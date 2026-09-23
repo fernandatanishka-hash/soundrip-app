@@ -1,4 +1,4 @@
-name: Build FlowRip with Full Screen Ads & Downloads
+name: Build FlowRip Studio Pro
 
 on:
   push:
@@ -80,14 +80,49 @@ jobs:
           </adaptive-icon>
           EOF
 
-          # 2. gradle.properties
+          # 2. Modern Dark Splash Screen Background (No white screen!)
+          cat << 'EOF' > app/src/main/res/drawable/splash_background.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:drawable="@color/flowrip_bg" />
+              <item
+                  android:width="110dp"
+                  android:height="110dp"
+                  android:gravity="center"
+                  android:drawable="@drawable/ic_launcher_foreground" />
+          </layer-list>
+          EOF
+
+          # 3. Colors & Modern Dark Styles (Eliminates Purple Bar & White Screen)
+          cat << 'EOF' > app/src/main/res/values/colors.xml
+          <resources>
+              <color name="flowrip_bg">#121212</color>
+              <color name="flowrip_green">#1ED760</color>
+              <color name="flowrip_card">#181818</color>
+          </resources>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/values/styles.xml
+          <resources>
+              <style name="Theme.FlowRip" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="android:windowBackground">@drawable/splash_background</item>
+                  <item name="android:statusBarColor">#121212</item>
+                  <item name="android:navigationBarColor">#121212</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="colorPrimary">@color/flowrip_green</item>
+                  <item name="colorSecondary">@color/flowrip_green</item>
+              </style>
+          </resources>
+          EOF
+
+          # 4. gradle.properties
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           EOF
 
-          # 3. settings.gradle
+          # 5. settings.gradle
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -108,7 +143,7 @@ jobs:
           include ':app'
           EOF
 
-          # 4. root build.gradle
+          # 6. root build.gradle
           cat << 'EOF' > build.gradle
           plugins {
               id 'com.android.application' version '8.4.1' apply false
@@ -116,7 +151,7 @@ jobs:
           }
           EOF
 
-          # 5. app/build.gradle
+          # 7. app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -131,8 +166,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 4
-                  versionName "4.0"
+                  versionCode 5
+                  versionName "5.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -174,14 +209,14 @@ jobs:
           }
           EOF
 
-          # 6. strings.xml
+          # 8. strings.xml
           cat << 'EOF' > app/src/main/res/values/strings.xml
           <resources>
               <string name="app_name">FlowRip</string>
           </resources>
           EOF
 
-          # 7. AndroidManifest.xml
+          # 9. AndroidManifest.xml (Uses Theme.FlowRip)
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -199,7 +234,7 @@ jobs:
                   android:roundIcon="@mipmap/ic_launcher_round"
                   android:supportsRtl="true"
                   android:extractNativeLibs="true"
-                  android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar"
+                  android:theme="@style/Theme.FlowRip"
                   android:requestLegacyExternalStorage="true">
                   <activity
                       android:name=".MainActivity"
@@ -214,7 +249,7 @@ jobs:
           </manifest>
           EOF
 
-          # 8. High-Contrast Spinner Layouts
+          # 10. High-Contrast Spinner Layouts
           cat << 'EOF' > app/src/main/res/layout/item_spinner_selected.xml
           <?xml version="1.0" encoding="utf-8"?>
           <TextView xmlns:android="http://schemas.android.com/apk/res/android"
@@ -238,7 +273,7 @@ jobs:
               android:textStyle="bold" />
           EOF
 
-          # 9. activity_main.xml Layout
+          # 11. activity_main.xml
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -491,7 +526,7 @@ jobs:
           </RelativeLayout>
           EOF
 
-          # 10. MainActivity.kt with Pre-loaded Full-Screen Video / Interstitial Ad
+          # 12. MainActivity.kt (Disables White Splash Delay)
           cat << 'EOF' > app/src/main/java/com/soundrip/app/MainActivity.kt
           package com.soundrip.app
 
@@ -543,19 +578,18 @@ jobs:
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
 
-                  // 1. Initialize Start.io Ads Engine in Test Mode
+                  // 1. Initialize Start.io Ads Engine (Disable blank splash ad!)
                   try {
                       StartAppSDK.init(this, "208492019", false)
                       StartAppSDK.setTestAdsEnabled(true)
-                      startAppAd = StartAppAd(this)
+                      StartAppAd.disableSplash() // <--- FIXES THE WHITE SCREEN FREEZE!
 
-                      // PRE-LOAD the full-screen ad right now so it's instantly ready when user taps download!
+                      startAppAd = StartAppAd(this)
                       startAppAd?.loadAd(StartAppAd.AdMode.AUTOMATIC, object : AdEventListener {
                           override fun onReceiveAd(ad: Ad) {}
                           override fun onFailedToReceiveAd(ad: Ad?) {}
                       })
 
-                      // Attach Bottom Banner
                       val bannerContainer = findViewById<FrameLayout>(R.id.bannerContainer)
                       val banner = Banner(this)
                       bannerContainer.addView(banner)
@@ -699,7 +733,6 @@ jobs:
                       } catch (_: Exception) {}
                   }
 
-                  // Function to start the actual download process
                   fun executeDownload() {
                       val url = urlInput.text.toString().trim()
                       val selectedQuality = qualitySpinner.selectedItem.toString()
@@ -779,27 +812,22 @@ jobs:
                           return@setOnClickListener
                       }
 
-                      // Show the pre-cached Full-Screen Ad!
                       var adShown = false
                       try {
                           adShown = startAppAd?.showAd(object : AdDisplayListener {
                               override fun adHidden(ad: Ad?) {
-                                  // User closed the ad -> Start download!
                                   executeDownload()
-                                  // Pre-load the next ad
                                   startAppAd?.loadAd(StartAppAd.AdMode.AUTOMATIC)
                               }
                               override fun adDisplayed(ad: Ad?) {}
                               override fun adClicked(ad: Ad?) {}
                               override fun adNotDisplayed(ad: Ad?) {
-                                  // If ad failed to display, don't freeze the user -> Start download directly
                                   executeDownload()
                                   startAppAd?.loadAd(StartAppAd.AdMode.AUTOMATIC)
                               }
                           }) ?: false
                       } catch (_: Exception) {}
 
-                      // If ad was not ready yet, proceed to download directly and load next ad
                       if (!adShown) {
                           executeDownload()
                           startAppAd?.loadAd(StartAppAd.AdMode.AUTOMATIC)
@@ -851,5 +879,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-FullMonetized-APK
+          name: FlowRip-StudioPro-APK
           path: app/build/outputs/apk/**/*.apk
