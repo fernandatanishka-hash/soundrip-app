@@ -1,3 +1,4 @@
+
 name: Build Native yt-dlp Android APK
 
 on:
@@ -130,6 +131,7 @@ jobs:
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
               <uses-permission android:name="android.permission.WAKE_LOCK" />
 
               <application
@@ -147,31 +149,11 @@ jobs:
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
-
-                  <provider
-                      android:name="androidx.core.content.FileProvider"
-                      android:authorities="${applicationId}.provider"
-                      android:exported="false"
-                      android:grantUriPermissions="true">
-                      <meta-data
-                          android:name="android.support.FILE_PROVIDER_PATHS"
-                          android:resource="@xml/provider_paths" />
-                  </provider>
               </application>
           </manifest>
           EOF
 
-          # 7. FileProvider XML
-          mkdir -p app/src/main/res/xml
-          cat << 'EOF' > app/src/main/res/xml/provider_paths.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <paths>
-              <external-path name="external_files" path="." />
-              <external-path name="download_files" path="Download" />
-          </paths>
-          EOF
-
-          # 8. UI Layout with Play & Share Buttons (activity_main.xml)
+          # 7. UI Layout (activity_main.xml)
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -274,51 +256,19 @@ jobs:
                   android:textColor="#00F076"
                   android:textSize="12sp"
                   android:layout_marginTop="16dp" />
-
-              <LinearLayout
-                  android:id="@+id/actionLayout"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:orientation="horizontal"
-                  android:layout_marginTop="20dp"
-                  android:visibility="gone">
-
-                  <Button
-                      android:id="@+id/playBtn"
-                      android:layout_width="0dp"
-                      android:layout_height="wrap_content"
-                      android:layout_weight="1"
-                      android:text="▶ PLAY NOW"
-                      android:textColor="#000000"
-                      android:backgroundTint="#00F076"
-                      android:layout_marginEnd="6dp" />
-
-                  <Button
-                      android:id="@+id/shareBtn"
-                      android:layout_width="0dp"
-                      android:layout_height="wrap_content"
-                      android:layout_weight="1"
-                      android:text="📤 SHARE"
-                      android:textColor="#FFFFFF"
-                      android:backgroundTint="#2A3345"
-                      android:layout_marginStart="6dp" />
-              </LinearLayout>
           </LinearLayout>
           EOF
 
-          # 9. Kotlin Code (MainActivity.kt)
+          # 8. Kotlin Code with latest yt-dlp auto-update and SABR bypass (MainActivity.kt)
           cat << 'EOF' > app/src/main/java/com/soundrip/app/MainActivity.kt
           package com.soundrip.app
 
-          import android.content.Intent
           import android.media.MediaScannerConnection
-          import android.net.Uri
           import android.os.Bundle
           import android.os.Environment
           import android.view.View
           import android.widget.*
           import androidx.appcompat.app.AppCompatActivity
-          import androidx.core.content.FileProvider
           import com.yausername.youtubedl_android.YoutubeDL
           import com.yausername.youtubedl_android.YoutubeDLRequest
           import com.yausername.ffmpeg.FFmpeg
@@ -328,7 +278,6 @@ jobs:
           class MainActivity : AppCompatActivity() {
 
               private var isAudio = true
-              private var savedFile: File? = null
 
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
@@ -341,14 +290,19 @@ jobs:
                   val btnVideo = findViewById<Button>(R.id.btnVideo)
                   val downloadBtn = findViewById<Button>(R.id.downloadBtn)
                   val progressBar = findViewById<ProgressBar>(R.id.progressBar)
-                  val actionLayout = findViewById<LinearLayout>(R.id.actionLayout)
-                  val playBtn = findViewById<Button>(R.id.playBtn)
-                  val shareBtn = findViewById<Button>(R.id.shareBtn)
 
                   thread {
                       try {
                           YoutubeDL.getInstance().init(applicationContext)
                           FFmpeg.getInstance().init(applicationContext)
+                          runOnUiThread {
+                              statusText.text = "Checking yt-dlp updates..."
+                          }
+                          // Automatically update yt-dlp to latest version to fix 403 errors
+                          try {
+                              YoutubeDL.getInstance().updateYoutubeDL(applicationContext, YoutubeDL.UpdateChannel.STABLE)
+                          } catch (_: Exception) {}
+
                           runOnUiThread {
                               statusText.text = "⚡ Engine Ready. Genuine yt-dlp active!"
                           }
@@ -381,37 +335,6 @@ jobs:
                       btnAudio.setTextColor(android.graphics.Color.WHITE)
                   }
 
-                  playBtn.setOnClickListener {
-                      savedFile?.let { file ->
-                          try {
-                              val uri = FileProvider.getUriForFile(this, "${packageName}.provider", file)
-                              val intent = Intent(Intent.ACTION_VIEW).apply {
-                                  setDataAndType(uri, if (isAudio) "audio/*" else "video/*")
-                                  addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                              }
-                              startActivity(intent)
-                          } catch (e: Exception) {
-                              Toast.makeText(this, "Could not open file: ${e.message}", Toast.LENGTH_SHORT).show()
-                          }
-                      }
-                  }
-
-                  shareBtn.setOnClickListener {
-                      savedFile?.let { file ->
-                          try {
-                              val uri = FileProvider.getUriForFile(this, "${packageName}.provider", file)
-                              val intent = Intent(Intent.ACTION_SEND).apply {
-                                  type = if (isAudio) "audio/*" else "video/*"
-                                  putExtra(Intent.EXTRA_STREAM, uri)
-                                  addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                              }
-                              startActivity(Intent.createChooser(intent, "Share Media"))
-                          } catch (e: Exception) {
-                              Toast.makeText(this, "Share failed: ${e.message}", Toast.LENGTH_SHORT).show()
-                          }
-                      }
-                  }
-
                   downloadBtn.setOnClickListener {
                       val url = urlInput.text.toString().trim()
                       if (url.isEmpty()) {
@@ -422,17 +345,21 @@ jobs:
                       downloadBtn.isEnabled = false
                       downloadBtn.text = "DOWNLOADING STREAM..."
                       progressBar.visibility = View.VISIBLE
-                      actionLayout.visibility = View.GONE
                       statusText.text = "yt-dlp is downloading stream..."
 
                       thread {
                           try {
-                              // Save directly to phone's public Download folder
                               val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
                               val targetDir = File(publicDownloads, "SoundRip")
                               if (!targetDir.exists()) targetDir.mkdirs()
 
                               val request = YoutubeDLRequest(url)
+                              
+                              // Bypass YouTube SABR 403 blocks by requesting android/ios client streams
+                              request.addOption("--extractor-args", "youtube:player_client=android,web")
+                              request.addOption("--no-check-certificates")
+                              request.addOption("--no-update")
+
                               if (isAudio) {
                                   request.addOption("-x")
                                   request.addOption("--audio-format", "mp3")
@@ -448,11 +375,8 @@ jobs:
                                   }
                               }
 
-                              // Scan the newly downloaded file so it shows in Music Player & Files
                               val downloadedFiles = targetDir.listFiles()
                               val latestFile = downloadedFiles?.maxByOrNull { it.lastModified() }
-                              savedFile = latestFile
-
                               latestFile?.let { file ->
                                   MediaScannerConnection.scanFile(
                                       applicationContext,
@@ -466,7 +390,6 @@ jobs:
                                   downloadBtn.isEnabled = true
                                   downloadBtn.text = "⚡ START INSTANT DOWNLOAD"
                                   progressBar.visibility = View.GONE
-                                  actionLayout.visibility = View.VISIBLE
                                   statusText.text = "✅ Saved to Downloads/SoundRip folder!"
                                   Toast.makeText(this@MainActivity, "Download Complete!", Toast.LENGTH_LONG).show()
                               }
