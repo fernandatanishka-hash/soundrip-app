@@ -1,3 +1,4 @@
+
 name: Build Native yt-dlp Android APK
 
 on:
@@ -18,9 +19,6 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '17'
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
 
       - name: Generate Native Android Project with Embedded yt-dlp
         run: |
@@ -271,7 +269,6 @@ jobs:
                   val downloadBtn = findViewById<Button>(R.id.downloadBtn)
                   val progressBar = findViewById<ProgressBar>(R.id.progressBar)
 
-                  // Initialize the embedded yt-dlp & FFmpeg engine
                   thread {
                       try {
                           YoutubeDL.getInstance().init(applicationContext)
