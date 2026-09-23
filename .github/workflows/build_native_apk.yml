@@ -25,7 +25,14 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
 
-          # 1. settings.gradle
+          # 1. gradle.properties (Enables AndroidX)
+          cat << 'EOF' > gradle.properties
+          android.useAndroidX=true
+          android.enableJetifier=true
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          EOF
+
+          # 2. settings.gradle
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -46,7 +53,7 @@ jobs:
           include ':app'
           EOF
 
-          # 2. root build.gradle
+          # 3. root build.gradle
           cat << 'EOF' > build.gradle
           plugins {
               id 'com.android.application' version '8.4.1' apply false
@@ -54,7 +61,7 @@ jobs:
           }
           EOF
 
-          # 3. app/build.gradle
+          # 4. app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -109,14 +116,14 @@ jobs:
           }
           EOF
 
-          # 4. strings.xml
+          # 5. strings.xml
           cat << 'EOF' > app/src/main/res/values/strings.xml
           <resources>
               <string name="app_name">SoundRip Studio</string>
           </resources>
           EOF
 
-          # 5. AndroidManifest.xml
+          # 6. AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -145,7 +152,7 @@ jobs:
           </manifest>
           EOF
 
-          # 6. UI Layout (activity_main.xml)
+          # 7. UI Layout (activity_main.xml)
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -251,7 +258,7 @@ jobs:
           </LinearLayout>
           EOF
 
-          # 7. Kotlin Code (MainActivity.kt)
+          # 8. Kotlin Code (MainActivity.kt)
           cat << 'EOF' > app/src/main/java/com/soundrip/app/MainActivity.kt
           package com.soundrip.app
 
