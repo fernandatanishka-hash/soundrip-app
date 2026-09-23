@@ -310,4 +310,7 @@ jobs:
                   }
 
                   btnVideo.setOnClickListener {
-                      isAudio 
+                      isAudio = false
+                      btnVideo.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#3B82F6"))
+                      btnVideo.setTextColor(android.graphics.Color.WHITE)
+                      
