@@ -313,4 +313,70 @@ jobs:
                       isAudio = false
                       btnVideo.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#3B82F6"))
                       btnVideo.setTextColor(android.graphics.Color.WHITE)
-                      
+                      btnAudio.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#1D222D"))
+                      btnAudio.setTextColor(android.graphics.Color.WHITE)
+                  }
+
+                  downloadBtn.setOnClickListener {
+                      val url = urlInput.text.toString().trim()
+                      if (url.isEmpty()) {
+                          Toast.makeText(this, "Please paste a YouTube link", Toast.LENGTH_SHORT).show()
+                          return@setOnClickListener
+                      }
+
+                      downloadBtn.isEnabled = false
+                      downloadBtn.text = "DOWNLOADING STREAM..."
+                      progressBar.visibility = View.VISIBLE
+                      statusText.text = "yt-dlp is downloading stream..."
+
+                      thread {
+                          try {
+                              val downloadDir = getExternalFilesDir(null) ?: filesDir
+                              val request = YoutubeDLRequest(url)
+                              if (isAudio) {
+                                  request.addOption("-x")
+                                  request.addOption("--audio-format", "mp3")
+                              } else {
+                                  request.addOption("-f", "best[ext=mp4]/best")
+                              }
+                              request.addOption("-o", "${downloadDir.absolutePath}/%(title)s.%(ext)s")
+
+                              YoutubeDL.getInstance().execute(request) { progress, _, _ ->
+                                  runOnUiThread {
+                                      progressBar.progress = progress.toInt()
+                                      statusText.text = "Downloading: ${progress.toInt()}%"
+                                  }
+                              }
+
+                              runOnUiThread {
+                                  downloadBtn.isEnabled = true
+                                  downloadBtn.text = "⚡ START INSTANT DOWNLOAD"
+                                  progressBar.visibility = View.GONE
+                                  statusText.text = "✅ Saved to storage: ${downloadDir.name}"
+                                  Toast.makeText(this@MainActivity, "Download Complete!", Toast.LENGTH_LONG).show()
+                              }
+                          } catch (e: Exception) {
+                              runOnUiThread {
+                                  downloadBtn.isEnabled = true
+                                  downloadBtn.text = "⚡ START INSTANT DOWNLOAD"
+                                  progressBar.visibility = View.GONE
+                                  statusText.text = "Error: ${e.message}"
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Native APK
+        run: gradle assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoundRip-Native-APK
+          path: app/build/outputs/apk/**/*.apk
