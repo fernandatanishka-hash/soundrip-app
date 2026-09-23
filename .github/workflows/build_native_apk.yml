@@ -1,4 +1,4 @@
-name: Build Native FlowRip Android APK
+name: Build FlowRip with Monetization Engine
 
 on:
   push:
@@ -27,7 +27,7 @@ jobs:
           mkdir -p app/src/main/res/drawable
           mkdir -p app/src/main/res/mipmap-anydpi-v26
 
-          # 1. FlowRip Custom Brand Launcher Icon
+          # 1. FlowRip Brand Vector Icon
           cat << 'EOF' > app/src/main/res/drawable/ic_launcher_background.xml
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -48,20 +48,16 @@ jobs:
               android:height="108dp"
               android:viewportWidth="108"
               android:viewportHeight="108">
-              <!-- Outer emerald circular accent ring -->
               <path
                   android:strokeColor="#1ED760"
                   android:strokeWidth="2.8"
                   android:pathData="M54,18 A36,36 0 1,1 53.9,18 Z"/>
-              <!-- FlowRip Waveform bars -->
               <path
                   android:fillColor="#1ED760"
                   android:pathData="M34,46 L38,46 L38,62 L34,62 Z M42,38 L46,38 L46,70 L42,70 Z"/>
-              <!-- High-speed Arrow -->
               <path
                   android:fillColor="#1ED760"
                   android:pathData="M50,34 L58,34 L58,58 L68,58 L54,76 L40,58 L50,58 Z"/>
-              <!-- Trailing Waveform bar -->
               <path
                   android:fillColor="#1ED760"
                   android:pathData="M70,42 L74,42 L74,66 L70,66 Z"/>
@@ -120,7 +116,7 @@ jobs:
           }
           EOF
 
-          # 5. app/build.gradle
+          # 5. app/build.gradle with Start.io SDK
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -135,8 +131,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 2
-                  versionName "2.0"
+                  versionCode 3
+                  versionName "3.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -169,8 +165,12 @@ jobs:
               implementation 'com.google.android.material:material:1.12.0'
               implementation 'androidx.cardview:cardview:1.0.0'
 
+              // yt-dlp & FFmpeg engines
               implementation 'io.github.junkfood02.youtubedl-android:library:0.18.1'
               implementation 'io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1'
+
+              // Monetization Engine (Start.io)
+              implementation 'com.startapp:inapp-sdk:5.1.0'
           }
           EOF
 
@@ -214,7 +214,7 @@ jobs:
           </manifest>
           EOF
 
-          # 8. Custom High-Contrast Spinner Layouts (Fixes dark text)
+          # 8. High-Contrast Spinner Layouts
           cat << 'EOF' > app/src/main/res/layout/item_spinner_selected.xml
           <?xml version="1.0" encoding="utf-8"?>
           <TextView xmlns:android="http://schemas.android.com/apk/res/android"
@@ -238,256 +238,269 @@ jobs:
               android:textStyle="bold" />
           EOF
 
-          # 9. Spotify Modern Dark UI Layout (activity_main.xml)
+          # 9. activity_main.xml with Banner Container & Share Button
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
               xmlns:app="http://schemas.android.com/apk/res-auto"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
-              android:background="#121212"
-              android:fillViewport="true">
+              android:background="#121212">
 
-              <LinearLayout
+              <ScrollView
                   android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:orientation="vertical"
-                  android:padding="20dp">
+                  android:layout_height="match_parent"
+                  android:layout_above="@id/bannerContainer"
+                  android:fillViewport="true">
 
-                  <!-- Header Area -->
                   <LinearLayout
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
-                      android:orientation="horizontal"
-                      android:gravity="center_vertical"
-                      android:layout_marginTop="8dp"
-                      android:layout_marginBottom="20dp">
+                      android:orientation="vertical"
+                      android:padding="20dp">
 
-                      <TextView
-                          android:layout_width="wrap_content"
-                          android:layout_height="wrap_content"
-                          android:text="FlowRip"
-                          android:textColor="#FFFFFF"
-                          android:textSize="26sp"
-                          android:textStyle="bold" />
-
-                      <TextView
-                          android:layout_width="wrap_content"
-                          android:layout_height="wrap_content"
-                          android:text="STUDIO"
-                          android:textColor="#1ED760"
-                          android:textSize="10sp"
-                          android:textStyle="bold"
-                          android:paddingStart="6dp"
-                          android:paddingEnd="6dp"
-                          android:paddingTop="2dp"
-                          android:paddingBottom="2dp"
-                          android:background="#1E3827"
-                          android:layout_marginStart="8dp" />
-                  </LinearLayout>
-
-                  <!-- Search / Input Card -->
-                  <androidx.cardview.widget.CardView
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      app:cardBackgroundColor="#181818"
-                      app:cardCornerRadius="14dp"
-                      app:cardElevation="0dp"
-                      android:layout_marginBottom="14dp">
-
+                      <!-- Top Header with Share Button -->
                       <LinearLayout
                           android:layout_width="match_parent"
                           android:layout_height="wrap_content"
                           android:orientation="horizontal"
                           android:gravity="center_vertical"
-                          android:padding="6dp">
+                          android:layout_marginTop="8dp"
+                          android:layout_marginBottom="20dp">
 
-                          <EditText
-                              android:id="@+id/urlInput"
+                          <TextView
+                              android:layout_width="0dp"
+                              android:layout_height="wrap_content"
+                              android:layout_weight="1"
+                              android:text="FlowRip"
+                              android:textColor="#FFFFFF"
+                              android:textSize="26sp"
+                              android:textStyle="bold" />
+
+                          <Button
+                              android:id="@+id/btnShareApp"
+                              android:layout_width="wrap_content"
+                              android:layout_height="38dp"
+                              android:text="🔗 Share"
+                              android:textColor="#1ED760"
+                              android:textSize="12sp"
+                              android:textStyle="bold"
+                              android:backgroundTint="#1F2E23"
+                              app:cornerRadius="10dp" />
+                      </LinearLayout>
+
+                      <!-- URL Input Pill -->
+                      <androidx.cardview.widget.CardView
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          app:cardBackgroundColor="#181818"
+                          app:cardCornerRadius="14dp"
+                          app:cardElevation="0dp"
+                          android:layout_marginBottom="14dp">
+
+                          <LinearLayout
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:orientation="horizontal"
+                              android:gravity="center_vertical"
+                              android:padding="6dp">
+
+                              <EditText
+                                  android:id="@+id/urlInput"
+                                  android:layout_width="0dp"
+                                  android:layout_height="48dp"
+                                  android:layout_weight="1"
+                                  android:hint="Paste YouTube or Music link..."
+                                  android:textColorHint="#686868"
+                                  android:textColor="#FFFFFF"
+                                  android:background="@null"
+                                  android:paddingStart="12dp"
+                                  android:paddingEnd="8dp"
+                                  android:textSize="14sp"
+                                  android:inputType="textUri" />
+
+                              <Button
+                                  android:id="@+id/pasteBtn"
+                                  android:layout_width="wrap_content"
+                                  android:layout_height="40dp"
+                                  android:text="PASTE"
+                                  android:textColor="#000000"
+                                  android:textStyle="bold"
+                                  android:textSize="12sp"
+                                  android:backgroundTint="#1ED760"
+                                  app:cornerRadius="10dp" />
+                          </LinearLayout>
+                      </androidx.cardview.widget.CardView>
+
+                      <!-- Thumbnail Preview Card -->
+                      <androidx.cardview.widget.CardView
+                          android:id="@+id/previewCard"
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          app:cardBackgroundColor="#181818"
+                          app:cardCornerRadius="16dp"
+                          app:cardElevation="0dp"
+                          android:visibility="gone"
+                          android:layout_marginBottom="16dp">
+
+                          <LinearLayout
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:orientation="vertical"
+                              android:padding="12dp">
+
+                              <androidx.cardview.widget.CardView
+                                  android:layout_width="match_parent"
+                                  android:layout_height="180dp"
+                                  app:cardCornerRadius="12dp"
+                                  app:cardElevation="0dp">
+
+                                  <ImageView
+                                      android:id="@+id/videoThumbnail"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="match_parent"
+                                      android:scaleType="centerCrop"
+                                      android:background="#242424" />
+                              </androidx.cardview.widget.CardView>
+
+                              <TextView
+                                  android:id="@+id/videoTitle"
+                                  android:layout_width="match_parent"
+                                  android:layout_height="wrap_content"
+                                  android:text="Loading title..."
+                                  android:textColor="#FFFFFF"
+                                  android:textSize="15sp"
+                                  android:textStyle="bold"
+                                  android:maxLines="2"
+                                  android:ellipsize="end"
+                                  android:layout_marginTop="10dp" />
+
+                              <TextView
+                                  android:id="@+id/videoAuthor"
+                                  android:layout_width="match_parent"
+                                  android:layout_height="wrap_content"
+                                  android:text="YouTube Artist"
+                                  android:textColor="#1ED760"
+                                  android:textSize="12sp"
+                                  android:layout_marginTop="3dp" />
+                          </LinearLayout>
+                      </androidx.cardview.widget.CardView>
+
+                      <!-- MP3 / MP4 Switcher -->
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:orientation="horizontal"
+                          android:layout_marginBottom="14dp">
+
+                          <Button
+                              android:id="@+id/btnAudio"
                               android:layout_width="0dp"
                               android:layout_height="48dp"
                               android:layout_weight="1"
-                              android:hint="Paste YouTube or Music link..."
-                              android:textColorHint="#686868"
-                              android:textColor="#FFFFFF"
-                              android:background="@null"
-                              android:paddingStart="12dp"
-                              android:paddingEnd="8dp"
-                              android:textSize="14sp"
-                              android:inputType="textUri" />
+                              android:text="🎵 MP3 AUDIO"
+                              android:textStyle="bold"
+                              android:textColor="#000000"
+                              android:backgroundTint="#1ED760"
+                              app:cornerRadius="12dp"
+                              android:layout_marginEnd="6dp" />
 
                           <Button
-                              android:id="@+id/pasteBtn"
-                              android:layout_width="wrap_content"
-                              android:layout_height="40dp"
-                              android:text="PASTE"
-                              android:textColor="#000000"
+                              android:id="@+id/btnVideo"
+                              android:layout_width="0dp"
+                              android:layout_height="48dp"
+                              android:layout_weight="1"
+                              android:text="🎬 MP4 VIDEO"
                               android:textStyle="bold"
-                              android:textSize="12sp"
-                              android:backgroundTint="#1ED760"
-                              app:cornerRadius="10dp" />
+                              android:textColor="#A7A7A7"
+                              android:backgroundTint="#242424"
+                              app:cornerRadius="12dp"
+                              android:layout_marginStart="6dp" />
                       </LinearLayout>
-                  </androidx.cardview.widget.CardView>
 
-                  <!-- Video Preview Card (Dynamic Thumbnail & Title) -->
-                  <androidx.cardview.widget.CardView
-                      android:id="@+id/previewCard"
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      app:cardBackgroundColor="#181818"
-                      app:cardCornerRadius="16dp"
-                      app:cardElevation="0dp"
-                      android:visibility="gone"
-                      android:layout_marginBottom="16dp">
-
-                      <LinearLayout
+                      <!-- Quality Selector -->
+                      <androidx.cardview.widget.CardView
                           android:layout_width="match_parent"
                           android:layout_height="wrap_content"
-                          android:orientation="vertical"
-                          android:padding="12dp">
+                          app:cardBackgroundColor="#181818"
+                          app:cardCornerRadius="14dp"
+                          app:cardElevation="0dp"
+                          android:layout_marginBottom="16dp">
 
-                          <androidx.cardview.widget.CardView
+                          <LinearLayout
                               android:layout_width="match_parent"
-                              android:layout_height="180dp"
-                              app:cardCornerRadius="12dp"
-                              app:cardElevation="0dp">
+                              android:layout_height="wrap_content"
+                              android:orientation="horizontal"
+                              android:gravity="center_vertical"
+                              android:padding="12dp">
 
-                              <ImageView
-                                  android:id="@+id/videoThumbnail"
+                              <TextView
+                                  android:id="@+id/qualityLabel"
+                                  android:layout_width="wrap_content"
+                                  android:layout_height="wrap_content"
+                                  android:text="Quality:"
+                                  android:textColor="#B3B3B3"
+                                  android:textSize="13sp"
+                                  android:textStyle="bold"
+                                  android:layout_marginEnd="12dp" />
+
+                              <Spinner
+                                  android:id="@+id/qualitySpinner"
                                   android:layout_width="match_parent"
-                                  android:layout_height="match_parent"
-                                  android:scaleType="centerCrop"
-                                  android:background="#242424" />
-                          </androidx.cardview.widget.CardView>
+                                  android:layout_height="wrap_content"
+                                  android:popupBackground="#222222" />
+                          </LinearLayout>
+                      </androidx.cardview.widget.CardView>
 
-                          <TextView
-                              android:id="@+id/videoTitle"
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              android:text="Loading media info..."
-                              android:textColor="#FFFFFF"
-                              android:textSize="15sp"
-                              android:textStyle="bold"
-                              android:maxLines="2"
-                              android:ellipsize="end"
-                              android:layout_marginTop="10dp" />
+                      <!-- Progress Indicator -->
+                      <ProgressBar
+                          android:id="@+id/progressBar"
+                          style="?android:attr/progressBarStyleHorizontal"
+                          android:layout_width="match_parent"
+                          android:layout_height="6dp"
+                          android:layout_marginBottom="14dp"
+                          android:visibility="gone"
+                          android:progressBackgroundTint="#282828"
+                          android:progressTint="#1ED760" />
 
-                          <TextView
-                              android:id="@+id/videoAuthor"
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              android:text="YouTube Artist"
-                              android:textColor="#1ED760"
-                              android:textSize="12sp"
-                              android:layout_marginTop="3dp" />
-                      </LinearLayout>
-                  </androidx.cardview.widget.CardView>
-
-                  <!-- Format Switcher -->
-                  <LinearLayout
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      android:orientation="horizontal"
-                      android:layout_marginBottom="14dp">
-
+                      <!-- Download Button -->
                       <Button
-                          android:id="@+id/btnAudio"
-                          android:layout_width="0dp"
-                          android:layout_height="48dp"
-                          android:layout_weight="1"
-                          android:text="🎵 MP3 AUDIO"
-                          android:textStyle="bold"
+                          android:id="@+id/downloadBtn"
+                          android:layout_width="match_parent"
+                          android:layout_height="56dp"
+                          android:text="⚡ DOWNLOAD TO PHONE"
                           android:textColor="#000000"
-                          android:backgroundTint="#1ED760"
-                          app:cornerRadius="12dp"
-                          android:layout_marginEnd="6dp" />
-
-                      <Button
-                          android:id="@+id/btnVideo"
-                          android:layout_width="0dp"
-                          android:layout_height="48dp"
-                          android:layout_weight="1"
-                          android:text="🎬 MP4 VIDEO"
+                          android:textSize="15sp"
                           android:textStyle="bold"
-                          android:textColor="#A7A7A7"
-                          android:backgroundTint="#242424"
-                          app:cornerRadius="12dp"
-                          android:layout_marginStart="6dp" />
-                  </LinearLayout>
+                          android:backgroundTint="#1ED760"
+                          app:cornerRadius="28dp"
+                          android:layout_marginBottom="14dp" />
 
-                  <!-- Crystal-Clear Quality Selector Card -->
-                  <androidx.cardview.widget.CardView
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      app:cardBackgroundColor="#181818"
-                      app:cardCornerRadius="14dp"
-                      app:cardElevation="0dp"
-                      android:layout_marginBottom="16dp">
-
-                      <LinearLayout
+                      <!-- Engine Status -->
+                      <TextView
+                          android:id="@+id/statusText"
                           android:layout_width="match_parent"
                           android:layout_height="wrap_content"
-                          android:orientation="horizontal"
-                          android:gravity="center_vertical"
-                          android:padding="12dp">
+                          android:text="⚡ Ready to download"
+                          android:textColor="#1ED760"
+                          android:textSize="12sp"
+                          android:gravity="center" />
 
-                          <TextView
-                              android:id="@+id/qualityLabel"
-                              android:layout_width="wrap_content"
-                              android:layout_height="wrap_content"
-                              android:text="Quality:"
-                              android:textColor="#B3B3B3"
-                              android:textSize="13sp"
-                              android:textStyle="bold"
-                              android:layout_marginEnd="12dp" />
+                  </LinearLayout>
+              </ScrollView>
 
-                          <Spinner
-                              android:id="@+id/qualitySpinner"
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              android:popupBackground="#222222" />
-                      </LinearLayout>
-                  </androidx.cardview.widget.CardView>
+              <!-- In-App Ad Banner Slot at Bottom -->
+              <FrameLayout
+                  android:id="@+id/bannerContainer"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:layout_alignParentBottom="true"
+                  android:background="#121212" />
 
-                  <!-- Download Progress Bar -->
-                  <ProgressBar
-                      android:id="@+id/progressBar"
-                      style="?android:attr/progressBarStyleHorizontal"
-                      android:layout_width="match_parent"
-                      android:layout_height="6dp"
-                      android:layout_marginBottom="14dp"
-                      android:visibility="gone"
-                      android:progressBackgroundTint="#282828"
-                      android:progressTint="#1ED760" />
-
-                  <!-- Main Action Button -->
-                  <Button
-                      android:id="@+id/downloadBtn"
-                      android:layout_width="match_parent"
-                      android:layout_height="56dp"
-                      android:text="⚡ DOWNLOAD TO PHONE"
-                      android:textColor="#000000"
-                      android:textSize="15sp"
-                      android:textStyle="bold"
-                      android:backgroundTint="#1ED760"
-                      app:cornerRadius="28dp"
-                      android:layout_marginBottom="14dp" />
-
-                  <!-- Status Bar -->
-                  <TextView
-                      android:id="@+id/statusText"
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      android:text="⚡ Ready to download"
-                      android:textColor="#1ED760"
-                      android:textSize="12sp"
-                      android:gravity="center" />
-
-              </LinearLayout>
-          </ScrollView>
+          </RelativeLayout>
           EOF
 
-          # 10. MainActivity.kt with Thumbnail Fetcher & High-Contrast Spinner
+          # 10. MainActivity.kt with Start.io Monetization
           cat << 'EOF' > app/src/main/java/com/soundrip/app/MainActivity.kt
           package com.soundrip.app
 
@@ -509,6 +522,9 @@ jobs:
           import androidx.appcompat.app.AppCompatActivity
           import androidx.core.app.ActivityCompat
           import androidx.core.content.ContextCompat
+          import com.startapp.sdk.adsbase.StartAppAd
+          import com.startapp.sdk.adsbase.StartAppSDK
+          import com.startapp.sdk.ads.banner.Banner
           import com.yausername.youtubedl_android.YoutubeDL
           import com.yausername.youtubedl_android.YoutubeDLRequest
           import com.yausername.ffmpeg.FFmpeg
@@ -527,10 +543,23 @@ jobs:
               private val audioQualities = arrayOf("320 kbps (HQ Audio)", "256 kbps", "192 kbps (Standard)", "128 kbps (Fast)")
               private val videoQualities = arrayOf("Best Available", "1080p (Full HD)", "720p (HD)", "480p", "360p")
               private var currentVideoId: String? = null
+              private var startAppAd: StartAppAd? = null
 
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
+
+                  // Initialize Start.io Ads (Replace "208492019" with your free Start.io App ID!)
+                  try {
+                      StartAppSDK.init(this, "208492019", false)
+                      StartAppSDK.setTestAdsEnabled(true)
+                      startAppAd = StartAppAd(this)
+
+                      // Attach Bottom Banner Ad
+                      val bannerContainer = findViewById<FrameLayout>(R.id.bannerContainer)
+                      val banner = Banner(this)
+                      bannerContainer.addView(banner)
+                  } catch (_: Exception) {}
 
                   checkAndPromptStoragePermission()
 
@@ -547,6 +576,16 @@ jobs:
                   val videoThumbnail = findViewById<ImageView>(R.id.videoThumbnail)
                   val videoTitle = findViewById<TextView>(R.id.videoTitle)
                   val videoAuthor = findViewById<TextView>(R.id.videoAuthor)
+                  val btnShareApp = findViewById<Button>(R.id.btnShareApp)
+
+                  btnShareApp.setOnClickListener {
+                      val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                          type = "text/plain"
+                          putExtra(Intent.EXTRA_SUBJECT, "Check out FlowRip!")
+                          putExtra(Intent.EXTRA_TEXT, "Download any YouTube song or video in 320kbps & 1080p with FlowRip! Get it here: https://github.com/${packageName}/releases")
+                      }
+                      startActivity(Intent.createChooser(shareIntent, "Share FlowRip via"))
+                  }
 
                   fun updateSpinner() {
                       val options = if (isAudio) audioQualities else videoQualities
@@ -570,7 +609,6 @@ jobs:
                           videoTitle.text = "Loading title..."
                           videoAuthor.text = "Fetching details..."
 
-                          // Instant HQ Thumbnail load
                           thread {
                               try {
                                   val thumbUrl = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
@@ -585,7 +623,6 @@ jobs:
                               } catch (_: Exception) {}
                           }
 
-                          // Fast Metadata fetch via YouTube oEmbed
                           thread {
                               try {
                                   val oembedUrl = "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=$videoId&format=json"
@@ -668,6 +705,12 @@ jobs:
                           Toast.makeText(this, "Please paste a link first", Toast.LENGTH_SHORT).show()
                           return@setOnClickListener
                       }
+
+                      // Trigger Monetization Ad before download starts
+                      try {
+                          startAppAd?.showAd()
+                          startAppAd?.loadAd()
+                      } catch (_: Exception) {}
 
                       val selectedQuality = qualitySpinner.selectedItem.toString()
                       downloadBtn.isEnabled = false
@@ -783,5 +826,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-Release-APK
+          name: FlowRip-Monetized-APK
           path: app/build/outputs/apk/**/*.apk
