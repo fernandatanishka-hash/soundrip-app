@@ -24,15 +24,66 @@ jobs:
           mkdir -p app/src/main/java/com/soundrip/app
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-anydpi-v26
 
-          # 1. gradle.properties
+          # 1. Custom App Logo (Vector Icon)
+          cat << 'EOF' > app/src/main/res/drawable/ic_launcher_background.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#0B0D11"
+                  android:pathData="M0,0h108v108h-108z"/>
+          </vector>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/drawable/ic_launcher_foreground.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <!-- Outer Glowing Emerald Ring -->
+              <path
+                  android:strokeColor="#00F076"
+                  android:strokeWidth="2.5"
+                  android:pathData="M54,16 A38,38 0 1,1 53.9,16 Z"/>
+              <!-- Neon Lightning Bolt -->
+              <path
+                  android:fillColor="#00F076"
+                  android:pathData="M56,26 L36,54 L52,54 L46,82 L72,50 L54,50 Z"/>
+          </vector>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          EOF
+
+          # 2. gradle.properties
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           EOF
 
-          # 2. settings.gradle
+          # 3. settings.gradle
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -53,7 +104,7 @@ jobs:
           include ':app'
           EOF
 
-          # 3. root build.gradle
+          # 4. root build.gradle
           cat << 'EOF' > build.gradle
           plugins {
               id 'com.android.application' version '8.4.1' apply false
@@ -61,7 +112,7 @@ jobs:
           }
           EOF
 
-          # 4. app/build.gradle
+          # 5. app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -115,14 +166,14 @@ jobs:
           }
           EOF
 
-          # 5. strings.xml
+          # 6. strings.xml
           cat << 'EOF' > app/src/main/res/values/strings.xml
           <resources>
               <string name="app_name">SoundRip Studio</string>
           </resources>
           EOF
 
-          # 6. AndroidManifest.xml
+          # 7. AndroidManifest.xml (Sets Custom Icon)
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -136,6 +187,8 @@ jobs:
               <application
                   android:allowBackup="true"
                   android:label="@string/app_name"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round"
                   android:supportsRtl="true"
                   android:extractNativeLibs="true"
                   android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar"
@@ -152,7 +205,7 @@ jobs:
           </manifest>
           EOF
 
-          # 7. UI Layout with Quality Spinner (activity_main.xml)
+          # 8. UI Layout with Quality Spinner (activity_main.xml)
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -285,16 +338,25 @@ jobs:
           </LinearLayout>
           EOF
 
-          # 8. Kotlin Code with dynamic Quality selections (MainActivity.kt)
+          # 9. Kotlin Code with Automatic Permission Dialog on First Open (MainActivity.kt)
           cat << 'EOF' > app/src/main/java/com/soundrip/app/MainActivity.kt
           package com.soundrip.app
 
+          import android.Manifest
+          import android.content.Intent
+          import android.content.pm.PackageManager
           import android.media.MediaScannerConnection
+          import android.net.Uri
+          import android.os.Build
           import android.os.Bundle
           import android.os.Environment
+          import android.provider.Settings
           import android.view.View
           import android.widget.*
+          import androidx.appcompat.app.AlertDialog
           import androidx.appcompat.app.AppCompatActivity
+          import androidx.core.app.ActivityCompat
+          import androidx.core.content.ContextCompat
           import com.yausername.youtubedl_android.YoutubeDL
           import com.yausername.youtubedl_android.YoutubeDLRequest
           import com.yausername.ffmpeg.FFmpeg
@@ -310,6 +372,9 @@ jobs:
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
+
+                  // Automatically ask for storage permission on first open!
+                  checkAndPromptStoragePermission()
 
                   val statusText = findViewById<TextView>(R.id.statusText)
                   val urlInput = findViewById<EditText>(R.id.urlInput)
@@ -395,7 +460,7 @@ jobs:
                               request.addOption("--no-update")
 
                               if (isAudio) {
-                                  val bitrate = selectedQuality.split(" ")[0] // extracts e.g. "320"
+                                  val bitrate = selectedQuality.split(" ")[0]
                                   request.addOption("-x")
                                   request.addOption("--audio-format", "mp3")
                                   request.addOption("--audio-quality", bitrate)
@@ -443,6 +508,37 @@ jobs:
                                   statusText.text = "Error: ${e.message}"
                               }
                           }
+                      }
+                  }
+              }
+
+              private fun checkAndPromptStoragePermission() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                      if (!Environment.isExternalStorageManager()) {
+                          AlertDialog.Builder(this)
+                              .setTitle("⚡ Storage Permission")
+                              .setMessage("SoundRip needs storage access to save your downloaded MP3s and MP4s directly into your phone's Downloads folder.")
+                              .setPositiveButton("Grant Access") { _, _ ->
+                                  try {
+                                      val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                                          data = Uri.parse("package:$packageName")
+                                      }
+                                      startActivity(intent)
+                                  } catch (e: Exception) {
+                                      val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                                      startActivity(intent)
+                                  }
+                              }
+                              .setNegativeButton("Later", null)
+                              .show()
+                      }
+                  } else {
+                      if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                          ActivityCompat.requestPermissions(
+                              this,
+                              arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE),
+                              101
+                          )
                       }
                   }
               }
