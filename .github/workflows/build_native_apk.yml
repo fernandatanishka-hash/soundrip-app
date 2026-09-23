@@ -103,7 +103,7 @@ jobs:
               implementation 'com.google.android.material:material:1.12.0'
               implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 
-              // Latest official youtubedl-android with Python 3.8 and FFmpeg
+              // Embedded yt-dlp and FFmpeg
               implementation 'io.github.junkfood02.youtubedl-android:library:0.18.1'
               implementation 'io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1'
           }
@@ -373,7 +373,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build Native APK
-        run: gradle assembleDebug --stacktrace
+        run: |
+          gradle wrapper --gradle-version 8.7
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
