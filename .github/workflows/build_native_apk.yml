@@ -1,4 +1,3 @@
-
 name: Build Native yt-dlp Android APK
 
 on:
@@ -153,7 +152,7 @@ jobs:
           </manifest>
           EOF
 
-          # 7. UI Layout (activity_main.xml)
+          # 7. UI Layout with Quality Spinner (activity_main.xml)
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -228,6 +227,33 @@ jobs:
                       android:layout_marginStart="6dp" />
               </LinearLayout>
 
+              <!-- Quality Selector Card -->
+              <LinearLayout
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:orientation="horizontal"
+                  android:background="#14171F"
+                  android:padding="12dp"
+                  android:gravity="center_vertical"
+                  android:layout_marginTop="14dp">
+
+                  <TextView
+                      android:id="@+id/qualityLabel"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:text="Audio Bitrate:"
+                      android:textColor="#8E9AA8"
+                      android:textSize="13sp"
+                      android:textStyle="bold"
+                      android:layout_marginEnd="10dp" />
+
+                  <Spinner
+                      android:id="@+id/qualitySpinner"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:backgroundTint="#00F076" />
+              </LinearLayout>
+
               <ProgressBar
                   android:id="@+id/progressBar"
                   style="?android:attr/progressBarStyleHorizontal"
@@ -259,7 +285,7 @@ jobs:
           </LinearLayout>
           EOF
 
-          # 8. Kotlin Code with latest yt-dlp auto-update and SABR bypass (MainActivity.kt)
+          # 8. Kotlin Code with dynamic Quality selections (MainActivity.kt)
           cat << 'EOF' > app/src/main/java/com/soundrip/app/MainActivity.kt
           package com.soundrip.app
 
@@ -278,6 +304,8 @@ jobs:
           class MainActivity : AppCompatActivity() {
 
               private var isAudio = true
+              private val audioQualities = arrayOf("320 kbps (HQ)", "256 kbps", "192 kbps (Standard)", "128 kbps (Fast)")
+              private val videoQualities = arrayOf("Best Available", "1080p (Full HD)", "720p (HD)", "480p", "360p")
 
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
@@ -290,15 +318,22 @@ jobs:
                   val btnVideo = findViewById<Button>(R.id.btnVideo)
                   val downloadBtn = findViewById<Button>(R.id.downloadBtn)
                   val progressBar = findViewById<ProgressBar>(R.id.progressBar)
+                  val qualityLabel = findViewById<TextView>(R.id.qualityLabel)
+                  val qualitySpinner = findViewById<Spinner>(R.id.qualitySpinner)
+
+                  fun updateSpinner() {
+                      val options = if (isAudio) audioQualities else videoQualities
+                      qualityLabel.text = if (isAudio) "Audio Bitrate:" else "Resolution:"
+                      val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, options)
+                      qualitySpinner.adapter = adapter
+                  }
+                  updateSpinner()
 
                   thread {
                       try {
                           YoutubeDL.getInstance().init(applicationContext)
                           FFmpeg.getInstance().init(applicationContext)
-                          runOnUiThread {
-                              statusText.text = "Checking yt-dlp updates..."
-                          }
-                          // Automatically update yt-dlp to latest version to fix 403 errors
+                          runOnUiThread { statusText.text = "Checking engine updates..." }
                           try {
                               YoutubeDL.getInstance().updateYoutubeDL(applicationContext, YoutubeDL.UpdateChannel.STABLE)
                           } catch (_: Exception) {}
@@ -307,9 +342,7 @@ jobs:
                               statusText.text = "⚡ Engine Ready. Genuine yt-dlp active!"
                           }
                       } catch (e: Exception) {
-                          runOnUiThread {
-                              statusText.text = "Engine ready"
-                          }
+                          runOnUiThread { statusText.text = "Engine ready" }
                       }
                   }
 
@@ -325,6 +358,7 @@ jobs:
                       btnAudio.setTextColor(android.graphics.Color.BLACK)
                       btnVideo.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#1D222D"))
                       btnVideo.setTextColor(android.graphics.Color.WHITE)
+                      updateSpinner()
                   }
 
                   btnVideo.setOnClickListener {
@@ -333,6 +367,7 @@ jobs:
                       btnVideo.setTextColor(android.graphics.Color.WHITE)
                       btnAudio.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#1D222D"))
                       btnAudio.setTextColor(android.graphics.Color.WHITE)
+                      updateSpinner()
                   }
 
                   downloadBtn.setOnClickListener {
@@ -342,6 +377,7 @@ jobs:
                           return@setOnClickListener
                       }
 
+                      val selectedQuality = qualitySpinner.selectedItem.toString()
                       downloadBtn.isEnabled = false
                       downloadBtn.text = "DOWNLOADING STREAM..."
                       progressBar.visibility = View.VISIBLE
@@ -354,17 +390,23 @@ jobs:
                               if (!targetDir.exists()) targetDir.mkdirs()
 
                               val request = YoutubeDLRequest(url)
-                              
-                              // Bypass YouTube SABR 403 blocks by requesting android/ios client streams
                               request.addOption("--extractor-args", "youtube:player_client=android,web")
                               request.addOption("--no-check-certificates")
                               request.addOption("--no-update")
 
                               if (isAudio) {
+                                  val bitrate = selectedQuality.split(" ")[0] // extracts e.g. "320"
                                   request.addOption("-x")
                                   request.addOption("--audio-format", "mp3")
+                                  request.addOption("--audio-quality", bitrate)
                               } else {
-                                  request.addOption("-f", "best[ext=mp4]/best")
+                                  when {
+                                      selectedQuality.contains("1080p") -> request.addOption("-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]")
+                                      selectedQuality.contains("720p") -> request.addOption("-f", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]")
+                                      selectedQuality.contains("480p") -> request.addOption("-f", "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]")
+                                      selectedQuality.contains("360p") -> request.addOption("-f", "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]")
+                                      else -> request.addOption("-f", "best[ext=mp4]/best")
+                                  }
                               }
                               request.addOption("-o", "${targetDir.absolutePath}/%(title)s.%(ext)s")
 
