@@ -1,4 +1,4 @@
-name: Build FlowRip with Monetization Engine
+name: Build FlowRip with Full Screen Ads & Downloads
 
 on:
   push:
@@ -116,7 +116,7 @@ jobs:
           }
           EOF
 
-          # 5. app/build.gradle with Start.io SDK
+          # 5. app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -131,8 +131,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 3
-                  versionName "3.0"
+                  versionCode 4
+                  versionName "4.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -165,11 +165,11 @@ jobs:
               implementation 'com.google.android.material:material:1.12.0'
               implementation 'androidx.cardview:cardview:1.0.0'
 
-              // yt-dlp & FFmpeg engines
+              // yt-dlp & FFmpeg
               implementation 'io.github.junkfood02.youtubedl-android:library:0.18.1'
               implementation 'io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1'
 
-              // Monetization Engine (Start.io)
+              // Start.io Monetization SDK
               implementation 'com.startapp:inapp-sdk:5.1.0'
           }
           EOF
@@ -238,7 +238,7 @@ jobs:
               android:textStyle="bold" />
           EOF
 
-          # 9. activity_main.xml with Banner Container & Share Button
+          # 9. activity_main.xml Layout
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -259,7 +259,6 @@ jobs:
                       android:orientation="vertical"
                       android:padding="20dp">
 
-                      <!-- Top Header with Share Button -->
                       <LinearLayout
                           android:layout_width="match_parent"
                           android:layout_height="wrap_content"
@@ -289,7 +288,6 @@ jobs:
                               app:cornerRadius="10dp" />
                       </LinearLayout>
 
-                      <!-- URL Input Pill -->
                       <androidx.cardview.widget.CardView
                           android:layout_width="match_parent"
                           android:layout_height="wrap_content"
@@ -332,7 +330,6 @@ jobs:
                           </LinearLayout>
                       </androidx.cardview.widget.CardView>
 
-                      <!-- Thumbnail Preview Card -->
                       <androidx.cardview.widget.CardView
                           android:id="@+id/previewCard"
                           android:layout_width="match_parent"
@@ -386,7 +383,6 @@ jobs:
                           </LinearLayout>
                       </androidx.cardview.widget.CardView>
 
-                      <!-- MP3 / MP4 Switcher -->
                       <LinearLayout
                           android:layout_width="match_parent"
                           android:layout_height="wrap_content"
@@ -418,7 +414,6 @@ jobs:
                               android:layout_marginStart="6dp" />
                       </LinearLayout>
 
-                      <!-- Quality Selector -->
                       <androidx.cardview.widget.CardView
                           android:layout_width="match_parent"
                           android:layout_height="wrap_content"
@@ -452,7 +447,6 @@ jobs:
                           </LinearLayout>
                       </androidx.cardview.widget.CardView>
 
-                      <!-- Progress Indicator -->
                       <ProgressBar
                           android:id="@+id/progressBar"
                           style="?android:attr/progressBarStyleHorizontal"
@@ -463,7 +457,6 @@ jobs:
                           android:progressBackgroundTint="#282828"
                           android:progressTint="#1ED760" />
 
-                      <!-- Download Button -->
                       <Button
                           android:id="@+id/downloadBtn"
                           android:layout_width="match_parent"
@@ -476,7 +469,6 @@ jobs:
                           app:cornerRadius="28dp"
                           android:layout_marginBottom="14dp" />
 
-                      <!-- Engine Status -->
                       <TextView
                           android:id="@+id/statusText"
                           android:layout_width="match_parent"
@@ -489,7 +481,6 @@ jobs:
                   </LinearLayout>
               </ScrollView>
 
-              <!-- In-App Ad Banner Slot at Bottom -->
               <FrameLayout
                   android:id="@+id/bannerContainer"
                   android:layout_width="match_parent"
@@ -500,7 +491,7 @@ jobs:
           </RelativeLayout>
           EOF
 
-          # 10. MainActivity.kt with Start.io Monetization
+          # 10. MainActivity.kt with Pre-loaded Full-Screen Video / Interstitial Ad
           cat << 'EOF' > app/src/main/java/com/soundrip/app/MainActivity.kt
           package com.soundrip.app
 
@@ -522,8 +513,11 @@ jobs:
           import androidx.appcompat.app.AppCompatActivity
           import androidx.core.app.ActivityCompat
           import androidx.core.content.ContextCompat
+          import com.startapp.sdk.adsbase.Ad
           import com.startapp.sdk.adsbase.StartAppAd
           import com.startapp.sdk.adsbase.StartAppSDK
+          import com.startapp.sdk.adsbase.adlisteners.AdDisplayListener
+          import com.startapp.sdk.adsbase.adlisteners.AdEventListener
           import com.startapp.sdk.ads.banner.Banner
           import com.yausername.youtubedl_android.YoutubeDL
           import com.yausername.youtubedl_android.YoutubeDLRequest
@@ -549,13 +543,19 @@ jobs:
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
 
-                  // Initialize Start.io Ads (Replace "208492019" with your free Start.io App ID!)
+                  // 1. Initialize Start.io Ads Engine in Test Mode
                   try {
                       StartAppSDK.init(this, "208492019", false)
                       StartAppSDK.setTestAdsEnabled(true)
                       startAppAd = StartAppAd(this)
 
-                      // Attach Bottom Banner Ad
+                      // PRE-LOAD the full-screen ad right now so it's instantly ready when user taps download!
+                      startAppAd?.loadAd(StartAppAd.AdMode.AUTOMATIC, object : AdEventListener {
+                          override fun onReceiveAd(ad: Ad) {}
+                          override fun onFailedToReceiveAd(ad: Ad?) {}
+                      })
+
+                      // Attach Bottom Banner
                       val bannerContainer = findViewById<FrameLayout>(R.id.bannerContainer)
                       val banner = Banner(this)
                       bannerContainer.addView(banner)
@@ -582,7 +582,7 @@ jobs:
                       val shareIntent = Intent(Intent.ACTION_SEND).apply {
                           type = "text/plain"
                           putExtra(Intent.EXTRA_SUBJECT, "Check out FlowRip!")
-                          putExtra(Intent.EXTRA_TEXT, "Download any YouTube song or video in 320kbps & 1080p with FlowRip! Get it here: https://github.com/${packageName}/releases")
+                          putExtra(Intent.EXTRA_TEXT, "Download any YouTube song or video in 320kbps & 1080p with FlowRip! Get it free here: https://github.com/fernandatanishka-hash/soundrip-app/releases")
                       }
                       startActivity(Intent.createChooser(shareIntent, "Share FlowRip via"))
                   }
@@ -699,20 +699,11 @@ jobs:
                       } catch (_: Exception) {}
                   }
 
-                  downloadBtn.setOnClickListener {
+                  // Function to start the actual download process
+                  fun executeDownload() {
                       val url = urlInput.text.toString().trim()
-                      if (url.isEmpty()) {
-                          Toast.makeText(this, "Please paste a link first", Toast.LENGTH_SHORT).show()
-                          return@setOnClickListener
-                      }
-
-                      // Trigger Monetization Ad before download starts
-                      try {
-                          startAppAd?.showAd()
-                          startAppAd?.loadAd()
-                      } catch (_: Exception) {}
-
                       val selectedQuality = qualitySpinner.selectedItem.toString()
+
                       downloadBtn.isEnabled = false
                       downloadBtn.text = "DOWNLOADING..."
                       progressBar.visibility = View.VISIBLE
@@ -780,6 +771,40 @@ jobs:
                           }
                       }
                   }
+
+                  downloadBtn.setOnClickListener {
+                      val url = urlInput.text.toString().trim()
+                      if (url.isEmpty()) {
+                          Toast.makeText(this, "Please paste a link first", Toast.LENGTH_SHORT).show()
+                          return@setOnClickListener
+                      }
+
+                      // Show the pre-cached Full-Screen Ad!
+                      var adShown = false
+                      try {
+                          adShown = startAppAd?.showAd(object : AdDisplayListener {
+                              override fun adHidden(ad: Ad?) {
+                                  // User closed the ad -> Start download!
+                                  executeDownload()
+                                  // Pre-load the next ad
+                                  startAppAd?.loadAd(StartAppAd.AdMode.AUTOMATIC)
+                              }
+                              override fun adDisplayed(ad: Ad?) {}
+                              override fun adClicked(ad: Ad?) {}
+                              override fun adNotDisplayed(ad: Ad?) {
+                                  // If ad failed to display, don't freeze the user -> Start download directly
+                                  executeDownload()
+                                  startAppAd?.loadAd(StartAppAd.AdMode.AUTOMATIC)
+                              }
+                          }) ?: false
+                      } catch (_: Exception) {}
+
+                      // If ad was not ready yet, proceed to download directly and load next ad
+                      if (!adShown) {
+                          executeDownload()
+                          startAppAd?.loadAd(StartAppAd.AdMode.AUTOMATIC)
+                      }
+                  }
               }
 
               private fun checkAndPromptStoragePermission() {
@@ -826,5 +851,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-Monetized-APK
+          name: FlowRip-FullMonetized-APK
           path: app/build/outputs/apk/**/*.apk
