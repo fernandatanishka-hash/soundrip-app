@@ -80,20 +80,7 @@ jobs:
           </adaptive-icon>
           EOF
 
-          # 2. Modern Dark Splash Screen Background (No white screen!)
-          cat << 'EOF' > app/src/main/res/drawable/splash_background.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-              <item android:drawable="@color/flowrip_bg" />
-              <item
-                  android:width="110dp"
-                  android:height="110dp"
-                  android:gravity="center"
-                  android:drawable="@drawable/ic_launcher_foreground" />
-          </layer-list>
-          EOF
-
-          # 3. Colors & Modern Dark Styles (Eliminates Purple Bar & White Screen)
+          # 2. Colors & Styles (Dark theme with zero white flash)
           cat << 'EOF' > app/src/main/res/values/colors.xml
           <resources>
               <color name="flowrip_bg">#121212</color>
@@ -105,7 +92,7 @@ jobs:
           cat << 'EOF' > app/src/main/res/values/styles.xml
           <resources>
               <style name="Theme.FlowRip" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="android:windowBackground">@drawable/splash_background</item>
+                  <item name="android:windowBackground">@color/flowrip_bg</item>
                   <item name="android:statusBarColor">#121212</item>
                   <item name="android:navigationBarColor">#121212</item>
                   <item name="android:windowLightStatusBar">false</item>
@@ -115,14 +102,14 @@ jobs:
           </resources>
           EOF
 
-          # 4. gradle.properties
+          # 3. gradle.properties
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           EOF
 
-          # 5. settings.gradle
+          # 4. settings.gradle
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -143,7 +130,7 @@ jobs:
           include ':app'
           EOF
 
-          # 6. root build.gradle
+          # 5. root build.gradle
           cat << 'EOF' > build.gradle
           plugins {
               id 'com.android.application' version '8.4.1' apply false
@@ -151,7 +138,7 @@ jobs:
           }
           EOF
 
-          # 7. app/build.gradle
+          # 6. app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -166,8 +153,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 5
-                  versionName "5.0"
+                  versionCode 6
+                  versionName "6.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -200,23 +187,21 @@ jobs:
               implementation 'com.google.android.material:material:1.12.0'
               implementation 'androidx.cardview:cardview:1.0.0'
 
-              // yt-dlp & FFmpeg
               implementation 'io.github.junkfood02.youtubedl-android:library:0.18.1'
               implementation 'io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1'
 
-              // Start.io Monetization SDK
               implementation 'com.startapp:inapp-sdk:5.1.0'
           }
           EOF
 
-          # 8. strings.xml
+          # 7. strings.xml
           cat << 'EOF' > app/src/main/res/values/strings.xml
           <resources>
               <string name="app_name">FlowRip</string>
           </resources>
           EOF
 
-          # 9. AndroidManifest.xml (Uses Theme.FlowRip)
+          # 8. AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -249,7 +234,7 @@ jobs:
           </manifest>
           EOF
 
-          # 10. High-Contrast Spinner Layouts
+          # 9. Spinner Item Layouts
           cat << 'EOF' > app/src/main/res/layout/item_spinner_selected.xml
           <?xml version="1.0" encoding="utf-8"?>
           <TextView xmlns:android="http://schemas.android.com/apk/res/android"
@@ -273,7 +258,7 @@ jobs:
               android:textStyle="bold" />
           EOF
 
-          # 11. activity_main.xml
+          # 10. activity_main.xml (With Cinematic Splash Overlay)
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -282,6 +267,7 @@ jobs:
               android:layout_height="match_parent"
               android:background="#121212">
 
+              <!-- Main Downloader Screen -->
               <ScrollView
                   android:layout_width="match_parent"
                   android:layout_height="match_parent"
@@ -523,10 +509,76 @@ jobs:
                   android:layout_alignParentBottom="true"
                   android:background="#121212" />
 
+              <!-- Brand Splash Screen Overlay with Logo, Name & Tagline -->
+              <RelativeLayout
+                  android:id="@+id/splashOverlay"
+                  android:layout_width="match_parent"
+                  android:layout_height="match_parent"
+                  android:background="#121212"
+                  android:clickable="true"
+                  android:focusable="true">
+
+                  <LinearLayout
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:layout_centerInParent="true"
+                      android:gravity="center"
+                      android:orientation="vertical">
+
+                      <ImageView
+                          android:layout_width="96dp"
+                          android:layout_height="96dp"
+                          android:src="@drawable/ic_launcher_foreground" />
+
+                      <TextView
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="FlowRip"
+                          android:textColor="#FFFFFF"
+                          android:textSize="32sp"
+                          android:textStyle="bold"
+                          android:layout_marginTop="14dp" />
+
+                      <TextView
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="STUDIO DOWNLOADER"
+                          android:textColor="#1ED760"
+                          android:textSize="12sp"
+                          android:textStyle="bold"
+                          android:letterSpacing="0.18"
+                          android:layout_marginTop="4dp" />
+                  </LinearLayout>
+
+                  <LinearLayout
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:layout_alignParentBottom="true"
+                      android:layout_centerHorizontal="true"
+                      android:layout_marginBottom="36dp"
+                      android:gravity="center"
+                      android:orientation="vertical">
+
+                      <ProgressBar
+                          style="?android:attr/progressBarStyleSmall"
+                          android:layout_width="22dp"
+                          android:layout_height="22dp"
+                          android:indeterminateTint="#1ED760" />
+
+                      <TextView
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="Ultra-High Fidelity Audio &amp; Video"
+                          android:textColor="#555555"
+                          android:textSize="11sp"
+                          android:layout_marginTop="12dp" />
+                  </LinearLayout>
+              </RelativeLayout>
+
           </RelativeLayout>
           EOF
 
-          # 12. MainActivity.kt (Disables White Splash Delay)
+          # 11. MainActivity.kt with Smooth Splash Fade Animation
           cat << 'EOF' > app/src/main/java/com/soundrip/app/MainActivity.kt
           package com.soundrip.app
 
@@ -578,11 +630,13 @@ jobs:
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
 
-                  // 1. Initialize Start.io Ads Engine (Disable blank splash ad!)
+                  val splashOverlay = findViewById<View>(R.id.splashOverlay)
+
+                  // Initialize Start.io Ads Engine (Disable blank splash ad!)
                   try {
                       StartAppSDK.init(this, "208492019", false)
                       StartAppSDK.setTestAdsEnabled(true)
-                      StartAppAd.disableSplash() // <--- FIXES THE WHITE SCREEN FREEZE!
+                      StartAppAd.disableSplash()
 
                       startAppAd = StartAppAd(this)
                       startAppAd?.loadAd(StartAppAd.AdMode.AUTOMATIC, object : AdEventListener {
@@ -595,7 +649,16 @@ jobs:
                       bannerContainer.addView(banner)
                   } catch (_: Exception) {}
 
-                  checkAndPromptStoragePermission()
+                  // Cinematic splash fade-out after 1.3 seconds
+                  splashOverlay.postDelayed({
+                      splashOverlay.animate()
+                          .alpha(0f)
+                          .setDuration(400)
+                          .withEndAction {
+                              splashOverlay.visibility = View.GONE
+                              checkAndPromptStoragePermission()
+                          }
+                  }, 1300)
 
                   val statusText = findViewById<TextView>(R.id.statusText)
                   val urlInput = findViewById<EditText>(R.id.urlInput)
