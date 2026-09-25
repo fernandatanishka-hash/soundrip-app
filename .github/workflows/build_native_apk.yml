@@ -28,7 +28,7 @@ jobs:
           mkdir -p app/src/main/res/xml
           mkdir -p app/src/main/res/mipmap-anydpi-v26
 
-          # 1. Vector Logos & Clean Vector Bottom Navigation Icons
+          # 1. Vector Logos & High-Contrast Navigation Icons
           cat << 'EOF' > app/src/main/res/drawable/ic_play_gradient.xml
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -66,7 +66,7 @@ jobs:
               android:viewportWidth="24"
               android:viewportHeight="24">
               <path
-                  android:fillColor="#94A3B8"
+                  android:fillColor="#64748B"
                   android:pathData="M13,3a9,9 0 0,0 -9,9H1l3.89,3.89.07.14L9,12H6c0,-3.87 3.13,-7 7,-7s7,3.13 7,7 -3.13,7 -7,7c-1.93,0 -3.68,-0.79 -4.94,-2.06l-1.42,1.42A8.954,8.954 0 0,0 13,21a9,9 0 0,0 0,-18zm-1,5v5l4.28,2.54.72,-1.21 -3.5,-2.08V8H12z"/>
           </vector>
           EOF
@@ -79,8 +79,8 @@ jobs:
               android:viewportWidth="24"
               android:viewportHeight="24">
               <path
-                  android:fillColor="#94A3B8"
-                  android:pathData="M12,15.6c-1.98,0 -3.6,-1.62 -3.6,-3.6s1.62,-3.6 3.6,-3.6 3.6,1.62 3.6,3.6 -1.62,3.6 -3.6,3.6z"/>
+                  android:fillColor="#64748B"
+                  android:pathData="M12,15.6c-1.98,0 -3.6,-1.62 -3.6,-3.6s1.62,-3.6 3.6,-3.6 3.6,1.62 3.6,3.6 -1.62,3.6 -3.6,3.6z M19.14,12.94c0.04,-0.3 0.06,-0.61 0.06,-0.94 0,-0.32 -0.02,-0.64 -0.07,-0.94l2.03,-1.58c0.18,-0.14 0.23,-0.41 0.12,-0.61l-1.92,-3.32c-0.12,-0.22 -0.37,-0.29 -0.59,-0.22l-2.39,0.96c-0.5,-0.38 -1.03,-0.7 -1.62,-0.94l-0.36,-2.54c-0.04,-0.24 -0.24,-0.41 -0.48,-0.41h-3.84c-0.24,0 -0.43,0.17 -0.47,0.41L9.25,5.35C8.66,5.59 8.12,5.92 7.63,6.29L5.24,5.33c-0.22,-0.08 -0.47,0 -0.59,0.22L2.74,8.87c-0.12,0.21 -0.08,0.47 0.12,0.61l2.03,1.58c-0.05,0.3 -0.09,0.63 -0.09,0.94s0.02,0.64 0.07,0.94l-2.03,1.58c-0.18,0.14 -0.23,0.41 -0.12,0.61l1.92,3.32c0.12,0.22 0.37,0.29 0.59,0.22l2.39,-0.96c0.5,0.38 1.03,0.7 1.62,0.94l0.36,2.54c0.05,0.24 0.24,0.41 0.48,0.41h3.84c0.24,0 0.44,-0.17 0.47,-0.41l0.36,-2.54c0.59,-0.24 1.13,-0.56 1.62,-0.94l2.39,0.96c0.22,0.08 0.47,0 0.59,-0.22l1.92,-3.32c0.12,-0.22 0.07,-0.47 -0.12,-0.61l-2.01,-1.58z"/>
           </vector>
           EOF
 
@@ -192,7 +192,7 @@ jobs:
           </paths>
           EOF
 
-          # 3. Colors & Theme
+          # 3. Colors & Modern Light Theme (Clean Light Status Bar)
           cat << 'EOF' > app/src/main/res/values/colors.xml
           <resources>
               <color name="flowrip_bg">#F8FAFC</color>
@@ -266,8 +266,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 11
-                  versionName "11.0"
+                  versionCode 12
+                  versionName "12.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -382,13 +382,15 @@ jobs:
               android:textStyle="bold" />
           EOF
 
-          # 11. Complete activity_main.xml (Exact Spacing & Full-Width Button Below Input)
+          # 11. Complete activity_main.xml (With Samsung / All-Android Navigation Protection)
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
               xmlns:app="http://schemas.android.com/apk/res-auto"
+              android:id="@+id/rootContainer"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
+              android:fitsSystemWindows="true"
               android:background="#F8FAFC">
 
               <!-- App Pages Container -->
@@ -396,7 +398,7 @@ jobs:
                   android:id="@+id/containerPages"
                   android:layout_width="match_parent"
                   android:layout_height="match_parent"
-                  android:layout_above="@id/bottomSection">
+                  android:layout_above="@id/bottomNavSection">
 
                   <!-- PAGE 1: HOME -->
                   <ScrollView
@@ -668,7 +670,7 @@ jobs:
                               </LinearLayout>
                           </LinearLayout>
 
-                          <!-- PREVIEW CARD (VIDEO DETAILS & CHOOSE FORMAT) -->
+                          <!-- PREVIEW CARD -->
                           <androidx.cardview.widget.CardView
                               android:id="@+id/viewPreviewCard"
                               android:layout_width="match_parent"
@@ -1250,7 +1252,7 @@ jobs:
                       </ScrollView>
                   </LinearLayout>
 
-                  <!-- PAGE 3: CLEAN SETTINGS SCREEN -->
+                  <!-- PAGE 3: SETTINGS SCREEN -->
                   <ScrollView
                       android:id="@+id/pageSettings"
                       android:layout_width="match_parent"
@@ -1496,13 +1498,15 @@ jobs:
                   </ScrollView>
               </FrameLayout>
 
-              <!-- BOTTOM SECTION: BANNER ADS + CLEAN NAVIGATION -->
+              <!-- BOTTOM NAVIGATION SECTION (DESIGNED FOR SAMSUNG & ALL ANDROID PHONES) -->
               <LinearLayout
-                  android:id="@+id/bottomSection"
+                  android:id="@+id/bottomNavSection"
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
                   android:layout_alignParentBottom="true"
-                  android:orientation="vertical">
+                  android:orientation="vertical"
+                  android:background="#FFFFFF"
+                  android:elevation="16dp">
 
                   <FrameLayout
                       android:id="@+id/bannerContainer"
@@ -1510,12 +1514,14 @@ jobs:
                       android:layout_height="wrap_content"
                       android:background="#F8FAFC" />
 
+                  <!-- Tall 64dp Navigation Bar with Large Click Targets -->
                   <LinearLayout
+                      android:id="@+id/navBarInner"
                       android:layout_width="match_parent"
-                      android:layout_height="56dp"
-                      android:background="#FFFFFF"
-                      android:elevation="12dp"
-                      android:orientation="horizontal">
+                      android:layout_height="64dp"
+                      android:orientation="horizontal"
+                      android:gravity="center_vertical"
+                      android:background="#FFFFFF">
 
                       <LinearLayout
                           android:id="@+id/tabHome"
@@ -1523,12 +1529,15 @@ jobs:
                           android:layout_height="match_parent"
                           android:layout_weight="1"
                           android:gravity="center"
+                          android:clickable="true"
+                          android:focusable="true"
+                          android:background="?attr/selectableItemBackground"
                           android:orientation="vertical">
 
                           <ImageView
                               android:id="@+id/iconTabHome"
-                              android:layout_width="20dp"
-                              android:layout_height="20dp"
+                              android:layout_width="24dp"
+                              android:layout_height="24dp"
                               android:src="@drawable/ic_nav_home" />
 
                           <TextView
@@ -1537,7 +1546,7 @@ jobs:
                               android:layout_height="wrap_content"
                               android:text="Home"
                               android:textColor="#4F46E5"
-                              android:textSize="11sp"
+                              android:textSize="12sp"
                               android:textStyle="bold"
                               android:layout_marginTop="2dp" />
                       </LinearLayout>
@@ -1548,12 +1557,15 @@ jobs:
                           android:layout_height="match_parent"
                           android:layout_weight="1"
                           android:gravity="center"
+                          android:clickable="true"
+                          android:focusable="true"
+                          android:background="?attr/selectableItemBackground"
                           android:orientation="vertical">
 
                           <ImageView
                               android:id="@+id/iconTabHistory"
-                              android:layout_width="20dp"
-                              android:layout_height="20dp"
+                              android:layout_width="24dp"
+                              android:layout_height="24dp"
                               android:src="@drawable/ic_nav_history" />
 
                           <TextView
@@ -1561,8 +1573,9 @@ jobs:
                               android:layout_width="wrap_content"
                               android:layout_height="wrap_content"
                               android:text="History"
-                              android:textColor="#94A3B8"
-                              android:textSize="11sp"
+                              android:textColor="#64748B"
+                              android:textSize="12sp"
+                              android:textStyle="bold"
                               android:layout_marginTop="2dp" />
                       </LinearLayout>
 
@@ -1572,12 +1585,15 @@ jobs:
                           android:layout_height="match_parent"
                           android:layout_weight="1"
                           android:gravity="center"
+                          android:clickable="true"
+                          android:focusable="true"
+                          android:background="?attr/selectableItemBackground"
                           android:orientation="vertical">
 
                           <ImageView
                               android:id="@+id/iconTabSettings"
-                              android:layout_width="20dp"
-                              android:layout_height="20dp"
+                              android:layout_width="24dp"
+                              android:layout_height="24dp"
                               android:src="@drawable/ic_nav_settings" />
 
                           <TextView
@@ -1585,8 +1601,9 @@ jobs:
                               android:layout_width="wrap_content"
                               android:layout_height="wrap_content"
                               android:text="Settings"
-                              android:textColor="#94A3B8"
-                              android:textSize="11sp"
+                              android:textColor="#64748B"
+                              android:textSize="12sp"
+                              android:textStyle="bold"
                               android:layout_marginTop="2dp" />
                       </LinearLayout>
                   </LinearLayout>
@@ -1665,7 +1682,7 @@ jobs:
           </RelativeLayout>
           EOF
 
-          # 12. MainActivity.kt (Full-Width Button Handler)
+          # 12. MainActivity.kt (True 1080p/720p FFmpeg Merge + Samsung Insets Protection)
           cat << 'EOF' > app/src/main/java/com/soundrip/app/MainActivity.kt
           package com.soundrip.app
 
@@ -1688,6 +1705,8 @@ jobs:
           import androidx.core.app.ActivityCompat
           import androidx.core.content.ContextCompat
           import androidx.core.content.FileProvider
+          import androidx.core.view.ViewCompat
+          import androidx.core.view.WindowInsetsCompat
           import com.startapp.sdk.adsbase.Ad
           import com.startapp.sdk.adsbase.StartAppAd
           import com.startapp.sdk.adsbase.StartAppSDK
@@ -1720,6 +1739,14 @@ jobs:
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
+
+                  // CRITICAL: Protect Samsung Galaxy A16 & all phones against button overlaps!
+                  ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootContainer)) { _, insets ->
+                      val navInsets = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+                      val bottomNavSection = findViewById<View>(R.id.bottomNavSection)
+                      bottomNavSection.setPadding(0, 0, 0, navInsets.bottom)
+                      insets
+                  }
 
                   try {
                       StartAppSDK.init(this, "208492019", false)
@@ -1819,7 +1846,7 @@ jobs:
                           val emptyText = TextView(this).apply {
                               text = "No downloads yet.\nPaste a link to get started!"
                               textSize = 14f
-                              setTextColor(android.graphics.Color.parseColor("#94A3B8"))
+                              setTextColor(android.graphics.Color.parseColor("#64748B"))
                               gravity = android.view.Gravity.CENTER
                               setPadding(0, 100, 0, 0)
                           }
@@ -1897,13 +1924,13 @@ jobs:
                       pageHistory.visibility = if (index == 1) View.VISIBLE else View.GONE
                       pageSettings.visibility = if (index == 2) View.VISIBLE else View.GONE
 
-                      textTabHome.setTextColor(android.graphics.Color.parseColor(if (index == 0) "#4F46E5" else "#94A3B8"))
-                      textTabHistory.setTextColor(android.graphics.Color.parseColor(if (index == 1) "#4F46E5" else "#94A3B8"))
-                      textTabSettings.setTextColor(android.graphics.Color.parseColor(if (index == 2) "#4F46E5" else "#94A3B8"))
+                      textTabHome.setTextColor(android.graphics.Color.parseColor(if (index == 0) "#4F46E5" else "#64748B"))
+                      textTabHistory.setTextColor(android.graphics.Color.parseColor(if (index == 1) "#4F46E5" else "#64748B"))
+                      textTabSettings.setTextColor(android.graphics.Color.parseColor(if (index == 2) "#4F46E5" else "#64748B"))
 
-                      iconTabHome.setColorFilter(android.graphics.Color.parseColor(if (index == 0) "#4F46E5" else "#94A3B8"))
-                      iconTabHistory.setColorFilter(android.graphics.Color.parseColor(if (index == 1) "#4F46E5" else "#94A3B8"))
-                      iconTabSettings.setColorFilter(android.graphics.Color.parseColor(if (index == 2) "#4F46E5" else "#94A3B8"))
+                      iconTabHome.setColorFilter(android.graphics.Color.parseColor(if (index == 0) "#4F46E5" else "#64748B"))
+                      iconTabHistory.setColorFilter(android.graphics.Color.parseColor(if (index == 1) "#4F46E5" else "#64748B"))
+                      iconTabSettings.setColorFilter(android.graphics.Color.parseColor(if (index == 2) "#4F46E5" else "#64748B"))
 
                       if (index == 1) refreshHistory()
                   }
@@ -2063,7 +2090,6 @@ jobs:
                       showDownloaderState(0)
                   }
 
-                  // 1-TAP PASTE OR DOWNLOAD ACTION
                   btnMainAction.setOnClickListener {
                       val currentText = urlInput.text.toString().trim()
                       if (currentText.isEmpty()) {
@@ -2080,6 +2106,7 @@ jobs:
                       }
                   }
 
+                  // 1080p, 720p, 480p High-Definition Video Extraction
                   fun executeDownload() {
                       val url = urlInput.text.toString().trim()
                       val selectedQuality = qualitySpinner.selectedItem.toString()
@@ -2089,7 +2116,7 @@ jobs:
                       circularProgressBar.progress = 0
                       txtCircularPercent.text = "0%"
                       linearProgressBar.progress = 0
-                      txtDownloadStats.text = "Starting high-speed stream..."
+                      txtDownloadStats.text = "Connecting to high-speed stream..."
 
                       thread {
                           try {
@@ -2108,12 +2135,29 @@ jobs:
                                   request.addOption("--audio-format", "mp3")
                                   request.addOption("--audio-quality", bitrate)
                               } else {
+                                  // CRITICAL FIX FOR 1080p / 720p BLURRINESS:
+                                  // Download separate HD video track + audio track and merge with FFmpeg!
                                   when {
-                                      selectedQuality.contains("1080p") -> request.addOption("-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]")
-                                      selectedQuality.contains("720p") -> request.addOption("-f", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]")
-                                      selectedQuality.contains("480p") -> request.addOption("-f", "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]")
-                                      selectedQuality.contains("360p") -> request.addOption("-f", "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]")
-                                      else -> request.addOption("-f", "best[ext=mp4]/best")
+                                      selectedQuality.contains("1080p") -> {
+                                          request.addOption("-f", "bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best[height<=1080]/best")
+                                          request.addOption("--merge-output-format", "mp4")
+                                      }
+                                      selectedQuality.contains("720p") -> {
+                                          request.addOption("-f", "bestvideo[height<=720]+bestaudio/bestvideo+bestaudio/best[height<=720]/best")
+                                          request.addOption("--merge-output-format", "mp4")
+                                      }
+                                      selectedQuality.contains("480p") -> {
+                                          request.addOption("-f", "bestvideo[height<=480]+bestaudio/bestvideo+bestaudio/best[height<=480]/best")
+                                          request.addOption("--merge-output-format", "mp4")
+                                      }
+                                      selectedQuality.contains("360p") -> {
+                                          request.addOption("-f", "bestvideo[height<=360]+bestaudio/bestvideo+bestaudio/best[height<=360]/best")
+                                          request.addOption("--merge-output-format", "mp4")
+                                      }
+                                      else -> { // Best Available
+                                          request.addOption("-f", "bestvideo+bestaudio/best")
+                                          request.addOption("--merge-output-format", "mp4")
+                                      }
                                   }
                               }
                               request.addOption("-o", "${targetDir.absolutePath}/%(title)s.%(ext)s")
@@ -2167,6 +2211,7 @@ jobs:
                                   startAppAd?.loadAd(StartAppAd.AdMode.AUTOMATIC)
                               }
                               override fun adDisplayed(ad: Ad?) {}
+                              override fun leisureAd() {}
                               override fun adClicked(ad: Ad?) {}
                               override fun adNotDisplayed(ad: Ad?) {
                                   executeDownload()
@@ -2299,5 +2344,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-ExactStudioUI-APK
+          name: FlowRip-SamsungFixed-HD-APK
           path: app/build/outputs/apk/**/*.apk
