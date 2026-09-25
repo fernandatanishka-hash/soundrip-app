@@ -255,8 +255,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 15
-                  versionName "15.0"
+                  versionCode 16
+                  versionName "16.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -2033,7 +2033,6 @@ jobs:
                               if (!targetDir.exists()) targetDir.mkdirs()
 
                               val request = YoutubeDLRequest(url)
-                              request.addOption("--extractor-args", "youtube:player_client=android,web")
                               request.addOption("--no-check-certificates")
                               request.addOption("--no-update")
 
@@ -2047,23 +2046,23 @@ jobs:
                                   // Uses native MP4 video + M4A (AAC) audio for lossless FFmpeg merge
                                   when {
                                       selectedQuality.contains("1080p") || selectedQuality.contains("Best") -> {
-                                          request.addOption("-f", "bv*[height<=1920][width<=1920][ext=mp4]+ba[ext=m4a]/bv*[ext=mp4]+ba[ext=m4a]/bv*+ba")
+                                          request.addOption("-f", "bv*[height<=1920][width<=1920][ext=mp4]+ba[ext=m4a]/bv*[height<=1920][width<=1920]+ba/bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b")
                                           request.addOption("--merge-output-format", "mp4")
                                       }
                                       selectedQuality.contains("720p") -> {
-                                          request.addOption("-f", "bv*[height<=1280][width<=1280][ext=mp4]+ba[ext=m4a]/bv*[height<=1280][width<=1280]+ba/bv*+ba")
+                                          request.addOption("-f", "bv*[height<=1280][width<=1280][ext=mp4]+ba[ext=m4a]/bv*[height<=1280][width<=1280]+ba/bv*+ba/b")
                                           request.addOption("--merge-output-format", "mp4")
                                       }
                                       selectedQuality.contains("480p") -> {
-                                          request.addOption("-f", "bv*[height<=854][width<=854][ext=mp4]+ba[ext=m4a]/bv*[height<=854][width<=854]+ba/bv*+ba")
+                                          request.addOption("-f", "bv*[height<=854][width<=854][ext=mp4]+ba[ext=m4a]/bv*[height<=854][width<=854]+ba/bv*+ba/b")
                                           request.addOption("--merge-output-format", "mp4")
                                       }
                                       selectedQuality.contains("360p") -> {
-                                          request.addOption("-f", "bv*[height<=640][width<=640]+ba[ext=m4a]/bv*[height<=640][width<=640]+ba/bv*+ba")
+                                          request.addOption("-f", "bv*[height<=640][width<=640][ext=mp4]+ba[ext=m4a]/bv*[height<=640][width<=640]+ba/bv*+ba/b")
                                           request.addOption("--merge-output-format", "mp4")
                                       }
                                       else -> {
-                                          request.addOption("-f", "bv*[ext=mp4]+ba[ext=m4a]/bv*+ba")
+                                          request.addOption("-f", "bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b")
                                           request.addOption("--merge-output-format", "mp4")
                                       }
                                   }
@@ -2265,5 +2264,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-VerifiedTrueHD-v15-APK
+          name: FlowRip-SABRFix-v16-APK
           path: app/build/outputs/apk/**/*.apk
