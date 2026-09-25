@@ -136,6 +136,15 @@ jobs:
           </shape>
           EOF
 
+          cat << 'EOF' > app/src/main/res/drawable/bg_search_bar.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android">
+              <solid android:color="#F1F5F9" />
+              <stroke android:width="1dp" android:color="#E2E8F0" />
+              <corners android:radius="22dp" />
+          </shape>
+          EOF
+
           cat << 'EOF' > app/src/main/res/drawable/bg_card_selected.xml
           <?xml version="1.0" encoding="utf-8"?>
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
@@ -255,8 +264,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 16
-                  versionName "16.0"
+                  versionCode 17
+                  versionName "17.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -1130,6 +1139,8 @@ jobs:
                       android:layout_height="match_parent"
                       android:orientation="vertical"
                       android:visibility="gone"
+                      android:focusable="true"
+                      android:focusableInTouchMode="true"
                       android:background="#F8FAFC">
 
                       <LinearLayout
@@ -1139,7 +1150,7 @@ jobs:
                           android:gravity="center_vertical"
                           android:paddingHorizontal="24dp"
                           android:paddingTop="36dp"
-                          android:paddingBottom="16dp">
+                          android:paddingBottom="14dp">
 
                           <TextView
                               android:layout_width="0dp"
@@ -1157,6 +1168,48 @@ jobs:
                               android:text="⚙"
                               android:textColor="#64748B"
                               android:textSize="20sp" />
+                      </LinearLayout>
+
+                      <!-- Search Input Box -->
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="44dp"
+                          android:layout_marginHorizontal="24dp"
+                          android:layout_marginBottom="12dp"
+                          android:background="@drawable/bg_search_bar"
+                          android:orientation="horizontal"
+                          android:gravity="center_vertical"
+                          android:paddingHorizontal="14dp">
+
+                          <TextView
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="🔍"
+                              android:textSize="14sp" />
+
+                          <EditText
+                              android:id="@+id/historySearchInput"
+                              android:layout_width="0dp"
+                              android:layout_height="match_parent"
+                              android:layout_weight="1"
+                              android:background="@null"
+                              android:hint="Search downloads..."
+                              android:textColorHint="#94A3B8"
+                              android:textColor="#0F172A"
+                              android:textSize="13sp"
+                              android:singleLine="true"
+                              android:imeOptions="actionDone"
+                              android:paddingStart="10dp" />
+
+                          <TextView
+                              android:id="@+id/btnClearHistorySearch"
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="✕"
+                              android:textSize="14sp"
+                              android:textColor="#94A3B8"
+                              android:padding="6dp"
+                              android:visibility="gone" />
                       </LinearLayout>
 
                       <!-- Filter Chips Row -->
@@ -1592,7 +1645,11 @@ jobs:
           import android.Manifest
           import android.content.Intent
           import android.content.pm.PackageManager
+          import android.graphics.Bitmap
           import android.graphics.BitmapFactory
+          import android.media.MediaMetadataRetriever
+          import android.view.ViewGroup
+          import android.view.inputmethod.InputMethodManager
           import android.media.MediaScannerConnection
           import android.net.Uri
           import android.os.Build
@@ -1633,6 +1690,10 @@ jobs:
           class MainActivity : AppCompatActivity() {
 
               private var isAudio = true
+
+              private fun dpToPx(dp: Int): Int {
+                  return (dp * resources.displayMetrics.density).toInt()
+              }
               private val audioQualities = arrayOf("320 kbps (HQ Audio)", "256 kbps", "192 kbps (Standard)", "128 kbps (Fast)")
               private val videoQualities = arrayOf("Best Available (1080p / 4K)", "1080p (Full HD)", "720p (HD)", "480p", "360p")
               private var currentVideoId: String? = null
@@ -1729,6 +1790,8 @@ jobs:
                   val btnMenu = findViewById<TextView>(R.id.btnMenu)
 
                   val historyListContainer = findViewById<LinearLayout>(R.id.historyListContainer)
+                  val historySearchInput = findViewById<EditText>(R.id.historySearchInput)
+                  val btnClearHistorySearch = findViewById<TextView>(R.id.btnClearHistorySearch)
                   val chipAll = findViewById<Button>(R.id.chipAll)
                   val chipAudio = findViewById<Button>(R.id.chipAudio)
                   val chipVideo = findViewById<Button>(R.id.chipVideo)
@@ -1737,17 +1800,20 @@ jobs:
                   fun refreshHistory() {
                       historyListContainer.removeAllViews()
                       val targetDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FlowRip")
+                      val searchQuery = historySearchInput.text.toString().trim().lowercase()
                       val files = targetDir.listFiles()?.filter {
-                          when (historyFilter) {
-                              "AUDIO" -> it.name.endsWith(".mp3")
-                              "VIDEO" -> it.name.endsWith(".mp4")
-                              else -> it.name.endsWith(".mp3") || it.name.endsWith(".mp4")
+                          val typeMatches = when (historyFilter) {
+                              "AUDIO" -> it.name.endsWith(".mp3", ignoreCase = true)
+                              "VIDEO" -> it.name.endsWith(".mp4", ignoreCase = true)
+                              else -> it.name.endsWith(".mp3", ignoreCase = true) || it.name.endsWith(".mp4", ignoreCase = true)
                           }
+                          val queryMatches = searchQuery.isEmpty() || it.name.lowercase().contains(searchQuery)
+                          typeMatches && queryMatches
                       }?.sortedByDescending { it.lastModified() } ?: emptyList()
 
                       if (files.isEmpty()) {
                           val emptyText = TextView(this).apply {
-                              text = "No downloads yet.\nPaste a link to get started!"
+                              text = if (searchQuery.isNotEmpty()) "No results found for \"$searchQuery\"" else "No downloads yet.\nPaste a link to get started!"
                               textSize = 14f
                               setTextColor(android.graphics.Color.parseColor("#64748B"))
                               gravity = android.view.Gravity.CENTER
@@ -1772,13 +1838,64 @@ jobs:
                           val row = LinearLayout(this).apply {
                               orientation = LinearLayout.HORIZONTAL
                               gravity = android.view.Gravity.CENTER_VERTICAL
-                              setPadding(32, 28, 32, 28)
+                              setPadding(24, 20, 24, 20)
                           }
 
-                          val icon = TextView(this).apply {
-                              text = if (file.name.endsWith(".mp3")) "🎵" else "🎬"
-                              textSize = 20f
-                              setPadding(0, 0, 24, 0)
+                          // Thumbnail Card with Fallback Placeholder
+                          val thumbCard = androidx.cardview.widget.CardView(this).apply {
+                              radius = 16f
+                              cardElevation = 0f
+                              setCardBackgroundColor(android.graphics.Color.parseColor("#EEF2FF"))
+                              val lp = LinearLayout.LayoutParams(dpToPx(56), dpToPx(56)).apply {
+                                  marginEnd = dpToPx(12)
+                              }
+                              layoutParams = lp
+                          }
+
+                          val thumbFrame = FrameLayout(this).apply {
+                              layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                          }
+
+                          val placeholderText = TextView(this).apply {
+                              text = if (file.name.endsWith(".mp3", ignoreCase = true)) "🎵" else "🎬"
+                              textSize = 22f
+                              gravity = android.view.Gravity.CENTER
+                              layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+                          }
+
+                          val thumbImg = ImageView(this).apply {
+                              layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+                              scaleType = ImageView.ScaleType.CENTER_CROP
+                          }
+
+                          thumbFrame.addView(placeholderText)
+                          thumbFrame.addView(thumbImg)
+                          thumbCard.addView(thumbFrame)
+
+                          // Extract thumbnail asynchronously
+                          thread {
+                              var bmp: Bitmap? = null
+                              try {
+                                  val retriever = MediaMetadataRetriever()
+                                  retriever.setDataSource(file.absolutePath)
+                                  if (file.name.endsWith(".mp4", ignoreCase = true)) {
+                                      bmp = retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                                          ?: retriever.frameAtTime
+                                  } else {
+                                      val art = retriever.embeddedPicture
+                                      if (art != null) {
+                                          bmp = BitmapFactory.decodeByteArray(art, 0, art.size)
+                                      }
+                                  }
+                                  retriever.release()
+                              } catch (e: Exception) {}
+
+                              if (bmp != null) {
+                                  runOnUiThread {
+                                      thumbImg.setImageBitmap(bmp)
+                                      placeholderText.visibility = View.GONE
+                                  }
+                              }
                           }
 
                           val infoCol = LinearLayout(this).apply {
@@ -1806,23 +1923,94 @@ jobs:
                           infoCol.addView(title)
                           infoCol.addView(sub)
 
+                          val actionsRow = LinearLayout(this).apply {
+                              orientation = LinearLayout.HORIZONTAL
+                              gravity = android.view.Gravity.CENTER_VERTICAL
+                          }
+
                           val playBtn = Button(this).apply {
                               text = "▶ Play"
                               textSize = 11f
                               setTextColor(android.graphics.Color.WHITE)
                               backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#4F46E5"))
+                              layoutParams = LinearLayout.LayoutParams(
+                                  LinearLayout.LayoutParams.WRAP_CONTENT,
+                                  dpToPx(36)
+                              )
+                              setPadding(dpToPx(12), 0, dpToPx(12), 0)
                               setOnClickListener { playFile(file) }
                           }
 
-                          row.addView(icon)
+                          val deleteBtn = Button(this).apply {
+                              text = "🗑"
+                              textSize = 13f
+                              setTextColor(android.graphics.Color.parseColor("#EF4444"))
+                              backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#FEE2E2"))
+                              val lp = LinearLayout.LayoutParams(dpToPx(42), dpToPx(36)).apply {
+                                  marginStart = dpToPx(6)
+                              }
+                              layoutParams = lp
+                              setPadding(0, 0, 0, 0)
+                              setOnClickListener {
+                                  AlertDialog.Builder(this@MainActivity)
+                                      .setTitle("Delete File?")
+                                      .setMessage("Are you sure you want to delete:\n\"${file.name}\"?")
+                                      .setPositiveButton("Delete") { _, _ ->
+                                          try {
+                                              val deleted = file.delete()
+                                              if (deleted) {
+                                                  MediaScannerConnection.scanFile(
+                                                      applicationContext,
+                                                      arrayOf(file.absolutePath),
+                                                      null,
+                                                      null
+                                                  )
+                                                  Toast.makeText(this@MainActivity, "File deleted", Toast.LENGTH_SHORT).show()
+                                                  refreshHistory()
+                                              } else {
+                                                  Toast.makeText(this@MainActivity, "Could not delete file", Toast.LENGTH_SHORT).show()
+                                              }
+                                          } catch (e: Exception) {
+                                              Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                          }
+                                      }
+                                      .setNegativeButton("Cancel", null)
+                                      .show()
+                              }
+                          }
+
+                          actionsRow.addView(playBtn)
+                          actionsRow.addView(deleteBtn)
+
+                          row.addView(thumbCard)
                           row.addView(infoCol)
-                          row.addView(playBtn)
+                          row.addView(actionsRow)
                           itemCard.addView(row)
                           historyListContainer.addView(itemCard)
                       }
                   }
 
+                  historySearchInput.addTextChangedListener(object : TextWatcher {
+                      override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                      override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                          val q = s?.toString()?.trim() ?: ""
+                          btnClearHistorySearch.visibility = if (q.isNotEmpty()) View.VISIBLE else View.GONE
+                          refreshHistory()
+                      }
+                      override fun afterTextChanged(s: Editable?) {}
+                  })
+
+                  btnClearHistorySearch.setOnClickListener {
+                      historySearchInput.text.clear()
+                      val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager
+                      imm?.hideSoftInputFromWindow(historySearchInput.windowToken, 0)
+                  }
+
                   fun switchTab(index: Int) {
+                      val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager
+                      imm?.hideSoftInputFromWindow(window.decorView.windowToken, 0)
+                      currentFocus?.clearFocus()
+
                       pageHome.visibility = if (index == 0) View.VISIBLE else View.GONE
                       pageHistory.visibility = if (index == 1) View.VISIBLE else View.GONE
                       pageSettings.visibility = if (index == 2) View.VISIBLE else View.GONE
@@ -2264,5 +2452,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-SABRFix-v16-APK
+          name: FlowRip-ProDownloads-v17-APK
           path: app/build/outputs/apk/**/*.apk
