@@ -255,8 +255,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 14
-                  versionName "14.0"
+                  versionCode 15
+                  versionName "15.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -296,6 +296,29 @@ jobs:
           }
           EOF
 
+          # 8. FlowRipApp.kt (Early Core Engine & FFmpeg Initialization)
+          cat << 'EOF' > app/src/main/java/com/soundrip/app/FlowRipApp.kt
+          package com.soundrip.app
+
+          import android.app.Application
+          import android.util.Log
+          import com.yausername.ffmpeg.FFmpeg
+          import com.yausername.youtubedl_android.YoutubeDL
+
+          class FlowRipApp : Application() {
+              override fun onCreate() {
+                  super.onCreate()
+                  try {
+                      YoutubeDL.getInstance().init(this)
+                      FFmpeg.getInstance().init(this)
+                      Log.d("FlowRipApp", "YoutubeDL and FFmpeg initialized successfully")
+                  } catch (e: Exception) {
+                      Log.e("FlowRipApp", "Failed to initialize YoutubeDL / FFmpeg", e)
+                  }
+              }
+          }
+          EOF
+
           # 8. strings.xml
           cat << 'EOF' > app/src/main/res/values/strings.xml
           <resources>
@@ -316,11 +339,13 @@ jobs:
               <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
 
               <application
+                  android:name=".FlowRipApp"
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
                   android:roundIcon="@mipmap/ic_launcher_round"
                   android:label="@string/app_name"
                   android:theme="@style/Theme.FlowRip"
+                  android:extractNativeLibs="true"
                   android:requestLegacyExternalStorage="true"
                   android:usesCleartextTraffic="true">
 
@@ -1640,7 +1665,7 @@ jobs:
                       val bannerContainer = findViewById<FrameLayout>(R.id.bannerContainer)
                       val banner = Banner(this)
                       bannerContainer.addView(banner)
-                  } catch (_: Exception) {}
+                  } catch (e: Exception) {}
 
                   val splashOverlay = findViewById<View>(R.id.splashOverlay)
                   splashOverlay.postDelayed({
@@ -1914,7 +1939,7 @@ jobs:
                                       previewThumbnail.setImageBitmap(bitmap)
                                       downloadingThumb.setImageBitmap(bitmap)
                                   }
-                              } catch (_: Exception) {}
+                              } catch (e: Exception) {}
                           }
 
                           thread {
@@ -1935,7 +1960,7 @@ jobs:
                                       previewDetails.text = "$author • YouTube Stream"
                                       downloadingTitle.text = title
                                   }
-                              } catch (_: Exception) {
+                              } catch (e: Exception) {
                                   runOnUiThread {
                                       previewTitle.text = "YouTube Media"
                                       previewDetails.text = "Ready to download"
@@ -2001,7 +2026,7 @@ jobs:
                               try {
                                   YoutubeDL.getInstance().init(applicationContext)
                                   FFmpeg.getInstance().init(applicationContext)
-                              } catch (_: Exception) {}
+                              } catch (e: Exception) {}
 
                               val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
                               val targetDir = File(publicDownloads, "FlowRip")
@@ -2022,23 +2047,23 @@ jobs:
                                   // Uses native MP4 video + M4A (AAC) audio for lossless FFmpeg merge
                                   when {
                                       selectedQuality.contains("1080p") || selectedQuality.contains("Best") -> {
-                                          request.addOption("-f", "bv*[height<=1920][width<=1920]+ba[ext=m4a]/bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b")
+                                          request.addOption("-f", "bv*[height<=1920][width<=1920][ext=mp4]+ba[ext=m4a]/bv*[ext=mp4]+ba[ext=m4a]/bv*+ba")
                                           request.addOption("--merge-output-format", "mp4")
                                       }
                                       selectedQuality.contains("720p") -> {
-                                          request.addOption("-f", "bv*[height<=1280][width<=1280]+ba[ext=m4a]/bv*+ba/b")
+                                          request.addOption("-f", "bv*[height<=1280][width<=1280][ext=mp4]+ba[ext=m4a]/bv*[height<=1280][width<=1280]+ba/bv*+ba")
                                           request.addOption("--merge-output-format", "mp4")
                                       }
                                       selectedQuality.contains("480p") -> {
-                                          request.addOption("-f", "bv*[height<=854][width<=854]+ba[ext=m4a]/bv*+ba/b")
+                                          request.addOption("-f", "bv*[height<=854][width<=854][ext=mp4]+ba[ext=m4a]/bv*[height<=854][width<=854]+ba/bv*+ba")
                                           request.addOption("--merge-output-format", "mp4")
                                       }
                                       selectedQuality.contains("360p") -> {
-                                          request.addOption("-f", "bv*[height<=640][width<=640]+ba[ext=m4a]/bv*+ba/b")
+                                          request.addOption("-f", "bv*[height<=640][width<=640]+ba[ext=m4a]/bv*[height<=640][width<=640]+ba/bv*+ba")
                                           request.addOption("--merge-output-format", "mp4")
                                       }
                                       else -> {
-                                          request.addOption("-f", "bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b")
+                                          request.addOption("-f", "bv*[ext=mp4]+ba[ext=m4a]/bv*+ba")
                                           request.addOption("--merge-output-format", "mp4")
                                       }
                                   }
@@ -2068,8 +2093,22 @@ jobs:
                                   )
                               }
 
+                              var resInfo = ""
+                              if (!isAudio && latestFile != null) {
+                                  try {
+                                      val retriever = android.media.MediaMetadataRetriever()
+                                      retriever.setDataSource(latestFile.absolutePath)
+                                      val width = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                                      val height = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                                      if (!width.isNullOrEmpty() && !height.isNullOrEmpty()) {
+                                          resInfo = " • ${width}x${height} HD"
+                                      }
+                                      retriever.release()
+                                  } catch (e: Exception) {}
+                              }
+
                               runOnUiThread {
-                                  completedFileName.text = latestFile?.name ?: "Media File"
+                                  completedFileName.text = (latestFile?.name ?: "Media File") + resInfo
                                   showDownloaderState(3)
                                   Toast.makeText(this@MainActivity, "Download Complete!", Toast.LENGTH_LONG).show()
                               }
@@ -2100,7 +2139,7 @@ jobs:
                                   startAppAd?.loadAd(StartAppAd.AdMode.AUTOMATIC)
                               }
                           }) ?: false
-                      } catch (_: Exception) {}
+                      } catch (e: Exception) {}
 
                       if (!adShown) {
                           executeDownload()
@@ -2150,8 +2189,8 @@ jobs:
                           FFmpeg.getInstance().init(applicationContext)
                           try {
                               YoutubeDL.getInstance().updateYoutubeDL(applicationContext, YoutubeDL.UpdateChannel.STABLE)
-                          } catch (_: Exception) {}
-                      } catch (_: Exception) {}
+                          } catch (e: Exception) {}
+                      } catch (e: Exception) {}
                   }
               }
 
@@ -2226,5 +2265,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-CrystalClear-HD-v14-APK
+          name: FlowRip-VerifiedTrueHD-v15-APK
           path: app/build/outputs/apk/**/*.apk
