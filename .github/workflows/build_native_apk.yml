@@ -38,10 +38,7 @@ jobs:
               android:viewportHeight="108">
               <path
                   android:fillColor="#6366F1"
-                  android:pathData="M38,28 C35.2,26.5 31,28.5 31,31.7 L31,76.3 C31,79.5 35.2,81.5 38,80.0 L76,57.7 C78.7,56.1 78.7,52.2 76,50.6 Z"/>
-              <path
-                  android:fillColor="#00D2FF"
-                  android:pathData="M38,28 C35.2,26.5 31,28.5 31,31.7 L31,54 L55,54 Z"/>
+                  android:pathData="M32,24 L86,54 L32,84 Z"/>
           </vector>
           EOF
 
@@ -84,6 +81,7 @@ jobs:
           </vector>
           EOF
 
+          # Custom Launcher Icon
           cat << 'EOF' > app/src/main/res/drawable/ic_launcher_background.xml
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -92,7 +90,7 @@ jobs:
               android:viewportWidth="108"
               android:viewportHeight="108">
               <path
-                  android:fillColor="#0A0D1A"
+                  android:fillColor="#0F172A"
                   android:pathData="M0,0h108v108h-108z"/>
           </vector>
           EOF
@@ -106,10 +104,10 @@ jobs:
               android:viewportHeight="108">
               <path
                   android:fillColor="#6366F1"
-                  android:pathData="M38,28 C35.2,26.5 31,28.5 31,31.7 L31,76.3 C31,79.5 35.2,81.5 38,80.0 L76,57.7 C78.7,56.1 78.7,52.2 76,50.6 Z"/>
+                  android:pathData="M54,16 A38,38 0 1,1 53.9,16 Z"/>
               <path
-                  android:fillColor="#00D2FF"
-                  android:pathData="M38,28 C35.2,26.5 31,28.5 31,31.7 L31,54 L55,54 Z"/>
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M44,36 L72,54 L44,72 Z"/>
           </vector>
           EOF
 
@@ -129,56 +127,45 @@ jobs:
           </adaptive-icon>
           EOF
 
-          # 2. Drawables (Badges, Cards, Circular Progress)
+          # 2. Modern Drawables
           cat << 'EOF' > app/src/main/res/drawable/bg_badge.xml
           <?xml version="1.0" encoding="utf-8"?>
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
-              <solid android:color="#F1F5F9"/>
-              <stroke android:width="1dp" android:color="#E2E8F0"/>
-              <corners android:radius="20dp"/>
+              <solid android:color="#EEF2FF" />
+              <corners android:radius="16dp" />
           </shape>
           EOF
 
           cat << 'EOF' > app/src/main/res/drawable/bg_card_selected.xml
           <?xml version="1.0" encoding="utf-8"?>
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
-              <solid android:color="#EEF2FF"/>
-              <stroke android:width="1.8dp" android:color="#4F46E5"/>
-              <corners android:radius="14dp"/>
+              <solid android:color="#F5F3FF" />
+              <stroke android:width="2dp" android:color="#6366F1" />
+              <corners android:radius="14dp" />
           </shape>
           EOF
 
           cat << 'EOF' > app/src/main/res/drawable/bg_card_unselected.xml
           <?xml version="1.0" encoding="utf-8"?>
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
-              <solid android:color="#FFFFFF"/>
-              <stroke android:width="1dp" android:color="#E2E8F0"/>
-              <corners android:radius="14dp"/>
+              <solid android:color="#F8FAFC" />
+              <stroke android:width="1.5dp" android:color="#E2E8F0" />
+              <corners android:radius="14dp" />
           </shape>
           EOF
 
           cat << 'EOF' > app/src/main/res/drawable/circular_progress_drawable.xml
           <?xml version="1.0" encoding="utf-8"?>
           <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-              <item android:id="@android:id/background">
-                  <shape
-                      android:innerRadiusRatio="2.4"
-                      android:shape="ring"
-                      android:thickness="6dp"
-                      android:useLevel="false">
-                      <solid android:color="#E2E8F0" />
+              <item>
+                  <shape android:shape="ring" android:thicknessRatio="14" android:useLevel="false">
+                      <solid android:color="#EEF2FF" />
                   </shape>
               </item>
-              <item android:id="@android:id/progress">
-                  <rotate
-                      android:fromDegrees="270"
-                      android:toDegrees="270">
-                      <shape
-                          android:innerRadiusRatio="2.4"
-                          android:shape="ring"
-                          android:thickness="6dp"
-                          android:useLevel="true">
-                          <solid android:color="#4F46E5" />
+              <item>
+                  <rotate android:fromDegrees="270" android:toDegrees="270">
+                      <shape android:shape="ring" android:thicknessRatio="14" android:useLevel="true">
+                          <solid android:color="#6366F1" />
                       </shape>
                   </rotate>
               </item>
@@ -187,8 +174,8 @@ jobs:
 
           cat << 'EOF' > app/src/main/res/xml/provider_paths.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <paths xmlns:android="http://schemas.android.com/apk/res/android">
-              <external-path name="external_files" path="."/>
+          <paths>
+              <external-path name="external_files" path="." />
           </paths>
           EOF
 
@@ -196,30 +183,32 @@ jobs:
           cat << 'EOF' > app/src/main/res/values/colors.xml
           <resources>
               <color name="flowrip_bg">#F8FAFC</color>
-              <color name="flowrip_primary">#4F46E5</color>
-              <color name="flowrip_dark">#0F172A</color>
-              <color name="flowrip_muted">#64748B</color>
-              <color name="flowrip_success">#10B981</color>
+              <color name="flowrip_primary">#6366F1</color>
+              <color name="flowrip_primary_dark">#4F46E5</color>
+              <color name="flowrip_accent">#10B981</color>
           </resources>
           EOF
 
           cat << 'EOF' > app/src/main/res/values/styles.xml
           <resources>
-              <style name="Theme.FlowRip" parent="Theme.MaterialComponents.Light.NoActionBar">
-                  <item name="android:windowBackground">#F8FAFC</item>
+              <style name="Theme.FlowRip" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+                  <item name="colorPrimary">@color/flowrip_primary</color>
+                  <item name="colorPrimaryDark">@color/flowrip_primary_dark</item>
+                  <item name="colorAccent">@color/flowrip_accent</item>
+                  <item name="android:windowBackground">@color/flowrip_bg</item>
                   <item name="android:statusBarColor">#F8FAFC</item>
-                  <item name="android:navigationBarColor">#FFFFFF</item>
                   <item name="android:windowLightStatusBar">true</item>
-                  <item name="colorPrimary">@color/flowrip_primary</item>
+                  <item name="android:navigationBarColor">#FFFFFF</item>
+                  <item name="android:windowLightNavigationBar">true</item>
               </style>
           </resources>
           EOF
 
           # 4. gradle.properties
           cat << 'EOF' > gradle.properties
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           android.useAndroidX=true
           android.enableJetifier=true
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           EOF
 
           # 5. settings.gradle
@@ -266,8 +255,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 12
-                  versionName "12.0"
+                  versionCode 13
+                  versionName "13.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -317,28 +306,29 @@ jobs:
           # 9. AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:tools="http://schemas.android.com/tools">
+
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" tools:ignore="ScopedStorage" />
+              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
 
               <application
                   android:allowBackup="true"
-                  android:label="@string/app_name"
                   android:icon="@mipmap/ic_launcher"
                   android:roundIcon="@mipmap/ic_launcher_round"
-                  android:supportsRtl="true"
-                  android:extractNativeLibs="true"
+                  android:label="@string/app_name"
                   android:theme="@style/Theme.FlowRip"
-                  android:requestLegacyExternalStorage="true">
+                  android:requestLegacyExternalStorage="true"
+                  android:usesCleartextTraffic="true">
 
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
-                      android:windowSoftInputMode="adjustPan">
+                      android:windowSoftInputMode="adjustResize"
+                      android:configChanges="orientation|screenSize|screenLayout">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -358,7 +348,7 @@ jobs:
           </manifest>
           EOF
 
-          # 10. High-Contrast Spinner Layouts
+          # 10. Spinner layouts
           cat << 'EOF' > app/src/main/res/layout/item_spinner_selected.xml
           <?xml version="1.0" encoding="utf-8"?>
           <TextView xmlns:android="http://schemas.android.com/apk/res/android"
@@ -366,7 +356,7 @@ jobs:
               android:layout_height="wrap_content"
               android:padding="8dp"
               android:textColor="#0F172A"
-              android:textSize="14sp"
+              android:textSize="13sp"
               android:textStyle="bold" />
           EOF
 
@@ -375,10 +365,9 @@ jobs:
           <TextView xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
               android:layout_height="wrap_content"
-              android:padding="14dp"
-              android:background="#FFFFFF"
+              android:padding="12dp"
               android:textColor="#0F172A"
-              android:textSize="14sp"
+              android:textSize="13sp"
               android:textStyle="bold" />
           EOF
 
@@ -406,267 +395,274 @@ jobs:
                       android:layout_width="match_parent"
                       android:layout_height="match_parent"
                       android:fillViewport="true"
-                      android:visibility="visible">
+                      android:scrollbars="none">
 
                       <LinearLayout
                           android:layout_width="match_parent"
                           android:layout_height="wrap_content"
                           android:orientation="vertical"
-                          android:padding="20dp">
+                          android:paddingHorizontal="24dp"
+                          android:paddingTop="36dp"
+                          android:paddingBottom="24dp">
 
-                          <!-- Top Header Bar -->
+                          <!-- Top Header Badge -->
                           <LinearLayout
-                              android:layout_width="match_parent"
+                              android:layout_width="wrap_content"
                               android:layout_height="wrap_content"
                               android:orientation="horizontal"
                               android:gravity="center_vertical"
-                              android:layout_marginTop="4dp"
-                              android:layout_marginBottom="24dp">
+                              android:background="@drawable/bg_badge"
+                              android:paddingHorizontal="14dp"
+                              android:paddingVertical="7dp">
 
-                              <ImageView
-                                  android:layout_width="32dp"
-                                  android:layout_height="32dp"
-                                  android:src="@drawable/ic_play_gradient" />
+                              <View
+                                  android:layout_width="7dp"
+                                  android:layout_height="7dp"
+                                  android:background="#10B981" />
 
                               <TextView
                                   android:layout_width="wrap_content"
                                   android:layout_height="wrap_content"
-                                  android:text="Flow"
-                                  android:textColor="#0F172A"
-                                  android:textSize="22sp"
-                                  android:textStyle="bold"
-                                  android:layout_marginStart="8dp" />
-
-                              <TextView
-                                  android:layout_width="0dp"
-                                  android:layout_height="wrap_content"
-                                  android:layout_weight="1"
-                                  android:text="rip"
-                                  android:textColor="#6366F1"
-                                  android:textSize="22sp"
+                                  android:text="  Ultra HD 1080p &amp; 320kbps MP3"
+                                  android:textColor="#4F46E5"
+                                  android:textSize="11sp"
                                   android:textStyle="bold" />
-
-                              <TextView
-                                  android:id="@+id/btnMenu"
-                                  android:layout_width="36dp"
-                                  android:layout_height="36dp"
-                                  android:text="☰"
-                                  android:textColor="#0F172A"
-                                  android:textSize="22sp"
-                                  android:gravity="center" />
                           </LinearLayout>
 
-                          <!-- HERO TITLE: YOUTUBE TO MP3 & MP4 -->
+                          <!-- Hero Title -->
                           <LinearLayout
                               android:id="@+id/viewHomeHero"
                               android:layout_width="match_parent"
                               android:layout_height="wrap_content"
                               android:orientation="vertical"
-                              android:gravity="center_horizontal"
-                              android:visibility="visible"
-                              android:layout_marginTop="10dp"
-                              android:layout_marginBottom="24dp">
-
-                              <LinearLayout
-                                  android:layout_width="wrap_content"
-                                  android:layout_height="wrap_content"
-                                  android:orientation="horizontal">
-
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="YouTube to "
-                                      android:textColor="#0F172A"
-                                      android:textSize="26sp"
-                                      android:textStyle="bold" />
-
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="MP3 &amp; MP4"
-                                      android:textColor="#4F46E5"
-                                      android:textSize="26sp"
-                                      android:textStyle="bold" />
-                              </LinearLayout>
+                              android:layout_marginTop="20dp">
 
                               <TextView
                                   android:layout_width="wrap_content"
                                   android:layout_height="wrap_content"
-                                  android:text="Download your favorite videos &amp; music in HD, easily."
+                                  android:text="Download Media"
+                                  android:textColor="#0F172A"
+                                  android:textSize="30sp"
+                                  android:textStyle="bold"
+                                  android:letterSpacing="-0.02" />
+
+                              <TextView
+                                  android:layout_width="wrap_content"
+                                  android:layout_height="wrap_content"
+                                  android:text="Fast, studio-quality MP3 audio and 1080p MP4 video downloads from YouTube."
                                   android:textColor="#64748B"
-                                  android:textSize="14sp"
-                                  android:layout_marginTop="6dp" />
+                                  android:textSize="13sp"
+                                  android:layout_marginTop="6dp"
+                                  android:lineSpacingExtra="3dp" />
                           </LinearLayout>
 
-                          <!-- FULL-WIDTH LINK INPUT CARD -->
+                          <!-- FULL-WIDTH URL INPUT PILL -->
                           <androidx.cardview.widget.CardView
                               android:layout_width="match_parent"
-                              android:layout_height="54dp"
-                              app:cardBackgroundColor="#FFFFFF"
-                              app:cardCornerRadius="16dp"
-                              app:cardElevation="2dp"
-                              android:layout_marginBottom="12dp">
+                              android:layout_height="58dp"
+                              android:layout_marginTop="24dp"
+                              app:cardCornerRadius="29dp"
+                              app:cardElevation="3dp"
+                              app:cardBackgroundColor="#FFFFFF">
 
-                              <LinearLayout
+                              <RelativeLayout
                                   android:layout_width="match_parent"
                                   android:layout_height="match_parent"
-                                  android:orientation="horizontal"
-                                  android:gravity="center_vertical"
-                                  android:paddingStart="16dp"
-                                  android:paddingEnd="16dp">
+                                  android:paddingHorizontal="20dp">
 
                                   <TextView
+                                      android:id="@+id/txtLinkIcon"
                                       android:layout_width="wrap_content"
                                       android:layout_height="wrap_content"
+                                      android:layout_centerVertical="true"
                                       android:text="🔗"
-                                      android:textSize="18sp"
-                                      android:layout_marginEnd="10dp" />
+                                      android:textSize="16sp" />
 
                                   <EditText
                                       android:id="@+id/urlInput"
-                                      android:layout_width="0dp"
+                                      android:layout_width="match_parent"
                                       android:layout_height="match_parent"
-                                      android:layout_weight="1"
-                                      android:hint="Paste YouTube link here..."
+                                      android:layout_toEndOf="@id/txtLinkIcon"
+                                      android:layout_toStartOf="@+id/btnClear"
+                                      android:layout_marginStart="10dp"
+                                      android:layout_marginEnd="6dp"
+                                      android:background="@null"
+                                      android:hint="Paste YouTube video or music link..."
                                       android:textColorHint="#94A3B8"
                                       android:textColor="#0F172A"
-                                      android:background="@null"
-                                      android:textSize="14sp"
-                                      android:inputType="textUri" />
+                                      android:textSize="13sp"
+                                      android:singleLine="true"
+                                      android:imeOptions="actionDone" />
 
                                   <TextView
                                       android:id="@+id/btnClear"
-                                      android:layout_width="32dp"
-                                      android:layout_height="32dp"
+                                      android:layout_width="28dp"
+                                      android:layout_height="28dp"
+                                      android:layout_alignParentEnd="true"
+                                      android:layout_centerVertical="true"
                                       android:text="✕"
                                       android:textColor="#94A3B8"
+                                      android:textSize="14sp"
                                       android:gravity="center"
-                                      android:textSize="16sp"
                                       android:visibility="gone" />
-                              </LinearLayout>
+                              </RelativeLayout>
                           </androidx.cardview.widget.CardView>
 
-                          <!-- BIG FULL-WIDTH BUTTON DIRECTLY BELOW INPUT -->
+                          <!-- FULL-WIDTH MAIN ACTION BUTTON (DIRECTLY BELOW INPUT) -->
                           <Button
                               android:id="@+id/btnMainAction"
                               android:layout_width="match_parent"
-                              android:layout_height="52dp"
+                              android:layout_height="56dp"
+                              android:layout_marginTop="14dp"
                               android:text="📋 PASTE LINK"
                               android:textColor="#FFFFFF"
-                              android:textSize="15sp"
+                              android:textSize="14sp"
                               android:textStyle="bold"
                               android:backgroundTint="#4F46E5"
-                              app:cornerRadius="26dp"
-                              android:layout_marginBottom="36dp" />
+                              app:cornerRadius="28dp"
+                              android:elevation="4dp" />
 
-                          <!-- 3 FEATURES BADGES -->
+                          <!-- VALUE PROPOSITION BADGES -->
                           <LinearLayout
                               android:id="@+id/viewHomeFeatures"
                               android:layout_width="match_parent"
                               android:layout_height="wrap_content"
-                              android:orientation="horizontal"
-                              android:visibility="visible">
+                              android:orientation="vertical"
+                              android:layout_marginTop="32dp">
 
                               <LinearLayout
-                                  android:layout_width="0dp"
+                                  android:layout_width="match_parent"
                                   android:layout_height="wrap_content"
-                                  android:layout_weight="1"
-                                  android:gravity="center"
-                                  android:orientation="vertical">
+                                  android:orientation="horizontal"
+                                  android:gravity="center_vertical"
+                                  android:paddingVertical="12dp">
 
-                                  <TextView
-                                      android:layout_width="48dp"
-                                      android:layout_height="48dp"
-                                      android:text="⚡"
-                                      android:textSize="20sp"
-                                      android:gravity="center"
-                                      android:background="@drawable/bg_badge" />
+                                  <androidx.cardview.widget.CardView
+                                      android:layout_width="44dp"
+                                      android:layout_height="44dp"
+                                      app:cardCornerRadius="22dp"
+                                      app:cardElevation="0dp"
+                                      app:cardBackgroundColor="#EEF2FF">
+                                      <TextView
+                                          android:layout_width="match_parent"
+                                          android:layout_height="match_parent"
+                                          android:text="⚡"
+                                          android:textSize="18sp"
+                                          android:gravity="center" />
+                                  </androidx.cardview.widget.CardView>
 
-                                  <TextView
-                                      android:layout_width="wrap_content"
+                                  <LinearLayout
+                                      android:layout_width="0dp"
                                       android:layout_height="wrap_content"
-                                      android:text="Fast"
-                                      android:textColor="#0F172A"
-                                      android:textSize="13sp"
-                                      android:textStyle="bold"
-                                      android:layout_marginTop="8dp" />
+                                      android:layout_weight="1"
+                                      android:orientation="vertical"
+                                      android:layout_marginStart="14dp">
 
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="Quick and\nreliable"
-                                      android:textColor="#94A3B8"
-                                      android:textSize="11sp"
-                                      android:gravity="center"
-                                      android:layout_marginTop="2dp" />
+                                      <TextView
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:text="Instant Multi-Threaded Engine"
+                                          android:textColor="#0F172A"
+                                          android:textSize="13sp"
+                                          android:textStyle="bold" />
+
+                                      <TextView
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:text="Powered by optimized yt-dlp &amp; FFmpeg"
+                                          android:textColor="#64748B"
+                                          android:textSize="11sp" />
+                                  </LinearLayout>
                               </LinearLayout>
 
                               <LinearLayout
-                                  android:layout_width="0dp"
+                                  android:layout_width="match_parent"
                                   android:layout_height="wrap_content"
-                                  android:layout_weight="1"
-                                  android:gravity="center"
-                                  android:orientation="vertical">
+                                  android:orientation="horizontal"
+                                  android:gravity="center_vertical"
+                                  android:paddingVertical="12dp">
 
-                                  <TextView
-                                      android:layout_width="48dp"
-                                      android:layout_height="48dp"
-                                      android:text="🛡️"
-                                      android:textSize="20sp"
-                                      android:gravity="center"
-                                      android:background="@drawable/bg_badge" />
+                                  <androidx.cardview.widget.CardView
+                                      android:layout_width="44dp"
+                                      android:layout_height="44dp"
+                                      app:cardCornerRadius="22dp"
+                                      app:cardElevation="0dp"
+                                      app:cardBackgroundColor="#ECFDF5">
+                                      <TextView
+                                          android:layout_width="match_parent"
+                                          android:layout_height="match_parent"
+                                          android:text="🎬"
+                                          android:textSize="18sp"
+                                          android:gravity="center" />
+                                  </androidx.cardview.widget.CardView>
 
-                                  <TextView
-                                      android:layout_width="wrap_content"
+                                  <LinearLayout
+                                      android:layout_width="0dp"
                                       android:layout_height="wrap_content"
-                                      android:text="Free"
-                                      android:textColor="#0F172A"
-                                      android:textSize="13sp"
-                                      android:textStyle="bold"
-                                      android:layout_marginTop="8dp" />
+                                      android:layout_weight="1"
+                                      android:orientation="vertical"
+                                      android:layout_marginStart="14dp">
 
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="No hidden\ncharges"
-                                      android:textColor="#94A3B8"
-                                      android:textSize="11sp"
-                                      android:gravity="center"
-                                      android:layout_marginTop="2dp" />
+                                      <TextView
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:text="Both Audio (MP3) &amp; Video (MP4)"
+                                          android:textColor="#0F172A"
+                                          android:textSize="13sp"
+                                          android:textStyle="bold" />
+
+                                      <TextView
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:text="Crystal-clear 1080p, 720p HD and 320kbps audio"
+                                          android:textColor="#64748B"
+                                          android:textSize="11sp" />
+                                  </LinearLayout>
                               </LinearLayout>
 
                               <LinearLayout
-                                  android:layout_width="0dp"
+                                  android:layout_width="match_parent"
                                   android:layout_height="wrap_content"
-                                  android:layout_weight="1"
-                                  android:gravity="center"
-                                  android:orientation="vertical">
+                                  android:orientation="horizontal"
+                                  android:gravity="center_vertical"
+                                  android:paddingVertical="12dp">
 
-                                  <TextView
-                                      android:layout_width="48dp"
-                                      android:layout_height="48dp"
-                                      android:text="📱"
-                                      android:textSize="20sp"
-                                      android:gravity="center"
-                                      android:background="@drawable/bg_badge" />
+                                  <androidx.cardview.widget.CardView
+                                      android:layout_width="44dp"
+                                      android:layout_height="44dp"
+                                      app:cardCornerRadius="22dp"
+                                      app:cardElevation="0dp"
+                                      app:cardBackgroundColor="#FEF3C7">
+                                      <TextView
+                                          android:layout_width="match_parent"
+                                          android:layout_height="match_parent"
+                                          android:text="📂"
+                                          android:textSize="18sp"
+                                          android:gravity="center" />
+                                  </androidx.cardview.widget.CardView>
 
-                                  <TextView
-                                      android:layout_width="wrap_content"
+                                  <LinearLayout
+                                      android:layout_width="0dp"
                                       android:layout_height="wrap_content"
-                                      android:text="Works Everywhere"
-                                      android:textColor="#0F172A"
-                                      android:textSize="13sp"
-                                      android:textStyle="bold"
-                                      android:layout_marginTop="8dp" />
+                                      android:layout_weight="1"
+                                      android:orientation="vertical"
+                                      android:layout_marginStart="14dp">
 
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="On any device,\nany browser"
-                                      android:textColor="#94A3B8"
-                                      android:textSize="11sp"
-                                      android:gravity="center"
-                                      android:layout_marginTop="2dp" />
+                                      <TextView
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:text="Direct Phone Storage"
+                                          android:textColor="#0F172A"
+                                          android:textSize="13sp"
+                                          android:textStyle="bold" />
+
+                                      <TextView
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:text="Saved right in your phone's Downloads folder"
+                                          android:textColor="#64748B"
+                                          android:textSize="11sp" />
+                                  </LinearLayout>
                               </LinearLayout>
                           </LinearLayout>
 
@@ -675,52 +671,230 @@ jobs:
                               android:id="@+id/viewPreviewCard"
                               android:layout_width="match_parent"
                               android:layout_height="wrap_content"
-                              app:cardBackgroundColor="#FFFFFF"
-                              app:cardCornerRadius="16dp"
-                              app:cardElevation="2dp"
+                              android:layout_marginTop="20dp"
                               android:visibility="gone"
-                              android:layout_marginBottom="16dp">
+                              app:cardCornerRadius="20dp"
+                              app:cardElevation="4dp"
+                              app:cardBackgroundColor="#FFFFFF">
 
                               <LinearLayout
                                   android:layout_width="match_parent"
                                   android:layout_height="wrap_content"
                                   android:orientation="vertical"
-                                  android:padding="16dp">
+                                  android:padding="18dp">
+
+                                  <!-- Thumbnail with Rounded Corners -->
+                                  <androidx.cardview.widget.CardView
+                                      android:layout_width="match_parent"
+                                      android:layout_height="180dp"
+                                      app:cardCornerRadius="14dp"
+                                      app:cardElevation="0dp">
+
+                                      <ImageView
+                                          android:id="@+id/previewThumbnail"
+                                          android:layout_width="match_parent"
+                                          android:layout_height="match_parent"
+                                          android:scaleType="centerCrop"
+                                          android:src="@drawable/ic_play_gradient" />
+                                  </androidx.cardview.widget.CardView>
+
+                                  <TextView
+                                      android:id="@+id/previewTitle"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:text="Loading media..."
+                                      android:textColor="#0F172A"
+                                      android:textSize="15sp"
+                                      android:textStyle="bold"
+                                      android:layout_marginTop="12dp"
+                                      android:maxLines="2"
+                                      android:ellipsize="end" />
+
+                                  <TextView
+                                      android:id="@+id/previewDetails"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:text="Fetching stream details..."
+                                      android:textColor="#64748B"
+                                      android:textSize="12sp"
+                                      android:layout_marginTop="3dp" />
+
+                                  <!-- Format Selector Tabs (MP3 vs MP4) -->
+                                  <TextView
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="Select Format:"
+                                      android:textColor="#0F172A"
+                                      android:textSize="12sp"
+                                      android:textStyle="bold"
+                                      android:layout_marginTop="16dp" />
 
                                   <LinearLayout
                                       android:layout_width="match_parent"
                                       android:layout_height="wrap_content"
                                       android:orientation="horizontal"
-                                      android:layout_marginBottom="16dp">
+                                      android:layout_marginTop="8dp">
 
-                                      <FrameLayout
-                                          android:layout_width="120dp"
-                                          android:layout_height="72dp">
+                                      <!-- MP3 Card -->
+                                      <LinearLayout
+                                          android:id="@+id/cardMp3"
+                                          android:layout_width="0dp"
+                                          android:layout_height="wrap_content"
+                                          android:layout_weight="1"
+                                          android:background="@drawable/bg_card_selected"
+                                          android:orientation="vertical"
+                                          android:padding="12dp">
 
-                                          <androidx.cardview.widget.CardView
+                                          <LinearLayout
                                               android:layout_width="match_parent"
-                                              android:layout_height="match_parent"
-                                              app:cardCornerRadius="10dp"
-                                              app:cardElevation="0dp">
+                                              android:layout_height="wrap_content"
+                                              android:orientation="horizontal"
+                                              android:gravity="center_vertical">
 
-                                              <ImageView
-                                                  android:id="@+id/previewThumbnail"
-                                                  android:layout_width="match_parent"
-                                                  android:layout_height="match_parent"
-                                                  android:scaleType="centerCrop"
-                                                  android:background="#E2E8F0" />
-                                          </androidx.cardview.widget.CardView>
+                                              <TextView
+                                                  android:id="@+id/radioDotMp3"
+                                                  android:layout_width="wrap_content"
+                                                  android:layout_height="wrap_content"
+                                                  android:text="●"
+                                                  android:textColor="#4F46E5"
+                                                  android:textSize="14sp" />
+
+                                              <TextView
+                                                  android:layout_width="wrap_content"
+                                                  android:layout_height="wrap_content"
+                                                  android:text="  MP3 Audio"
+                                                  android:textColor="#0F172A"
+                                                  android:textSize="13sp"
+                                                  android:textStyle="bold" />
+                                          </LinearLayout>
 
                                           <TextView
-                                              android:layout_width="28dp"
-                                              android:layout_height="28dp"
-                                              android:text="▶"
-                                              android:textColor="#FFFFFF"
-                                              android:textSize="12sp"
-                                              android:gravity="center"
-                                              android:background="#80000000"
-                                              android:layout_gravity="center" />
-                                      </FrameLayout>
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="Music &amp; Podcasts"
+                                              android:textColor="#64748B"
+                                              android:textSize="11sp"
+                                              android:layout_marginTop="4dp" />
+                                      </LinearLayout>
+
+                                      <View
+                                          android:layout_width="12dp"
+                                          android:layout_height="1dp" />
+
+                                      <!-- MP4 Card -->
+                                      <LinearLayout
+                                          android:id="@+id/cardMp4"
+                                          android:layout_width="0dp"
+                                          android:layout_height="wrap_content"
+                                          android:layout_weight="1"
+                                          android:background="@drawable/bg_card_unselected"
+                                          android:orientation="vertical"
+                                          android:padding="12dp">
+
+                                          <LinearLayout
+                                              android:layout_width="match_parent"
+                                              android:layout_height="wrap_content"
+                                              android:orientation="horizontal"
+                                              android:gravity="center_vertical">
+
+                                              <TextView
+                                                  android:id="@+id/radioDotMp4"
+                                                  android:layout_width="wrap_content"
+                                                  android:layout_height="wrap_content"
+                                                  android:text="○"
+                                                  android:textColor="#94A3B8"
+                                                  android:textSize="14sp" />
+
+                                              <TextView
+                                                  android:layout_width="wrap_content"
+                                                  android:layout_height="wrap_content"
+                                                  android:text="  MP4 Video"
+                                                  android:textColor="#0F172A"
+                                                  android:textSize="13sp"
+                                                  android:textStyle="bold" />
+                                          </LinearLayout>
+
+                                          <TextView
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="Up to 1080p Full HD"
+                                              android:textColor="#64748B"
+                                              android:textSize="11sp"
+                                              android:layout_marginTop="4dp" />
+                                      </LinearLayout>
+                                  </LinearLayout>
+
+                                  <!-- Quality Dropdown -->
+                                  <TextView
+                                      android:id="@+id/qualityLabel"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="Bitrate:"
+                                      android:textColor="#0F172A"
+                                      android:textSize="12sp"
+                                      android:textStyle="bold"
+                                      android:layout_marginTop="14dp" />
+
+                                  <Spinner
+                                      android:id="@+id/qualitySpinner"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="44dp"
+                                      android:layout_marginTop="6dp"
+                                      android:background="@drawable/bg_card_unselected" />
+
+                                  <!-- Start Download Action Button -->
+                                  <Button
+                                      android:id="@+id/btnStartDownload"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="54dp"
+                                      android:layout_marginTop="18dp"
+                                      android:text="⬇ START DOWNLOAD"
+                                      android:textColor="#FFFFFF"
+                                      android:textSize="14sp"
+                                      android:textStyle="bold"
+                                      android:backgroundTint="#4F46E5"
+                                      app:cornerRadius="27dp" />
+                              </LinearLayout>
+                          </androidx.cardview.widget.CardView>
+
+                          <!-- DOWNLOADING PROGRESS CARD -->
+                          <androidx.cardview.widget.CardView
+                              android:id="@+id/viewDownloadingCard"
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:layout_marginTop="20dp"
+                              android:visibility="gone"
+                              app:cardCornerRadius="20dp"
+                              app:cardElevation="4dp"
+                              app:cardBackgroundColor="#FFFFFF">
+
+                              <LinearLayout
+                                  android:layout_width="match_parent"
+                                  android:layout_height="wrap_content"
+                                  android:orientation="vertical"
+                                  android:gravity="center_horizontal"
+                                  android:padding="24dp">
+
+                                  <!-- Track Info Row -->
+                                  <LinearLayout
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:orientation="horizontal"
+                                      android:gravity="center_vertical">
+
+                                      <androidx.cardview.widget.CardView
+                                          android:layout_width="56dp"
+                                          android:layout_height="56dp"
+                                          app:cardCornerRadius="12dp"
+                                          app:cardElevation="0dp">
+
+                                          <ImageView
+                                              android:id="@+id/downloadingThumb"
+                                              android:layout_width="match_parent"
+                                              android:layout_height="match_parent"
+                                              android:scaleType="centerCrop"
+                                              android:src="@drawable/ic_play_gradient" />
+                                      </androidx.cardview.widget.CardView>
 
                                       <LinearLayout
                                           android:layout_width="0dp"
@@ -730,235 +904,12 @@ jobs:
                                           android:layout_marginStart="14dp">
 
                                           <TextView
-                                              android:id="@+id/previewTitle"
-                                              android:layout_width="match_parent"
-                                              android:layout_height="wrap_content"
-                                              android:text="Loading media..."
-                                              android:textColor="#0F172A"
-                                              android:textSize="14sp"
-                                              android:textStyle="bold"
-                                              android:maxLines="2"
-                                              android:ellipsize="end" />
-
-                                          <TextView
-                                              android:id="@+id/previewDetails"
-                                              android:layout_width="match_parent"
-                                              android:layout_height="wrap_content"
-                                              android:text="YouTube • HD Stream"
-                                              android:textColor="#64748B"
-                                              android:textSize="12sp"
-                                              android:layout_marginTop="4dp" />
-                                      </LinearLayout>
-                                  </LinearLayout>
-
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="Choose format"
-                                      android:textColor="#0F172A"
-                                      android:textSize="13sp"
-                                      android:textStyle="bold"
-                                      android:layout_marginBottom="10dp" />
-
-                                  <LinearLayout
-                                      android:layout_width="match_parent"
-                                      android:layout_height="wrap_content"
-                                      android:orientation="horizontal"
-                                      android:layout_marginBottom="12dp">
-
-                                      <!-- MP3 Card -->
-                                      <LinearLayout
-                                          android:id="@+id/cardMp3"
-                                          android:layout_width="0dp"
-                                          android:layout_height="wrap_content"
-                                          android:layout_weight="1"
-                                          android:background="@drawable/bg_card_selected"
-                                          android:orientation="horizontal"
-                                          android:gravity="center_vertical"
-                                          android:padding="12dp"
-                                          android:layout_marginEnd="6dp">
-
-                                          <TextView
-                                              android:layout_width="34dp"
-                                              android:layout_height="34dp"
-                                              android:text="🎵"
-                                              android:textSize="16sp"
-                                              android:gravity="center"
-                                              android:background="#EEF2FF" />
-
-                                          <LinearLayout
-                                              android:layout_width="0dp"
-                                              android:layout_height="wrap_content"
-                                              android:layout_weight="1"
-                                              android:orientation="vertical"
-                                              android:layout_marginStart="8dp">
-
-                                              <TextView
-                                                  android:layout_width="wrap_content"
-                                                  android:layout_height="wrap_content"
-                                                  android:text="MP3"
-                                                  android:textColor="#0F172A"
-                                                  android:textSize="13sp"
-                                                  android:textStyle="bold" />
-
-                                              <TextView
-                                                  android:id="@+id/txtAudioSubtitle"
-                                                  android:layout_width="wrap_content"
-                                                  android:layout_height="wrap_content"
-                                                  android:text="Audio only"
-                                                  android:textColor="#64748B"
-                                                  android:textSize="11sp" />
-                                          </LinearLayout>
-
-                                          <TextView
-                                              android:id="@+id/radioDotMp3"
-                                              android:layout_width="18dp"
-                                              android:layout_height="18dp"
-                                              android:text="●"
-                                              android:textColor="#4F46E5"
-                                              android:textSize="14sp"
-                                              android:gravity="center" />
-                                      </LinearLayout>
-
-                                      <!-- MP4 Card -->
-                                      <LinearLayout
-                                          android:id="@+id/cardMp4"
-                                          android:layout_width="0dp"
-                                          android:layout_height="wrap_content"
-                                          android:layout_weight="1"
-                                          android:background="@drawable/bg_card_unselected"
-                                          android:orientation="horizontal"
-                                          android:gravity="center_vertical"
-                                          android:padding="12dp"
-                                          android:layout_marginStart="6dp">
-
-                                          <TextView
-                                              android:layout_width="34dp"
-                                              android:layout_height="34dp"
-                                              android:text="🎬"
-                                              android:textSize="16sp"
-                                              android:gravity="center"
-                                              android:background="#F8FAFC" />
-
-                                          <LinearLayout
-                                              android:layout_width="0dp"
-                                              android:layout_height="wrap_content"
-                                              android:layout_weight="1"
-                                              android:orientation="vertical"
-                                              android:layout_marginStart="8dp">
-
-                                              <TextView
-                                                  android:layout_width="wrap_content"
-                                                  android:layout_height="wrap_content"
-                                                  android:text="MP4"
-                                                  android:textColor="#0F172A"
-                                                  android:textSize="13sp"
-                                                  android:textStyle="bold" />
-
-                                              <TextView
-                                                  android:layout_width="wrap_content"
-                                                  android:layout_height="wrap_content"
-                                                  android:text="Full Video"
-                                                  android:textColor="#64748B"
-                                                  android:textSize="11sp" />
-                                          </LinearLayout>
-
-                                          <TextView
-                                              android:id="@+id/radioDotMp4"
-                                              android:layout_width="18dp"
-                                              android:layout_height="18dp"
-                                              android:text="○"
-                                              android:textColor="#94A3B8"
-                                              android:textSize="14sp"
-                                              android:gravity="center" />
-                                      </LinearLayout>
-                                  </LinearLayout>
-
-                                  <LinearLayout
-                                      android:layout_width="match_parent"
-                                      android:layout_height="wrap_content"
-                                      android:background="@drawable/bg_card_unselected"
-                                      android:orientation="horizontal"
-                                      android:gravity="center_vertical"
-                                      android:padding="8dp"
-                                      android:layout_marginBottom="16dp">
-
-                                      <TextView
-                                          android:id="@+id/qualityLabel"
-                                          android:layout_width="wrap_content"
-                                          android:layout_height="wrap_content"
-                                          android:text="Quality:"
-                                          android:textColor="#64748B"
-                                          android:textSize="13sp"
-                                          android:textStyle="bold"
-                                          android:layout_marginStart="6dp"
-                                          android:layout_marginEnd="6dp" />
-
-                                      <Spinner
-                                          android:id="@+id/qualitySpinner"
-                                          android:layout_width="match_parent"
-                                          android:layout_height="wrap_content"
-                                          android:backgroundTint="#4F46E5" />
-                                  </LinearLayout>
-
-                                  <Button
-                                      android:id="@+id/btnStartDownload"
-                                      android:layout_width="match_parent"
-                                      android:layout_height="52dp"
-                                      android:text="📥 Download"
-                                      android:textColor="#FFFFFF"
-                                      android:textSize="15sp"
-                                      android:textStyle="bold"
-                                      android:backgroundTint="#4F46E5"
-                                      app:cornerRadius="26dp" />
-                              </LinearLayout>
-                          </androidx.cardview.widget.CardView>
-
-                          <!-- DOWNLOADING PROGRESS CARD -->
-                          <androidx.cardview.widget.CardView
-                              android:id="@+id/viewDownloadingCard"
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              app:cardBackgroundColor="#FFFFFF"
-                              app:cardCornerRadius="16dp"
-                              app:cardElevation="2dp"
-                              android:visibility="gone"
-                              android:layout_marginBottom="16dp">
-
-                              <LinearLayout
-                                  android:layout_width="match_parent"
-                                  android:layout_height="wrap_content"
-                                  android:orientation="vertical"
-                                  android:padding="20dp">
-
-                                  <LinearLayout
-                                      android:layout_width="match_parent"
-                                      android:layout_height="wrap_content"
-                                      android:orientation="horizontal"
-                                      android:gravity="center_vertical"
-                                      android:layout_marginBottom="20dp">
-
-                                      <ImageView
-                                          android:id="@+id/downloadingThumb"
-                                          android:layout_width="70dp"
-                                          android:layout_height="44dp"
-                                          android:scaleType="centerCrop"
-                                          android:background="#E2E8F0" />
-
-                                      <LinearLayout
-                                          android:layout_width="0dp"
-                                          android:layout_height="wrap_content"
-                                          android:layout_weight="1"
-                                          android:orientation="vertical"
-                                          android:layout_marginStart="12dp">
-
-                                          <TextView
                                               android:id="@+id/downloadingTitle"
                                               android:layout_width="match_parent"
                                               android:layout_height="wrap_content"
                                               android:text="Downloading media..."
                                               android:textColor="#0F172A"
-                                              android:textSize="13sp"
+                                              android:textSize="14sp"
                                               android:textStyle="bold"
                                               android:maxLines="1"
                                               android:ellipsize="end" />
@@ -968,30 +919,34 @@ jobs:
                                               android:layout_width="wrap_content"
                                               android:layout_height="wrap_content"
                                               android:text="MP3 • 320 kbps"
-                                              android:textColor="#64748B"
-                                              android:textSize="11sp" />
+                                              android:textColor="#4F46E5"
+                                              android:textSize="11sp"
+                                              android:layout_marginTop="3dp" />
                                       </LinearLayout>
                                   </LinearLayout>
 
-                                  <LinearLayout
-                                      android:layout_width="match_parent"
-                                      android:layout_height="wrap_content"
-                                      android:orientation="horizontal"
-                                      android:gravity="center_vertical"
-                                      android:layout_marginBottom="20dp">
+                                  <!-- Large Circular Percentage Indicator -->
+                                  <RelativeLayout
+                                      android:layout_width="140dp"
+                                      android:layout_height="140dp"
+                                      android:layout_marginTop="26dp">
 
-                                      <FrameLayout
-                                          android:layout_width="72dp"
-                                          android:layout_height="72dp">
+                                      <ProgressBar
+                                          android:id="@+id/circularProgressBar"
+                                          style="?android:attr/progressBarStyleHorizontal"
+                                          android:layout_width="140dp"
+                                          android:layout_height="140dp"
+                                          android:indeterminate="false"
+                                          android:max="100"
+                                          android:progress="0"
+                                          android:progressDrawable="@drawable/circular_progress_drawable" />
 
-                                          <ProgressBar
-                                              android:id="@+id/circularProgressBar"
-                                              style="?android:attr/progressBarStyleHorizontal"
-                                              android:layout_width="72dp"
-                                              android:layout_height="72dp"
-                                              android:indeterminate="false"
-                                              android:progress="0"
-                                              android:progressDrawable="@drawable/circular_progress_drawable" />
+                                      <LinearLayout
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:layout_centerInParent="true"
+                                          android:gravity="center"
+                                          android:orientation="vertical">
 
                                           <TextView
                                               android:id="@+id/txtCircularPercent"
@@ -999,185 +954,147 @@ jobs:
                                               android:layout_height="wrap_content"
                                               android:text="0%"
                                               android:textColor="#0F172A"
-                                              android:textSize="17sp"
-                                              android:textStyle="bold"
-                                              android:layout_gravity="center" />
-                                      </FrameLayout>
-
-                                      <LinearLayout
-                                          android:layout_width="0dp"
-                                          android:layout_height="wrap_content"
-                                          android:layout_weight="1"
-                                          android:orientation="vertical"
-                                          android:layout_marginStart="16dp">
-
-                                          <TextView
-                                              android:layout_width="wrap_content"
-                                              android:layout_height="wrap_content"
-                                              android:text="Downloading..."
-                                              android:textColor="#0F172A"
-                                              android:textSize="14sp"
+                                              android:textSize="26sp"
                                               android:textStyle="bold" />
 
-                                          <ProgressBar
-                                              android:id="@+id/linearProgressBar"
-                                              style="?android:attr/progressBarStyleHorizontal"
-                                              android:layout_width="match_parent"
-                                              android:layout_height="6dp"
-                                              android:progress="0"
-                                              android:progressTint="#4F46E5"
-                                              android:progressBackgroundTint="#E2E8F0"
-                                              android:layout_marginTop="8dp"
-                                              android:layout_marginBottom="6dp" />
-
                                           <TextView
-                                              android:id="@+id/txtDownloadStats"
                                               android:layout_width="wrap_content"
                                               android:layout_height="wrap_content"
-                                              android:text="Starting high-speed stream..."
-                                              android:textColor="#64748B"
-                                              android:textSize="11sp" />
-                                  </LinearLayout>
+                                              android:text="DOWNLOADING"
+                                              android:textColor="#94A3B8"
+                                              android:textSize="9sp"
+                                              android:textStyle="bold" />
+                                      </LinearLayout>
+                                  </RelativeLayout>
+
+                                  <!-- Linear Progress Bar -->
+                                  <ProgressBar
+                                      android:id="@+id/linearProgressBar"
+                                      style="@style/Widget.AppCompat.ProgressBar.Horizontal"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="6dp"
+                                      android:layout_marginTop="24dp"
+                                      android:max="100"
+                                      android:progress="0"
+                                      android:progressTint="#6366F1" />
+
+                                  <TextView
+                                      android:id="@+id/txtDownloadStats"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="Connecting to stream..."
+                                      android:textColor="#64748B"
+                                      android:textSize="12sp"
+                                      android:layout_marginTop="8dp" />
+
+                                  <Button
+                                      android:id="@+id/btnCancel"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="38dp"
+                                      android:layout_marginTop="16dp"
+                                      android:text="✕ Cancel"
+                                      android:textColor="#EF4444"
+                                      android:textSize="12sp"
+                                      android:backgroundTint="#FEE2E2"
+                                      app:cornerRadius="19dp" />
                               </LinearLayout>
+                          </androidx.cardview.widget.CardView>
 
-                              <Button
-                                  android:id="@+id/btnCancel"
-                                  android:layout_width="wrap_content"
-                                  android:layout_height="38dp"
-                                  android:text="Cancel"
-                                  android:textColor="#64748B"
-                                  android:textSize="12sp"
-                                  android:backgroundTint="#F1F5F9"
-                                  app:cornerRadius="19dp"
-                                  android:layout_gravity="center_horizontal" />
-                          </LinearLayout>
-                      </androidx.cardview.widget.CardView>
-
-                      <!-- COMPLETE SECTION -->
-                      <LinearLayout
-                          android:id="@+id/viewCompleteSection"
-                          android:layout_width="match_parent"
-                          android:layout_height="wrap_content"
-                          android:orientation="vertical"
-                          android:gravity="center_horizontal"
-                          android:visibility="gone">
-
-                          <TextView
-                              android:layout_width="56dp"
-                              android:layout_height="56dp"
-                              android:text="✔"
-                              android:textColor="#FFFFFF"
-                              android:textSize="26sp"
-                              android:gravity="center"
-                              android:background="@drawable/bg_badge"
-                              android:backgroundTint="#10B981"
-                              android:layout_marginTop="20dp" />
-
-                          <TextView
-                              android:layout_width="wrap_content"
-                              android:layout_height="wrap_content"
-                              android:text="Download Complete!"
-                              android:textColor="#0F172A"
-                              android:textSize="20sp"
-                              android:textStyle="bold"
-                              android:layout_marginTop="14dp" />
-
-                          <TextView
-                              android:layout_width="wrap_content"
-                              android:layout_height="wrap_content"
-                              android:text="Your file is ready in Downloads/FlowRip. Enjoy!"
-                              android:textColor="#64748B"
-                              android:textSize="13sp"
-                              android:layout_marginTop="4dp"
-                              android:layout_marginBottom="24dp" />
-
+                          <!-- DOWNLOAD COMPLETE SECTION -->
                           <androidx.cardview.widget.CardView
+                              android:id="@+id/viewCompleteSection"
                               android:layout_width="match_parent"
                               android:layout_height="wrap_content"
-                              app:cardBackgroundColor="#FFFFFF"
-                              app:cardCornerRadius="14dp"
-                              app:cardElevation="2dp"
-                              android:layout_marginBottom="20dp">
+                              android:layout_marginTop="20dp"
+                              android:visibility="gone"
+                              app:cardCornerRadius="20dp"
+                              app:cardElevation="4dp"
+                              app:cardBackgroundColor="#FFFFFF">
 
                               <LinearLayout
                                   android:layout_width="match_parent"
                                   android:layout_height="wrap_content"
-                                  android:orientation="horizontal"
-                                  android:gravity="center_vertical"
-                                  android:padding="14dp">
+                                  android:orientation="vertical"
+                                  android:gravity="center_horizontal"
+                                  android:padding="24dp">
 
                                   <TextView
-                                      android:layout_width="38dp"
-                                      android:layout_height="38dp"
-                                      android:text="⚡"
-                                      android:textSize="18sp"
-                                      android:gravity="center"
-                                      android:background="#EEF2FF" />
+                                      android:layout_width="64dp"
+                                      android:layout_height="64dp"
+                                      android:background="@drawable/bg_badge"
+                                      android:text="✓"
+                                      android:textColor="#10B981"
+                                      android:textSize="32sp"
+                                      android:textStyle="bold"
+                                      android:gravity="center" />
 
-                                  <LinearLayout
-                                      android:layout_width="0dp"
+                                  <TextView
+                                      android:layout_width="wrap_content"
                                       android:layout_height="wrap_content"
-                                      android:layout_weight="1"
-                                      android:orientation="vertical"
-                                      android:layout_marginStart="12dp">
+                                      android:text="Ready in Downloads!"
+                                      android:textColor="#0F172A"
+                                      android:textSize="18sp"
+                                      android:textStyle="bold"
+                                      android:layout_marginTop="14dp" />
 
-                                      <TextView
-                                          android:id="@+id/completedFileName"
-                                          android:layout_width="match_parent"
-                                          android:layout_height="wrap_content"
-                                          android:text="Media File"
-                                          android:textColor="#0F172A"
+                                  <TextView
+                                      android:id="@+id/completedFileName"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="TrackName.mp3"
+                                      android:textColor="#64748B"
+                                      android:textSize="12sp"
+                                      android:layout_marginTop="4dp"
+                                      android:maxLines="1"
+                                      android:ellipsize="end" />
+
+                                  <!-- Play & Share Buttons -->
+                                  <LinearLayout
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:orientation="horizontal"
+                                      android:layout_marginTop="20dp">
+
+                                      <Button
+                                          android:id="@+id/btnPlayFile"
+                                          android:layout_width="0dp"
+                                          android:layout_height="50dp"
+                                          android:layout_weight="1"
+                                          android:text="▶ Play Media"
+                                          android:textColor="#FFFFFF"
                                           android:textSize="13sp"
                                           android:textStyle="bold"
-                                          android:maxLines="1"
-                                          android:ellipsize="end" />
+                                          android:backgroundTint="#4F46E5"
+                                          app:cornerRadius="25dp" />
 
-                                      <TextView
-                                          android:layout_width="wrap_content"
-                                          android:layout_height="wrap_content"
-                                          android:text="Ready to play"
-                                          android:textColor="#10B981"
-                                          android:textSize="11sp" />
+                                      <View
+                                          android:layout_width="12dp"
+                                          android:layout_height="1dp" />
+
+                                      <Button
+                                          android:id="@+id/btnSaveFile"
+                                          android:layout_width="0dp"
+                                          android:layout_height="50dp"
+                                          android:layout_weight="1"
+                                          android:text="↗ Share / Save"
+                                          android:textColor="#4F46E5"
+                                          android:textSize="13sp"
+                                          android:textStyle="bold"
+                                          android:backgroundTint="#EEF2FF"
+                                          app:cornerRadius="25dp" />
                                   </LinearLayout>
+
+                                  <TextView
+                                      android:id="@+id/btnDownloadAnother"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="Download Another Link"
+                                      android:textColor="#64748B"
+                                      android:textSize="12sp"
+                                      android:layout_marginTop="16dp"
+                                      android:padding="6dp" />
                               </LinearLayout>
                           </androidx.cardview.widget.CardView>
-
-                          <Button
-                              android:id="@+id/btnPlayFile"
-                              android:layout_width="match_parent"
-                              android:layout_height="52dp"
-                              android:text="▶ Play"
-                              android:textColor="#FFFFFF"
-                              android:textSize="15sp"
-                              android:textStyle="bold"
-                              android:backgroundTint="#4F46E5"
-                              app:cornerRadius="26dp"
-                              android:layout_marginBottom="10dp" />
-
-                          <Button
-                              android:id="@+id/btnSaveFile"
-                              android:layout_width="match_parent"
-                              android:layout_height="50dp"
-                              android:text="📥 Save / Share"
-                              android:textColor="#4F46E5"
-                              android:textSize="14sp"
-                              android:textStyle="bold"
-                              android:backgroundTint="#FFFFFF"
-                              app:strokeColor="#E2E8F0"
-                              app:strokeWidth="1dp"
-                              app:cornerRadius="25dp"
-                              android:layout_marginBottom="16dp" />
-
-                          <TextView
-                              android:id="@+id/btnDownloadAnother"
-                              android:layout_width="wrap_content"
-                              android:layout_height="wrap_content"
-                              android:text="🔄 Download Another"
-                              android:textColor="#64748B"
-                              android:textSize="13sp"
-                              android:padding="8dp" />
-                      </LinearLayout>
-
                       </LinearLayout>
                   </ScrollView>
 
@@ -1187,68 +1104,89 @@ jobs:
                       android:layout_width="match_parent"
                       android:layout_height="match_parent"
                       android:orientation="vertical"
-                      android:padding="20dp"
-                      android:visibility="gone">
-
-                      <TextView
-                          android:layout_width="wrap_content"
-                          android:layout_height="wrap_content"
-                          android:text="Download History"
-                          android:textColor="#0F172A"
-                          android:textSize="22sp"
-                          android:textStyle="bold"
-                          android:layout_marginTop="6dp"
-                          android:layout_marginBottom="16dp" />
+                      android:visibility="gone"
+                      android:background="#F8FAFC">
 
                       <LinearLayout
                           android:layout_width="match_parent"
                           android:layout_height="wrap_content"
                           android:orientation="horizontal"
-                          android:layout_marginBottom="16dp">
+                          android:gravity="center_vertical"
+                          android:paddingHorizontal="24dp"
+                          android:paddingTop="36dp"
+                          android:paddingBottom="16dp">
+
+                          <TextView
+                              android:layout_width="0dp"
+                              android:layout_height="wrap_content"
+                              android:layout_weight="1"
+                              android:text="Downloads"
+                              android:textColor="#0F172A"
+                              android:textSize="26sp"
+                              android:textStyle="bold" />
+
+                          <TextView
+                              android:id="@+id/btnMenu"
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="⚙"
+                              android:textColor="#64748B"
+                              android:textSize="20sp" />
+                      </LinearLayout>
+
+                      <!-- Filter Chips Row -->
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:orientation="horizontal"
+                          android:paddingHorizontal="24dp"
+                          android:paddingBottom="14dp">
 
                           <Button
                               android:id="@+id/chipAll"
                               android:layout_width="wrap_content"
                               android:layout_height="36dp"
-                              android:text="All"
-                              android:textColor="#FFFFFF"
+                              android:text="All Files"
                               android:textSize="12sp"
-                              android:textStyle="bold"
+                              android:textColor="#FFFFFF"
                               android:backgroundTint="#4F46E5"
-                              app:cornerRadius="18dp"
-                              android:layout_marginEnd="8dp" />
+                              app:cornerRadius="18dp" />
 
                           <Button
                               android:id="@+id/chipAudio"
                               android:layout_width="wrap_content"
                               android:layout_height="36dp"
-                              android:text="Audio"
-                              android:textColor="#64748B"
+                              android:layout_marginStart="8dp"
+                              android:text="🎵 Audio"
                               android:textSize="12sp"
+                              android:textColor="#64748B"
                               android:backgroundTint="#F1F5F9"
-                              app:cornerRadius="18dp"
-                              android:layout_marginEnd="8dp" />
+                              app:cornerRadius="18dp" />
 
                           <Button
                               android:id="@+id/chipVideo"
                               android:layout_width="wrap_content"
                               android:layout_height="36dp"
-                              android:text="Video"
-                              android:textColor="#64748B"
+                              android:layout_marginStart="8dp"
+                              android:text="🎬 Video"
                               android:textSize="12sp"
+                              android:textColor="#64748B"
                               android:backgroundTint="#F1F5F9"
                               app:cornerRadius="18dp" />
                       </LinearLayout>
 
                       <ScrollView
                           android:layout_width="match_parent"
-                          android:layout_height="match_parent">
+                          android:layout_height="match_parent"
+                          android:fillViewport="true"
+                          android:paddingHorizontal="24dp">
 
                           <LinearLayout
                               android:id="@+id/historyListContainer"
                               android:layout_width="match_parent"
                               android:layout_height="wrap_content"
-                              android:orientation="vertical" />
+                              android:orientation="vertical"
+                              android:paddingBottom="24dp" />
                       </ScrollView>
                   </LinearLayout>
 
@@ -1257,47 +1195,169 @@ jobs:
                       android:id="@+id/pageSettings"
                       android:layout_width="match_parent"
                       android:layout_height="match_parent"
+                      android:visibility="gone"
                       android:fillViewport="true"
-                      android:visibility="gone">
+                      android:background="#F8FAFC">
 
                       <LinearLayout
                           android:layout_width="match_parent"
                           android:layout_height="wrap_content"
                           android:orientation="vertical"
-                          android:padding="20dp">
+                          android:paddingHorizontal="24dp"
+                          android:paddingTop="36dp"
+                          android:paddingBottom="30dp">
 
                           <TextView
                               android:layout_width="wrap_content"
                               android:layout_height="wrap_content"
                               android:text="Settings"
                               android:textColor="#0F172A"
-                              android:textSize="22sp"
+                              android:textSize="26sp"
+                              android:textStyle="bold" />
+
+                          <TextView
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="Preferences &amp; Engine Information"
+                              android:textColor="#64748B"
+                              android:textSize="13sp"
+                              android:layout_marginTop="4dp" />
+
+                          <!-- PREFERENCES SECTION -->
+                          <TextView
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="DOWNLOAD PREFERENCES"
+                              android:textColor="#94A3B8"
+                              android:textSize="11sp"
                               android:textStyle="bold"
-                              android:layout_marginTop="6dp"
-                              android:layout_marginBottom="20dp" />
+                              android:layout_marginTop="26dp" />
 
                           <androidx.cardview.widget.CardView
-                              android:id="@+id/settingRowQuality"
                               android:layout_width="match_parent"
                               android:layout_height="wrap_content"
-                              app:cardBackgroundColor="#FFFFFF"
-                              app:cardCornerRadius="14dp"
-                              app:cardElevation="1dp"
-                              android:layout_marginBottom="12dp">
+                              android:layout_marginTop="10dp"
+                              app:cardCornerRadius="18dp"
+                              app:cardElevation="2dp"
+                              app:cardBackgroundColor="#FFFFFF">
 
                               <LinearLayout
                                   android:layout_width="match_parent"
                                   android:layout_height="wrap_content"
+                                  android:orientation="vertical">
+
+                                  <LinearLayout
+                                      android:id="@+id/settingRowQuality"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:orientation="horizontal"
+                                      android:gravity="center_vertical"
+                                      android:padding="18dp">
+
+                                      <LinearLayout
+                                          android:layout_width="0dp"
+                                          android:layout_height="wrap_content"
+                                          android:layout_weight="1"
+                                          android:orientation="vertical">
+
+                                          <TextView
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="Preferred Quality"
+                                              android:textColor="#0F172A"
+                                              android:textSize="14sp"
+                                              android:textStyle="bold" />
+
+                                          <TextView
+                                              android:id="@+id/txtDefaultQuality"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="Best Available (1080p / 320 kbps)"
+                                              android:textColor="#64748B"
+                                              android:textSize="12sp"
+                                              android:layout_marginTop="2dp" />
+                                      </LinearLayout>
+
+                                      <TextView
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:text="›"
+                                          android:textColor="#94A3B8"
+                                          android:textSize="22sp" />
+                                  </LinearLayout>
+
+                                  <View
+                                      android:layout_width="match_parent"
+                                      android:layout_height="1dp"
+                                      android:background="#F1F5F9" />
+
+                                  <LinearLayout
+                                      android:id="@+id/settingRowFormat"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:orientation="horizontal"
+                                      android:gravity="center_vertical"
+                                      android:padding="18dp">
+
+                                      <LinearLayout
+                                          android:layout_width="0dp"
+                                          android:layout_height="wrap_content"
+                                          android:layout_weight="1"
+                                          android:orientation="vertical">
+
+                                          <TextView
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="Default Format"
+                                              android:textColor="#0F172A"
+                                              android:textSize="14sp"
+                                              android:textStyle="bold" />
+
+                                          <TextView
+                                              android:id="@+id/txtDefaultFormat"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="MP3 (Audio Only)"
+                                              android:textColor="#64748B"
+                                              android:textSize="12sp"
+                                              android:layout_marginTop="2dp" />
+                                      </LinearLayout>
+
+                                      <TextView
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:text="›"
+                                          android:textColor="#94A3B8"
+                                          android:textSize="22sp" />
+                                  </LinearLayout>
+                              </LinearLayout>
+                          </androidx.cardview.widget.CardView>
+
+                          <!-- APP INFO -->
+                          <TextView
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="APP INFORMATION"
+                              android:textColor="#94A3B8"
+                              android:textSize="11sp"
+                              android:textStyle="bold"
+                              android:layout_marginTop="24dp" />
+
+                          <androidx.cardview.widget.CardView
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:layout_marginTop="10dp"
+                              app:cardCornerRadius="18dp"
+                              app:cardElevation="2dp"
+                              app:cardBackgroundColor="#FFFFFF">
+
+                              <LinearLayout
+                                  android:id="@+id/settingRowAbout"
+                                  android:layout_width="match_parent"
+                                  android:layout_height="wrap_content"
                                   android:orientation="horizontal"
                                   android:gravity="center_vertical"
-                                  android:padding="16dp">
-
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="⬇️"
-                                      android:textSize="18sp"
-                                      android:layout_marginEnd="14dp" />
+                                  android:padding="18dp">
 
                                   <LinearLayout
                                       android:layout_width="0dp"
@@ -1308,117 +1368,7 @@ jobs:
                                       <TextView
                                           android:layout_width="wrap_content"
                                           android:layout_height="wrap_content"
-                                          android:text="Download Quality"
-                                          android:textColor="#0F172A"
-                                          android:textSize="14sp"
-                                          android:textStyle="bold" />
-
-                                      <TextView
-                                          android:id="@+id/txtDefaultQuality"
-                                          android:layout_width="wrap_content"
-                                          android:layout_height="wrap_content"
-                                          android:text="Best Quality (320 kbps / 1080p)"
-                                          android:textColor="#64748B"
-                                          android:textSize="12sp" />
-                                  </LinearLayout>
-
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="›"
-                                      android:textColor="#94A3B8"
-                                      android:textSize="20sp" />
-                              </LinearLayout>
-                          </androidx.cardview.widget.CardView>
-
-                          <androidx.cardview.widget.CardView
-                              android:id="@+id/settingRowFormat"
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              app:cardBackgroundColor="#FFFFFF"
-                              app:cardCornerRadius="14dp"
-                              app:cardElevation="1dp"
-                              android:layout_marginBottom="12dp">
-
-                              <LinearLayout
-                                  android:layout_width="match_parent"
-                                  android:layout_height="wrap_content"
-                                  android:orientation="horizontal"
-                                  android:gravity="center_vertical"
-                                  android:padding="16dp">
-
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="✔️"
-                                      android:textSize="18sp"
-                                      android:layout_marginEnd="14dp" />
-
-                                  <LinearLayout
-                                      android:layout_width="0dp"
-                                      android:layout_height="wrap_content"
-                                      android:layout_weight="1"
-                                      android:orientation="vertical">
-
-                                      <TextView
-                                          android:layout_width="wrap_content"
-                                          android:layout_height="wrap_content"
-                                          android:text="Default Format"
-                                          android:textColor="#0F172A"
-                                          android:textSize="14sp"
-                                          android:textStyle="bold" />
-
-                                      <TextView
-                                          android:id="@+id/txtDefaultFormat"
-                                          android:layout_width="wrap_content"
-                                          android:layout_height="wrap_content"
-                                          android:text="MP3 (Audio)"
-                                          android:textColor="#64748B"
-                                          android:textSize="12sp" />
-                                  </LinearLayout>
-
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="›"
-                                      android:textColor="#94A3B8"
-                                      android:textSize="20sp" />
-                              </LinearLayout>
-                          </androidx.cardview.widget.CardView>
-
-                          <androidx.cardview.widget.CardView
-                              android:id="@+id/settingRowLocation"
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              app:cardBackgroundColor="#FFFFFF"
-                              app:cardCornerRadius="14dp"
-                              app:cardElevation="1dp"
-                              android:layout_marginBottom="12dp">
-
-                              <LinearLayout
-                                  android:layout_width="match_parent"
-                                  android:layout_height="wrap_content"
-                                  android:orientation="horizontal"
-                                  android:gravity="center_vertical"
-                                  android:padding="16dp">
-
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="📁"
-                                      android:textSize="18sp"
-                                      android:layout_marginEnd="14dp" />
-
-                                  <LinearLayout
-                                      android:layout_width="0dp"
-                                      android:layout_height="wrap_content"
-                                      android:layout_weight="1"
-                                      android:orientation="vertical">
-
-                                      <TextView
-                                          android:layout_width="wrap_content"
-                                          android:layout_height="wrap_content"
-                                          android:text="Download Location"
+                                          android:text="FlowRip Studio Pro"
                                           android:textColor="#0F172A"
                                           android:textSize="14sp"
                                           android:textStyle="bold" />
@@ -1426,9 +1376,10 @@ jobs:
                                       <TextView
                                           android:layout_width="wrap_content"
                                           android:layout_height="wrap_content"
-                                          android:text="/Downloads/FlowRip"
+                                          android:text="Version 1.0.0 • yt-dlp &amp; FFmpeg Engine"
                                           android:textColor="#64748B"
-                                          android:textSize="12sp" />
+                                          android:textSize="12sp"
+                                          android:layout_marginTop="2dp" />
                                   </LinearLayout>
 
                                   <TextView
@@ -1436,64 +1387,9 @@ jobs:
                                       android:layout_height="wrap_content"
                                       android:text="›"
                                       android:textColor="#94A3B8"
-                                      android:textSize="20sp" />
+                                      android:textSize="22sp" />
                               </LinearLayout>
                           </androidx.cardview.widget.CardView>
-
-                          <androidx.cardview.widget.CardView
-                              android:id="@+id/settingRowAbout"
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              app:cardBackgroundColor="#FFFFFF"
-                              app:cardCornerRadius="14dp"
-                              app:cardElevation="1dp"
-                              android:layout_marginBottom="24dp">
-
-                              <LinearLayout
-                                  android:layout_width="match_parent"
-                                  android:layout_height="wrap_content"
-                                  android:orientation="horizontal"
-                                  android:gravity="center_vertical"
-                                  android:padding="16dp">
-
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="ℹ️"
-                                      android:textSize="18sp"
-                                      android:layout_marginEnd="14dp" />
-
-                                  <LinearLayout
-                                      android:layout_width="0dp"
-                                      android:layout_height="wrap_content"
-                                      android:layout_weight="1"
-                                      android:orientation="vertical">
-
-                                      <TextView
-                                          android:layout_width="wrap_content"
-                                          android:layout_height="wrap_content"
-                                          android:text="About FlowRip"
-                                          android:textColor="#0F172A"
-                                          android:textSize="14sp"
-                                          android:textStyle="bold" />
-
-                                      <TextView
-                                          android:layout_width="wrap_content"
-                                          android:layout_height="wrap_content"
-                                          android:text="Version 1.0.0 (Native yt-dlp Engine)"
-                                          android:textColor="#64748B"
-                                          android:textSize="12sp" />
-                                  </LinearLayout>
-
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="›"
-                                      android:textColor="#94A3B8"
-                                      android:textSize="20sp" />
-                              </LinearLayout>
-                          </androidx.cardview.widget.CardView>
-
                       </LinearLayout>
                   </ScrollView>
               </FrameLayout>
@@ -1609,76 +1505,58 @@ jobs:
                   </LinearLayout>
               </LinearLayout>
 
-              <!-- SCREENS 1 & 2: COSMIC DARK SPLASH OVERLAY -->
-              <RelativeLayout
+              <!-- COSMIC DARK SPLASH OVERLAY -->
+              <FrameLayout
                   android:id="@+id/splashOverlay"
                   android:layout_width="match_parent"
                   android:layout_height="match_parent"
-                  android:background="#0A0D1A"
-                  android:clickable="true"
-                  android:focusable="true">
+                  android:background="#0A0F1D"
+                  android:elevation="30dp">
 
                   <LinearLayout
                       android:layout_width="wrap_content"
                       android:layout_height="wrap_content"
-                      android:layout_centerInParent="true"
+                      android:layout_gravity="center"
                       android:gravity="center"
                       android:orientation="vertical">
 
-                      <ImageView
-                          android:layout_width="96dp"
-                          android:layout_height="96dp"
-                          android:src="@drawable/ic_play_gradient" />
-
-                      <LinearLayout
-                          android:layout_width="wrap_content"
-                          android:layout_height="wrap_content"
-                          android:orientation="horizontal"
-                          android:layout_marginTop="16dp">
+                      <androidx.cardview.widget.CardView
+                          android:layout_width="72dp"
+                          android:layout_height="72dp"
+                          app:cardCornerRadius="36dp"
+                          app:cardElevation="8dp"
+                          app:cardBackgroundColor="#6366F1">
 
                           <TextView
-                              android:layout_width="wrap_content"
-                              android:layout_height="wrap_content"
-                              android:text="Flow"
+                              android:layout_width="match_parent"
+                              android:layout_height="match_parent"
+                              android:gravity="center"
+                              android:text="▶"
                               android:textColor="#FFFFFF"
-                              android:textSize="34sp"
-                              android:textStyle="bold" />
-
-                          <TextView
-                              android:layout_width="wrap_content"
-                              android:layout_height="wrap_content"
-                              android:text="rip"
-                              android:textColor="#6366F1"
-                              android:textSize="34sp"
-                              android:textStyle="bold" />
-                      </LinearLayout>
+                              android:textSize="28sp" />
+                      </androidx.cardview.widget.CardView>
 
                       <TextView
                           android:layout_width="wrap_content"
                           android:layout_height="wrap_content"
-                          android:text="Download MP3 Audio &amp; MP4 Video • Fast &amp; Free"
-                          android:textColor="#94A3B8"
-                          android:textSize="13sp"
-                          android:layout_marginTop="8dp" />
-
-                      <ProgressBar
-                          style="?android:attr/progressBarStyleHorizontal"
-                          android:layout_width="160dp"
-                          android:layout_height="4dp"
-                          android:indeterminate="true"
-                          android:indeterminateTint="#6366F1"
-                          android:layout_marginTop="32dp" />
+                          android:layout_marginTop="20dp"
+                          android:text="FLOWRIP"
+                          android:textColor="#FFFFFF"
+                          android:textSize="26sp"
+                          android:textStyle="bold"
+                          android:letterSpacing="0.08" />
 
                       <TextView
                           android:layout_width="wrap_content"
                           android:layout_height="wrap_content"
-                          android:text="Loading..."
-                          android:textColor="#64748B"
-                          android:textSize="11sp"
-                          android:layout_marginTop="10dp" />
+                          android:layout_marginTop="4dp"
+                          android:text="ULTRA HD MP3 &amp; MP4 STUDIO"
+                          android:textColor="#818CF8"
+                          android:textSize="10sp"
+                          android:textStyle="bold"
+                          android:letterSpacing="0.12" />
                   </LinearLayout>
-              </RelativeLayout>
-
+              </FrameLayout>
           </RelativeLayout>
           EOF
 
@@ -2211,7 +2089,6 @@ jobs:
                                   startAppAd?.loadAd(StartAppAd.AdMode.AUTOMATIC)
                               }
                               override fun adDisplayed(ad: Ad?) {}
-                              override fun leisureAd() {}
                               override fun adClicked(ad: Ad?) {}
                               override fun adNotDisplayed(ad: Ad?) {
                                   executeDownload()
@@ -2344,5 +2221,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-SamsungFixed-HD-APK
+          name: FlowRip-SamsungFixed-HD-v13-APK
           path: app/build/outputs/apk/**/*.apk
