@@ -192,7 +192,7 @@ jobs:
           cat << 'EOF' > app/src/main/res/values/styles.xml
           <resources>
               <style name="Theme.FlowRip" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="colorPrimary">@color/flowrip_primary</color>
+                  <item name="colorPrimary">@color/flowrip_primary</item>
                   <item name="colorPrimaryDark">@color/flowrip_primary_dark</item>
                   <item name="colorAccent">@color/flowrip_accent</item>
                   <item name="android:windowBackground">@color/flowrip_bg</item>
