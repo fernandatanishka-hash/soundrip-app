@@ -288,8 +288,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 18
-                  versionName "18.0"
+                  versionCode 19
+                  versionName "19.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -326,6 +326,361 @@ jobs:
               implementation 'io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1'
 
               implementation 'com.startapp:inapp-sdk:5.1.0'
+          }
+          EOF
+
+          # 8b. DownloadService.kt (Foreground Download Service with Real Cancellation)
+          cat << 'EOF' > app/src/main/java/com/soundrip/app/DownloadService.kt
+          package com.soundrip.app
+
+          import android.app.Notification
+          import android.app.NotificationChannel
+          import android.app.NotificationManager
+          import android.app.PendingIntent
+          import android.app.Service
+          import android.content.Context
+          import android.content.Intent
+          import android.content.pm.ServiceInfo
+          import android.media.MediaMetadataRetriever
+          import android.media.MediaScannerConnection
+          import android.os.Build
+          import android.os.Environment
+          import android.os.IBinder
+          import androidx.core.app.NotificationCompat
+          import androidx.core.app.ServiceCompat
+          import com.yausername.youtubedl_android.YoutubeDL
+          import com.yausername.youtubedl_android.YoutubeDLRequest
+          import java.io.File
+          import kotlin.concurrent.thread
+
+          class DownloadService : Service() {
+
+              companion object {
+                  const val CHANNEL_ID = "flowrip_download_channel"
+                  const val NOTIFICATION_ID = 1001
+
+                  const val ACTION_START = "com.soundrip.app.action.START_DOWNLOAD"
+                  const val ACTION_CANCEL = "com.soundrip.app.action.CANCEL_DOWNLOAD"
+
+                  const val EXTRA_URL = "EXTRA_URL"
+                  const val EXTRA_TITLE = "EXTRA_TITLE"
+                  const val EXTRA_IS_AUDIO = "EXTRA_IS_AUDIO"
+                  const val EXTRA_QUALITY = "EXTRA_QUALITY"
+
+                  @Volatile
+                  var isDownloading = false
+                      private set
+
+                  @Volatile
+                  var currentProgress = 0
+                      private set
+
+                  @Volatile
+                  var currentTitle = ""
+                      private set
+
+                  @Volatile
+                  var currentFormat = ""
+                      private set
+
+                  private var activeListener: ((DownloadEvent) -> Unit)? = null
+
+                  fun setListener(listener: ((DownloadEvent) -> Unit)?) {
+                      activeListener = listener
+                  }
+
+                  fun postEvent(event: DownloadEvent) {
+                      activeListener?.invoke(event)
+                  }
+              }
+
+              sealed class DownloadEvent {
+                  data class Progress(val progress: Int, val stats: String) : DownloadEvent()
+                  data class Completed(val file: File, val resolutionInfo: String) : DownloadEvent()
+                  data class Error(val message: String) : DownloadEvent()
+                  object Cancelled : DownloadEvent()
+              }
+
+              private var activeTaskId: String? = null
+              private var notificationManager: NotificationManager? = null
+
+              override fun onBind(intent: Intent?): IBinder? = null
+
+              override fun onCreate() {
+                  super.onCreate()
+                  notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                  createNotificationChannel()
+              }
+
+              private fun createNotificationChannel() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      val channel = NotificationChannel(
+                          CHANNEL_ID,
+                          "FlowRip Media Downloads",
+                          NotificationManager.IMPORTANCE_LOW
+                      ).apply {
+                          description = "Active media download notifications"
+                          setShowBadge(false)
+                      }
+                      notificationManager?.createNotificationChannel(channel)
+                  }
+              }
+
+              override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+                  when (intent?.action) {
+                      ACTION_START -> {
+                          val url = intent.getStringExtra(EXTRA_URL) ?: ""
+                          val title = intent.getStringExtra(EXTRA_TITLE) ?: "Media File"
+                          val isAudio = intent.getBooleanExtra(EXTRA_IS_AUDIO, false)
+                          val quality = intent.getStringExtra(EXTRA_QUALITY) ?: "Best"
+
+                          if (url.isNotEmpty() && !isDownloading) {
+                              startDownloadTask(url, title, isAudio, quality)
+                          }
+                      }
+                      ACTION_CANCEL -> {
+                          cancelDownloadTask()
+                      }
+                  }
+                  return START_NOT_STICKY
+              }
+
+              private fun startDownloadTask(url: String, title: String, isAudio: Boolean, quality: String) {
+                  isDownloading = true
+                  currentProgress = 0
+                  currentTitle = title
+                  currentFormat = if (isAudio) "MP3 • $quality" else "MP4 • $quality"
+                  val taskId = "task_" + System.currentTimeMillis()
+                  activeTaskId = taskId
+
+                  val initialNotification = buildNotification(title, "Connecting to stream...", 0, true)
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                      ServiceCompat.startForeground(
+                          this,
+                          NOTIFICATION_ID,
+                          initialNotification,
+                          ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                      )
+                  } else {
+                      startForeground(NOTIFICATION_ID, initialNotification)
+                  }
+
+                  thread(start = true, name = "FlowRipDownloadThread") {
+                      var latestFilesBefore: List<File> = emptyList()
+                      var targetDir: File? = null
+                      try {
+                          try {
+                              YoutubeDL.getInstance().init(applicationContext)
+                          } catch (e: Exception) {}
+
+                          val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                          targetDir = File(publicDownloads, "FlowRip")
+                          if (!targetDir.exists()) targetDir.mkdirs()
+
+                          latestFilesBefore = targetDir.listFiles()?.toList() ?: emptyList()
+
+                          val request = YoutubeDLRequest(url)
+                          request.addOption("--no-check-certificates")
+                          request.addOption("--no-update")
+
+                          if (isAudio) {
+                              val bitrate = quality.split(" ")[0]
+                              request.addOption("-x")
+                              request.addOption("--audio-format", "mp3")
+                              request.addOption("--audio-quality", bitrate)
+                          } else {
+                              when {
+                                  quality.contains("1080p") || quality.contains("Best") -> {
+                                      request.addOption("-f", "bv*[height<=1920][width<=1920][ext=mp4]+ba[ext=m4a]/bv*[height<=1920][width<=1920]+ba/bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b")
+                                      request.addOption("--merge-output-format", "mp4")
+                                  }
+                                  quality.contains("720p") -> {
+                                      request.addOption("-f", "bv*[height<=1280][width<=1280][ext=mp4]+ba[ext=m4a]/bv*[height<=1280][width<=1280]+ba/bv*+ba/b")
+                                      request.addOption("--merge-output-format", "mp4")
+                                  }
+                                  quality.contains("480p") -> {
+                                      request.addOption("-f", "bv*[height<=854][width<=854][ext=mp4]+ba[ext=m4a]/bv*[height<=854][width<=854]+ba/bv*+ba/b")
+                                      request.addOption("--merge-output-format", "mp4")
+                                  }
+                                  quality.contains("360p") -> {
+                                      request.addOption("-f", "bv*[height<=640][width<=640][ext=mp4]+ba[ext=m4a]/bv*[height<=640][width<=640]+ba/bv*+ba/b")
+                                      request.addOption("--merge-output-format", "mp4")
+                                  }
+                                  else -> {
+                                      request.addOption("-f", "bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b")
+                                      request.addOption("--merge-output-format", "mp4")
+                                  }
+                              }
+                          }
+                          request.addOption("-o", "${targetDir.absolutePath}/%(title)s.%(ext)s")
+
+                          YoutubeDL.getInstance().execute(request, taskId) { progress, _, _ ->
+                              val p = progress.toInt().coerceIn(1, 100)
+                              currentProgress = p
+                              val stats = "Downloading stream... $p%"
+                              postEvent(DownloadEvent.Progress(p, stats))
+                              updateNotification(currentTitle, "$p% completed", p, false)
+                          }
+
+                          val downloadedFiles = targetDir.listFiles()?.toList() ?: emptyList()
+                          val newlyAdded = downloadedFiles.filter { it !in latestFilesBefore }
+                          val finishedFile = newlyAdded.maxByOrNull { it.lastModified() }
+                              ?: downloadedFiles.maxByOrNull { it.lastModified() }
+
+                          var resInfo = ""
+                          if (!isAudio && finishedFile != null) {
+                              try {
+                                  val retriever = MediaMetadataRetriever()
+                                  retriever.setDataSource(finishedFile.absolutePath)
+                                  val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                                  val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                                  if (!width.isNullOrEmpty() && !height.isNullOrEmpty()) {
+                                      resInfo = " • ${width}x${height} HD"
+                                  }
+                                  retriever.release()
+                              } catch (e: Exception) {}
+                          }
+
+                          finishedFile?.let { file ->
+                              MediaScannerConnection.scanFile(
+                                  applicationContext,
+                                  arrayOf(file.absolutePath),
+                                  arrayOf(if (isAudio) "audio/mpeg" else "video/mp4"),
+                                  null
+                              )
+                          }
+
+                          isDownloading = false
+                          activeTaskId = null
+                          if (finishedFile != null) {
+                              postEvent(DownloadEvent.Completed(finishedFile, resInfo))
+                              showCompletionNotification(finishedFile.name, resInfo)
+                          } else {
+                              postEvent(DownloadEvent.Error("Completed, but target file not found"))
+                          }
+                          stopForeground(true)
+                          stopSelf()
+
+                      } catch (e: Exception) {
+                          if (activeTaskId == null) {
+                              cleanupPartialFiles(targetDir)
+                              postEvent(DownloadEvent.Cancelled)
+                          } else {
+                              isDownloading = false
+                              activeTaskId = null
+                              val msg = e.message ?: "Download failed"
+                              postEvent(DownloadEvent.Error(msg))
+                              cleanupPartialFiles(targetDir)
+                          }
+                          stopForeground(true)
+                          stopSelf()
+                      }
+                  }
+              }
+
+              private fun cancelDownloadTask() {
+                  val taskId = activeTaskId
+                  activeTaskId = null
+                  isDownloading = false
+                  currentProgress = 0
+
+                  if (taskId != null) {
+                      thread {
+                          try {
+                              YoutubeDL.getInstance().destroyProcessById(taskId)
+                          } catch (e: Exception) {}
+                      }
+                  }
+                  val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                  val targetDir = File(publicDownloads, "FlowRip")
+                  cleanupPartialFiles(targetDir)
+
+                  postEvent(DownloadEvent.Cancelled)
+                  stopForeground(true)
+                  stopSelf()
+              }
+
+              private fun cleanupPartialFiles(targetDir: File?) {
+                  try {
+                      targetDir?.listFiles()?.forEach { file ->
+                          if (file.name.endsWith(".part") || file.name.endsWith(".ytdl") || file.name.endsWith(".temp")) {
+                              file.delete()
+                          }
+                      }
+                  } catch (e: Exception) {}
+              }
+
+              private fun buildNotification(
+                  title: String,
+                  content: String,
+                  progress: Int,
+                  isIndeterminate: Boolean
+              ): Notification {
+                  val openAppIntent = Intent(this, MainActivity::class.java).apply {
+                      flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                  }
+                  val openAppPendingIntent = PendingIntent.getActivity(
+                      this,
+                      0,
+                      openAppIntent,
+                      PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+                  )
+
+                  val cancelIntent = Intent(this, DownloadService::class.java).apply {
+                      action = ACTION_CANCEL
+                  }
+                  val cancelPendingIntent = PendingIntent.getService(
+                      this,
+                      1,
+                      cancelIntent,
+                      PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+                  )
+
+                  return NotificationCompat.Builder(this, CHANNEL_ID)
+                      .setContentTitle(title)
+                      .setContentText(content)
+                      .setSmallIcon(R.drawable.ic_launcher_emblem)
+                      .setContentIntent(openAppPendingIntent)
+                      .setOngoing(true)
+                      .setOnlyAlertOnce(true)
+                      .setProgress(100, progress, isIndeterminate)
+                      .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", cancelPendingIntent)
+                      .build()
+              }
+
+              private fun updateNotification(title: String, content: String, progress: Int, isIndeterminate: Boolean) {
+                  val notification = buildNotification(title, content, progress, isIndeterminate)
+                  notificationManager?.notify(NOTIFICATION_ID, notification)
+              }
+
+              private fun showCompletionNotification(fileName: String, resInfo: String) {
+                  val openAppIntent = Intent(this, MainActivity::class.java).apply {
+                      flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                  }
+                  val openAppPendingIntent = PendingIntent.getActivity(
+                      this,
+                      0,
+                      openAppIntent,
+                      PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+                  )
+
+                  val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+                      .setContentTitle("Download Complete!")
+                      .setContentText("$fileName$resInfo")
+                      .setSmallIcon(R.drawable.ic_launcher_emblem)
+                      .setContentIntent(openAppPendingIntent)
+                      .setAutoCancel(true)
+                      .setOngoing(false)
+                      .build()
+
+                  notificationManager?.notify(NOTIFICATION_ID + 1, notification)
+              }
+
+              override fun onDestroy() {
+                  isDownloading = false
+                  activeTaskId = null
+                  super.onDestroy()
+              }
           }
           EOF
 
@@ -370,6 +725,9 @@ jobs:
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" tools:ignore="ScopedStorage" />
               <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
               <application
                   android:name=".FlowRipApp"
@@ -385,13 +743,24 @@ jobs:
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
+                      android:launchMode="singleTop"
                       android:windowSoftInputMode="adjustResize"
                       android:configChanges="orientation|screenSize|screenLayout">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
+                      <intent-filter>
+                          <action android:name="android.intent.action.SEND" />
+                          <category android:name="android.intent.category.DEFAULT" />
+                          <data android:mimeType="text/plain" />
+                      </intent-filter>
                   </activity>
+
+                  <service
+                      android:name=".DownloadService"
+                      android:foregroundServiceType="dataSync"
+                      android:exported="false" />
 
                   <provider
                       android:name="androidx.core.content.FileProvider"
@@ -2259,7 +2628,37 @@ jobs:
                       }
                   }
 
-                  // 1080p, 720p, 480p High-Definition Video Extraction (Shorts + Normal Videos)
+                  fun attachDownloadListener() {
+                      DownloadService.setListener { event ->
+                          runOnUiThread {
+                              when (event) {
+                                  is DownloadService.DownloadEvent.Progress -> {
+                                      showDownloaderState(2)
+                                      circularProgressBar.progress = event.progress
+                                      txtCircularPercent.text = "${event.progress}%"
+                                      linearProgressBar.progress = event.progress
+                                      txtDownloadStats.text = event.stats
+                                  }
+                                  is DownloadService.DownloadEvent.Completed -> {
+                                      lastDownloadedFile = event.file
+                                      completedFileName.text = event.file.name + event.resolutionInfo
+                                      showDownloaderState(3)
+                                      refreshHistory()
+                                      Toast.makeText(this@MainActivity, "Download Complete!${event.resolutionInfo}", Toast.LENGTH_LONG).show()
+                                  }
+                                  is DownloadService.DownloadEvent.Error -> {
+                                      Toast.makeText(this@MainActivity, "Download Error: ${event.message}", Toast.LENGTH_LONG).show()
+                                      showDownloaderState(1)
+                                  }
+                                  is DownloadService.DownloadEvent.Cancelled -> {
+                                      showDownloaderState(1)
+                                      Toast.makeText(this@MainActivity, "Download cancelled", Toast.LENGTH_SHORT).show()
+                                  }
+                              }
+                          }
+                      }
+                  }
+
                   fun executeDownload() {
                       val rawInput = urlInput.text.toString().trim()
                       val cleanId = currentVideoId ?: extractYouTubeId(rawInput)
@@ -2271,104 +2670,19 @@ jobs:
                       circularProgressBar.progress = 0
                       txtCircularPercent.text = "0%"
                       linearProgressBar.progress = 0
-                      txtDownloadStats.text = "Connecting to high-speed stream..."
+                      txtDownloadStats.text = "Starting background download service..."
 
-                      thread {
-                          try {
-                              try {
-                                  YoutubeDL.getInstance().init(applicationContext)
-                                  FFmpeg.getInstance().init(applicationContext)
-                              } catch (e: Exception) {}
-
-                              val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                              val targetDir = File(publicDownloads, "FlowRip")
-                              if (!targetDir.exists()) targetDir.mkdirs()
-
-                              val request = YoutubeDLRequest(url)
-                              request.addOption("--no-check-certificates")
-                              request.addOption("--no-update")
-
-                              if (isAudio) {
-                                  val bitrate = selectedQuality.split(" ")[0]
-                                  request.addOption("-x")
-                                  request.addOption("--audio-format", "mp3")
-                                  request.addOption("--audio-quality", bitrate)
-                              } else {
-                                  // TRUE HD FIX FOR SHORTS (1080x1920) AND REGULAR VIDEOS (1920x1080)
-                                  // Uses native MP4 video + M4A (AAC) audio for lossless FFmpeg merge
-                                  when {
-                                      selectedQuality.contains("1080p") || selectedQuality.contains("Best") -> {
-                                          request.addOption("-f", "bv*[height<=1920][width<=1920][ext=mp4]+ba[ext=m4a]/bv*[height<=1920][width<=1920]+ba/bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b")
-                                          request.addOption("--merge-output-format", "mp4")
-                                      }
-                                      selectedQuality.contains("720p") -> {
-                                          request.addOption("-f", "bv*[height<=1280][width<=1280][ext=mp4]+ba[ext=m4a]/bv*[height<=1280][width<=1280]+ba/bv*+ba/b")
-                                          request.addOption("--merge-output-format", "mp4")
-                                      }
-                                      selectedQuality.contains("480p") -> {
-                                          request.addOption("-f", "bv*[height<=854][width<=854][ext=mp4]+ba[ext=m4a]/bv*[height<=854][width<=854]+ba/bv*+ba/b")
-                                          request.addOption("--merge-output-format", "mp4")
-                                      }
-                                      selectedQuality.contains("360p") -> {
-                                          request.addOption("-f", "bv*[height<=640][width<=640][ext=mp4]+ba[ext=m4a]/bv*[height<=640][width<=640]+ba/bv*+ba/b")
-                                          request.addOption("--merge-output-format", "mp4")
-                                      }
-                                      else -> {
-                                          request.addOption("-f", "bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b")
-                                          request.addOption("--merge-output-format", "mp4")
-                                      }
-                                  }
-                              }
-                              request.addOption("-o", "${targetDir.absolutePath}/%(title)s.%(ext)s")
-
-                              YoutubeDL.getInstance().execute(request) { progress, _, _ ->
-                                  runOnUiThread {
-                                      val p = progress.toInt().coerceIn(1, 100)
-                                      circularProgressBar.progress = p
-                                      txtCircularPercent.text = "$p%"
-                                      linearProgressBar.progress = p
-                                      txtDownloadStats.text = "Downloading stream... $p%"
-                                  }
-                              }
-
-                              val downloadedFiles = targetDir.listFiles()
-                              val latestFile = downloadedFiles?.maxByOrNull { it.lastModified() }
-                              lastDownloadedFile = latestFile
-
-                              latestFile?.let { file ->
-                                  MediaScannerConnection.scanFile(
-                                      applicationContext,
-                                      arrayOf(file.absolutePath),
-                                      arrayOf(if (isAudio) "audio/mpeg" else "video/mp4"),
-                                      null
-                                  )
-                              }
-
-                              var resInfo = ""
-                              if (!isAudio && latestFile != null) {
-                                  try {
-                                      val retriever = android.media.MediaMetadataRetriever()
-                                      retriever.setDataSource(latestFile.absolutePath)
-                                      val width = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
-                                      val height = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
-                                      if (!width.isNullOrEmpty() && !height.isNullOrEmpty()) {
-                                          resInfo = " • ${width}x${height} HD"
-                                      }
-                                      retriever.release()
-                                  } catch (e: Exception) {}
-                              }
-
-                              runOnUiThread {
-                                  completedFileName.text = (latestFile?.name ?: "Media File") + resInfo
-                                  showDownloaderState(3)
-                                  Toast.makeText(this@MainActivity, "Download Complete!", Toast.LENGTH_LONG).show()
-                              }
-                          } catch (e: Exception) {
-                              runOnUiThread {
-                                  Toast.makeText(this@MainActivity, "Download Error: ${e.message}", Toast.LENGTH_LONG).show()
-                                  showDownloaderState(1)
-                              }
-                          }
+                      val serviceIntent = Intent(this@MainActivity, DownloadService::class.java).apply {
+                          action = DownloadService.ACTION_START
+                          putExtra(DownloadService.EXTRA_URL, url)
+                          putExtra(DownloadService.EXTRA_TITLE, downloadingTitle.text.toString())
+                          putExtra(DownloadService.EXTRA_IS_AUDIO, isAudio)
+                          putExtra(DownloadService.EXTRA_QUALITY, selectedQuality)
+                      }
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          startForegroundService(serviceIntent)
+                      } else {
+                          startService(serviceIntent)
                       }
                   }
 
@@ -2408,7 +2722,13 @@ jobs:
                       lastDownloadedFile?.let { shareFile(it) } ?: Toast.makeText(this, "File is saved in /Downloads/FlowRip", Toast.LENGTH_LONG).show()
                   }
 
-                  btnCancel.setOnClickListener { showDownloaderState(1) }
+                  btnCancel.setOnClickListener {
+                      val cancelIntent = Intent(this@MainActivity, DownloadService::class.java).apply {
+                          action = DownloadService.ACTION_CANCEL
+                      }
+                      startService(cancelIntent)
+                      showDownloaderState(1)
+                  }
                   btnDownloadAnother.setOnClickListener { urlInput.setText(""); currentVideoId = null; showDownloaderState(0) }
                   btnMenu.setOnClickListener { switchTab(2) }
 
@@ -2436,6 +2756,8 @@ jobs:
                           .show()
                   }
 
+                  handleIncomingIntent(intent)
+
                   thread {
                       try {
                           YoutubeDL.getInstance().init(applicationContext)
@@ -2445,6 +2767,50 @@ jobs:
                           } catch (e: Exception) {}
                       } catch (e: Exception) {}
                   }
+              }
+
+              override fun onNewIntent(intent: Intent?) {
+                  super.onNewIntent(intent)
+                  setIntent(intent)
+                  intent?.let { handleIncomingIntent(it) }
+              }
+
+              private fun handleIncomingIntent(intent: Intent?) {
+                  if (intent == null) return
+                  if (Intent.ACTION_SEND == intent.action && "text/plain" == intent.type) {
+                      val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
+                      if (!sharedText.isNullOrBlank()) {
+                          switchTab(0)
+                          val urlInput = findViewById<EditText>(R.id.urlInput)
+                          urlInput.setText(sharedText)
+                          val detectedId = extractYouTubeId(sharedText)
+                          if (detectedId != null) {
+                              fetchThumbnailAndTitle(sharedText)
+                          } else {
+                              Toast.makeText(this, "Shared link is not a recognized YouTube URL", Toast.LENGTH_SHORT).show()
+                          }
+                      }
+                  }
+              }
+
+              override fun onResume() {
+                  super.onResume()
+                  attachDownloadListener()
+                  if (DownloadService.isDownloading) {
+                      showDownloaderState(2)
+                      findViewById<TextView>(R.id.downloadingTitle).text = DownloadService.currentTitle
+                      findViewById<TextView>(R.id.downloadingFormat).text = DownloadService.currentFormat
+                      val p = DownloadService.currentProgress
+                      findViewById<ProgressBar>(R.id.circularProgressBar).progress = p
+                      findViewById<TextView>(R.id.txtCircularPercent).text = "$p%"
+                      findViewById<ProgressBar>(R.id.linearProgressBar).progress = p
+                      findViewById<TextView>(R.id.txtDownloadStats).text = "Downloading stream... $p%"
+                  }
+              }
+
+              override fun onStop() {
+                  super.onStop()
+                  DownloadService.setListener(null)
               }
 
               private fun playFile(file: File) {
@@ -2475,6 +2841,12 @@ jobs:
               }
 
               private fun checkAndPromptStoragePermission() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                          ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 102)
+                      }
+                  }
+
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                       if (!Environment.isExternalStorageManager()) {
                           AlertDialog.Builder(this)
@@ -2518,5 +2890,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-OfficialBranded-v18-APK
+          name: FlowRip-ProService-v19-APK
           path: app/build/outputs/apk/**/*.apk
