@@ -288,8 +288,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 19
-                  versionName "19.0"
+                  versionCode 20
+                  versionName "20.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -2043,8 +2043,6 @@ jobs:
           import android.graphics.Bitmap
           import android.graphics.BitmapFactory
           import android.media.MediaMetadataRetriever
-          import android.view.ViewGroup
-          import android.view.inputmethod.InputMethodManager
           import android.media.MediaScannerConnection
           import android.net.Uri
           import android.os.Build
@@ -2054,6 +2052,8 @@ jobs:
           import android.text.Editable
           import android.text.TextWatcher
           import android.view.View
+          import android.view.ViewGroup
+          import android.view.inputmethod.InputMethodManager
           import android.widget.*
           import androidx.appcompat.app.AlertDialog
           import androidx.appcompat.app.AppCompatActivity
@@ -2085,21 +2085,138 @@ jobs:
           class MainActivity : AppCompatActivity() {
 
               private var isAudio = true
-
-              private fun dpToPx(dp: Int): Int {
-                  return (dp * resources.displayMetrics.density).toInt()
-              }
               private val audioQualities = arrayOf("320 kbps (HQ Audio)", "256 kbps", "192 kbps (Standard)", "128 kbps (Fast)")
               private val videoQualities = arrayOf("Best Available (1080p / 4K)", "1080p (Full HD)", "720p (HD)", "480p", "360p")
               private var currentVideoId: String? = null
               private var startAppAd: StartAppAd? = null
               private var lastDownloadedFile: File? = null
+              private var historyFilter = "ALL"
+
+              // Views
+              private lateinit var pageHome: View
+              private lateinit var pageHistory: View
+              private lateinit var pageSettings: View
+
+              private lateinit var tabHome: View
+              private lateinit var tabHistory: View
+              private lateinit var tabSettings: View
+              private lateinit var textTabHome: TextView
+              private lateinit var textTabHistory: TextView
+              private lateinit var textTabSettings: TextView
+              private lateinit var iconTabHome: ImageView
+              private lateinit var iconTabHistory: ImageView
+              private lateinit var iconTabSettings: ImageView
+
+              private lateinit var viewHomeHero: View
+              private lateinit var viewHomeFeatures: View
+              private lateinit var viewPreviewCard: View
+              private lateinit var viewDownloadingCard: View
+              private lateinit var viewCompleteSection: View
+
+              private lateinit var urlInput: EditText
+              private lateinit var btnClear: TextView
+              private lateinit var btnMainAction: Button
+              private lateinit var btnStartDownload: Button
+
+              private lateinit var previewThumbnail: ImageView
+              private lateinit var previewTitle: TextView
+              private lateinit var previewDetails: TextView
+              private lateinit var cardMp3: View
+              private lateinit var cardMp4: View
+              private lateinit var radioDotMp3: TextView
+              private lateinit var radioDotMp4: TextView
+              private lateinit var qualityLabel: TextView
+              private lateinit var qualitySpinner: Spinner
+
+              private lateinit var downloadingThumb: ImageView
+              private lateinit var downloadingTitle: TextView
+              private lateinit var downloadingFormat: TextView
+              private lateinit var circularProgressBar: ProgressBar
+              private lateinit var txtCircularPercent: TextView
+              private lateinit var linearProgressBar: ProgressBar
+              private lateinit var txtDownloadStats: TextView
+              private lateinit var btnCancel: Button
+
+              private lateinit var completedFileName: TextView
+              private lateinit var btnPlayFile: Button
+              private lateinit var btnSaveFile: Button
+              private lateinit var btnDownloadAnother: TextView
+              private lateinit var btnMenu: TextView
+
+              private lateinit var historyListContainer: LinearLayout
+              private lateinit var historySearchInput: EditText
+              private lateinit var btnClearHistorySearch: TextView
+              private lateinit var chipAll: Button
+              private lateinit var chipAudio: Button
+              private lateinit var chipVideo: Button
+
+              private fun dpToPx(dp: Int): Int {
+                  return (dp * resources.displayMetrics.density).toInt()
+              }
 
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
 
-                  // CRITICAL: Protect Samsung Galaxy A16 & all phones against button overlaps!
+                  // Find views
+                  pageHome = findViewById(R.id.pageHome)
+                  pageHistory = findViewById(R.id.pageHistory)
+                  pageSettings = findViewById(R.id.pageSettings)
+
+                  tabHome = findViewById(R.id.tabHome)
+                  tabHistory = findViewById(R.id.tabHistory)
+                  tabSettings = findViewById(R.id.tabSettings)
+                  textTabHome = findViewById(R.id.textTabHome)
+                  textTabHistory = findViewById(R.id.textTabHistory)
+                  textTabSettings = findViewById(R.id.textTabSettings)
+                  iconTabHome = findViewById(R.id.iconTabHome)
+                  iconTabHistory = findViewById(R.id.iconTabHistory)
+                  iconTabSettings = findViewById(R.id.iconTabSettings)
+
+                  viewHomeHero = findViewById(R.id.viewHomeHero)
+                  viewHomeFeatures = findViewById(R.id.viewHomeFeatures)
+                  viewPreviewCard = findViewById(R.id.viewPreviewCard)
+                  viewDownloadingCard = findViewById(R.id.viewDownloadingCard)
+                  viewCompleteSection = findViewById(R.id.viewCompleteSection)
+
+                  urlInput = findViewById(R.id.urlInput)
+                  btnClear = findViewById(R.id.btnClear)
+                  btnMainAction = findViewById(R.id.btnMainAction)
+                  btnStartDownload = findViewById(R.id.btnStartDownload)
+
+                  previewThumbnail = findViewById(R.id.previewThumbnail)
+                  previewTitle = findViewById(R.id.previewTitle)
+                  previewDetails = findViewById(R.id.previewDetails)
+                  cardMp3 = findViewById(R.id.cardMp3)
+                  cardMp4 = findViewById(R.id.cardMp4)
+                  radioDotMp3 = findViewById(R.id.radioDotMp3)
+                  radioDotMp4 = findViewById(R.id.radioDotMp4)
+                  qualityLabel = findViewById(R.id.qualityLabel)
+                  qualitySpinner = findViewById(R.id.qualitySpinner)
+
+                  downloadingThumb = findViewById(R.id.downloadingThumb)
+                  downloadingTitle = findViewById(R.id.downloadingTitle)
+                  downloadingFormat = findViewById(R.id.downloadingFormat)
+                  circularProgressBar = findViewById(R.id.circularProgressBar)
+                  txtCircularPercent = findViewById(R.id.txtCircularPercent)
+                  linearProgressBar = findViewById(R.id.linearProgressBar)
+                  txtDownloadStats = findViewById(R.id.txtDownloadStats)
+                  btnCancel = findViewById(R.id.btnCancel)
+
+                  completedFileName = findViewById(R.id.completedFileName)
+                  btnPlayFile = findViewById(R.id.btnPlayFile)
+                  btnSaveFile = findViewById(R.id.btnSaveFile)
+                  btnDownloadAnother = findViewById(R.id.btnDownloadAnother)
+                  btnMenu = findViewById(R.id.btnMenu)
+
+                  historyListContainer = findViewById(R.id.historyListContainer)
+                  historySearchInput = findViewById(R.id.historySearchInput)
+                  btnClearHistorySearch = findViewById(R.id.btnClearHistorySearch)
+                  chipAll = findViewById(R.id.chipAll)
+                  chipAudio = findViewById(R.id.chipAudio)
+                  chipVideo = findViewById(R.id.chipVideo)
+
+                  // Navigation insets padding for Samsung & full-screen displays
                   ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootContainer)) { _, insets ->
                       val navInsets = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
                       val bottomNavSection = findViewById<View>(R.id.bottomNavSection)
@@ -2134,257 +2251,6 @@ jobs:
                           }
                   }, 1400)
 
-                  val pageHome = findViewById<View>(R.id.pageHome)
-                  val pageHistory = findViewById<View>(R.id.pageHistory)
-                  val pageSettings = findViewById<View>(R.id.pageSettings)
-
-                  val tabHome = findViewById<View>(R.id.tabHome)
-                  val tabHistory = findViewById<View>(R.id.tabHistory)
-                  val tabSettings = findViewById<View>(R.id.tabSettings)
-                  val textTabHome = findViewById<TextView>(R.id.textTabHome)
-                  val textTabHistory = findViewById<TextView>(R.id.textTabHistory)
-                  val textTabSettings = findViewById<TextView>(R.id.textTabSettings)
-                  val iconTabHome = findViewById<ImageView>(R.id.iconTabHome)
-                  val iconTabHistory = findViewById<ImageView>(R.id.iconTabHistory)
-                  val iconTabSettings = findViewById<ImageView>(R.id.iconTabSettings)
-
-                  val viewHomeHero = findViewById<View>(R.id.viewHomeHero)
-                  val viewHomeFeatures = findViewById<View>(R.id.viewHomeFeatures)
-                  val viewPreviewCard = findViewById<View>(R.id.viewPreviewCard)
-                  val viewDownloadingCard = findViewById<View>(R.id.viewDownloadingCard)
-                  val viewCompleteSection = findViewById<View>(R.id.viewCompleteSection)
-
-                  val urlInput = findViewById<EditText>(R.id.urlInput)
-                  val btnClear = findViewById<TextView>(R.id.btnClear)
-                  val btnMainAction = findViewById<Button>(R.id.btnMainAction)
-                  val btnStartDownload = findViewById<Button>(R.id.btnStartDownload)
-
-                  val previewThumbnail = findViewById<ImageView>(R.id.previewThumbnail)
-                  val previewTitle = findViewById<TextView>(R.id.previewTitle)
-                  val previewDetails = findViewById<TextView>(R.id.previewDetails)
-                  val cardMp3 = findViewById<View>(R.id.cardMp3)
-                  val cardMp4 = findViewById<View>(R.id.cardMp4)
-                  val radioDotMp3 = findViewById<TextView>(R.id.radioDotMp3)
-                  val radioDotMp4 = findViewById<TextView>(R.id.radioDotMp4)
-                  val qualityLabel = findViewById<TextView>(R.id.qualityLabel)
-                  val qualitySpinner = findViewById<Spinner>(R.id.qualitySpinner)
-
-                  val downloadingThumb = findViewById<ImageView>(R.id.downloadingThumb)
-                  val downloadingTitle = findViewById<TextView>(R.id.downloadingTitle)
-                  val downloadingFormat = findViewById<TextView>(R.id.downloadingFormat)
-                  val circularProgressBar = findViewById<ProgressBar>(R.id.circularProgressBar)
-                  val txtCircularPercent = findViewById<TextView>(R.id.txtCircularPercent)
-                  val linearProgressBar = findViewById<ProgressBar>(R.id.linearProgressBar)
-                  val txtDownloadStats = findViewById<TextView>(R.id.txtDownloadStats)
-                  val btnCancel = findViewById<Button>(R.id.btnCancel)
-
-                  val completedFileName = findViewById<TextView>(R.id.completedFileName)
-                  val btnPlayFile = findViewById<Button>(R.id.btnPlayFile)
-                  val btnSaveFile = findViewById<Button>(R.id.btnSaveFile)
-                  val btnDownloadAnother = findViewById<TextView>(R.id.btnDownloadAnother)
-                  val btnMenu = findViewById<TextView>(R.id.btnMenu)
-
-                  val historyListContainer = findViewById<LinearLayout>(R.id.historyListContainer)
-                  val historySearchInput = findViewById<EditText>(R.id.historySearchInput)
-                  val btnClearHistorySearch = findViewById<TextView>(R.id.btnClearHistorySearch)
-                  val chipAll = findViewById<Button>(R.id.chipAll)
-                  val chipAudio = findViewById<Button>(R.id.chipAudio)
-                  val chipVideo = findViewById<Button>(R.id.chipVideo)
-                  var historyFilter = "ALL"
-
-                  fun refreshHistory() {
-                      historyListContainer.removeAllViews()
-                      val targetDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FlowRip")
-                      val searchQuery = historySearchInput.text.toString().trim().lowercase()
-                      val files = targetDir.listFiles()?.filter {
-                          val typeMatches = when (historyFilter) {
-                              "AUDIO" -> it.name.endsWith(".mp3", ignoreCase = true)
-                              "VIDEO" -> it.name.endsWith(".mp4", ignoreCase = true)
-                              else -> it.name.endsWith(".mp3", ignoreCase = true) || it.name.endsWith(".mp4", ignoreCase = true)
-                          }
-                          val queryMatches = searchQuery.isEmpty() || it.name.lowercase().contains(searchQuery)
-                          typeMatches && queryMatches
-                      }?.sortedByDescending { it.lastModified() } ?: emptyList()
-
-                      if (files.isEmpty()) {
-                          val emptyText = TextView(this).apply {
-                              text = if (searchQuery.isNotEmpty()) "No results found for \"$searchQuery\"" else "No downloads yet.\nPaste a link to get started!"
-                              textSize = 14f
-                              setTextColor(android.graphics.Color.parseColor("#64748B"))
-                              gravity = android.view.Gravity.CENTER
-                              setPadding(0, 100, 0, 0)
-                          }
-                          historyListContainer.addView(emptyText)
-                          return
-                      }
-
-                      for (file in files) {
-                          val itemCard = androidx.cardview.widget.CardView(this).apply {
-                              radius = 28f
-                              cardElevation = 2f
-                              setCardBackgroundColor(android.graphics.Color.WHITE)
-                              val layoutParams = LinearLayout.LayoutParams(
-                                  LinearLayout.LayoutParams.MATCH_PARENT,
-                                  LinearLayout.LayoutParams.WRAP_CONTENT
-                              ).apply { setMargins(0, 0, 0, 24) }
-                              this.layoutParams = layoutParams
-                          }
-
-                          val row = LinearLayout(this).apply {
-                              orientation = LinearLayout.HORIZONTAL
-                              gravity = android.view.Gravity.CENTER_VERTICAL
-                              setPadding(24, 20, 24, 20)
-                          }
-
-                          // Thumbnail Card with Fallback Placeholder
-                          val thumbCard = androidx.cardview.widget.CardView(this).apply {
-                              radius = 16f
-                              cardElevation = 0f
-                              setCardBackgroundColor(android.graphics.Color.parseColor("#EEF2FF"))
-                              val lp = LinearLayout.LayoutParams(dpToPx(56), dpToPx(56)).apply {
-                                  marginEnd = dpToPx(12)
-                              }
-                              layoutParams = lp
-                          }
-
-                          val thumbFrame = FrameLayout(this).apply {
-                              layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                          }
-
-                          val placeholderText = TextView(this).apply {
-                              text = if (file.name.endsWith(".mp3", ignoreCase = true)) "🎵" else "🎬"
-                              textSize = 22f
-                              gravity = android.view.Gravity.CENTER
-                              layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-                          }
-
-                          val thumbImg = ImageView(this).apply {
-                              layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-                              scaleType = ImageView.ScaleType.CENTER_CROP
-                          }
-
-                          thumbFrame.addView(placeholderText)
-                          thumbFrame.addView(thumbImg)
-                          thumbCard.addView(thumbFrame)
-
-                          // Extract thumbnail asynchronously
-                          thread {
-                              var bmp: Bitmap? = null
-                              try {
-                                  val retriever = MediaMetadataRetriever()
-                                  retriever.setDataSource(file.absolutePath)
-                                  if (file.name.endsWith(".mp4", ignoreCase = true)) {
-                                      bmp = retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                                          ?: retriever.frameAtTime
-                                  } else {
-                                      val art = retriever.embeddedPicture
-                                      if (art != null) {
-                                          bmp = BitmapFactory.decodeByteArray(art, 0, art.size)
-                                      }
-                                  }
-                                  retriever.release()
-                              } catch (e: Exception) {}
-
-                              if (bmp != null) {
-                                  runOnUiThread {
-                                      thumbImg.setImageBitmap(bmp)
-                                      placeholderText.visibility = View.GONE
-                                  }
-                              }
-                          }
-
-                          val infoCol = LinearLayout(this).apply {
-                              orientation = LinearLayout.VERTICAL
-                              layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                          }
-
-                          val title = TextView(this).apply {
-                              text = file.name
-                              textSize = 13f
-                              setTextColor(android.graphics.Color.parseColor("#0F172A"))
-                              setTypeface(null, android.graphics.Typeface.BOLD)
-                              maxLines = 1
-                              ellipsize = android.text.TextUtils.TruncateAt.END
-                          }
-
-                          val sub = TextView(this).apply {
-                              val sizeMb = "%.1f MB".format(file.length() / (1024.0 * 1024.0))
-                              val dateStr = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(file.lastModified()))
-                              text = "$sizeMb • $dateStr"
-                              textSize = 11f
-                              setTextColor(android.graphics.Color.parseColor("#64748B"))
-                          }
-
-                          infoCol.addView(title)
-                          infoCol.addView(sub)
-
-                          val actionsRow = LinearLayout(this).apply {
-                              orientation = LinearLayout.HORIZONTAL
-                              gravity = android.view.Gravity.CENTER_VERTICAL
-                          }
-
-                          val playBtn = Button(this).apply {
-                              text = "▶ Play"
-                              textSize = 11f
-                              setTextColor(android.graphics.Color.WHITE)
-                              backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#4F46E5"))
-                              layoutParams = LinearLayout.LayoutParams(
-                                  LinearLayout.LayoutParams.WRAP_CONTENT,
-                                  dpToPx(36)
-                              )
-                              setPadding(dpToPx(12), 0, dpToPx(12), 0)
-                              setOnClickListener { playFile(file) }
-                          }
-
-                          val deleteBtn = Button(this).apply {
-                              text = "🗑"
-                              textSize = 13f
-                              setTextColor(android.graphics.Color.parseColor("#EF4444"))
-                              backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#FEE2E2"))
-                              val lp = LinearLayout.LayoutParams(dpToPx(42), dpToPx(36)).apply {
-                                  marginStart = dpToPx(6)
-                              }
-                              layoutParams = lp
-                              setPadding(0, 0, 0, 0)
-                              setOnClickListener {
-                                  AlertDialog.Builder(this@MainActivity)
-                                      .setTitle("Delete File?")
-                                      .setMessage("Are you sure you want to delete:\n\"${file.name}\"?")
-                                      .setPositiveButton("Delete") { _, _ ->
-                                          try {
-                                              val deleted = file.delete()
-                                              if (deleted) {
-                                                  MediaScannerConnection.scanFile(
-                                                      applicationContext,
-                                                      arrayOf(file.absolutePath),
-                                                      null,
-                                                      null
-                                                  )
-                                                  Toast.makeText(this@MainActivity, "File deleted", Toast.LENGTH_SHORT).show()
-                                                  refreshHistory()
-                                              } else {
-                                                  Toast.makeText(this@MainActivity, "Could not delete file", Toast.LENGTH_SHORT).show()
-                                              }
-                                          } catch (e: Exception) {
-                                              Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                                          }
-                                      }
-                                      .setNegativeButton("Cancel", null)
-                                      .show()
-                              }
-                          }
-
-                          actionsRow.addView(playBtn)
-                          actionsRow.addView(deleteBtn)
-
-                          row.addView(thumbCard)
-                          row.addView(infoCol)
-                          row.addView(actionsRow)
-                          itemCard.addView(row)
-                          historyListContainer.addView(itemCard)
-                      }
-                  }
-
                   historySearchInput.addTextChangedListener(object : TextWatcher {
                       override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                       override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
@@ -2399,26 +2265,6 @@ jobs:
                       historySearchInput.text.clear()
                       val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager
                       imm?.hideSoftInputFromWindow(historySearchInput.windowToken, 0)
-                  }
-
-                  fun switchTab(index: Int) {
-                      val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager
-                      imm?.hideSoftInputFromWindow(window.decorView.windowToken, 0)
-                      currentFocus?.clearFocus()
-
-                      pageHome.visibility = if (index == 0) View.VISIBLE else View.GONE
-                      pageHistory.visibility = if (index == 1) View.VISIBLE else View.GONE
-                      pageSettings.visibility = if (index == 2) View.VISIBLE else View.GONE
-
-                      textTabHome.setTextColor(android.graphics.Color.parseColor(if (index == 0) "#4F46E5" else "#64748B"))
-                      textTabHistory.setTextColor(android.graphics.Color.parseColor(if (index == 1) "#4F46E5" else "#64748B"))
-                      textTabSettings.setTextColor(android.graphics.Color.parseColor(if (index == 2) "#4F46E5" else "#64748B"))
-
-                      iconTabHome.setColorFilter(android.graphics.Color.parseColor(if (index == 0) "#4F46E5" else "#64748B"))
-                      iconTabHistory.setColorFilter(android.graphics.Color.parseColor(if (index == 1) "#4F46E5" else "#64748B"))
-                      iconTabSettings.setColorFilter(android.graphics.Color.parseColor(if (index == 2) "#4F46E5" else "#64748B"))
-
-                      if (index == 1) refreshHistory()
                   }
 
                   tabHome.setOnClickListener { switchTab(0) }
@@ -2458,22 +2304,6 @@ jobs:
                       refreshHistory()
                   }
 
-                  fun showDownloaderState(state: Int) {
-                      viewHomeHero.visibility = if (state == 0) View.VISIBLE else View.GONE
-                      viewHomeFeatures.visibility = if (state == 0) View.VISIBLE else View.GONE
-                      btnMainAction.visibility = if (state == 0) View.VISIBLE else View.GONE
-                      viewPreviewCard.visibility = if (state == 1) View.VISIBLE else View.GONE
-                      viewDownloadingCard.visibility = if (state == 2) View.VISIBLE else View.GONE
-                      viewCompleteSection.visibility = if (state == 3) View.VISIBLE else View.GONE
-                  }
-
-                  fun updateSpinner() {
-                      val options = if (isAudio) audioQualities else videoQualities
-                      qualityLabel.text = if (isAudio) "Bitrate:" else "Resolution:"
-                      val adapter = ArrayAdapter(this, R.layout.item_spinner_selected, options)
-                      adapter.setDropDownViewResource(R.layout.item_spinner_dropdown)
-                      qualitySpinner.adapter = adapter
-                  }
                   updateSpinner()
 
                   cardMp3.setOnClickListener {
@@ -2498,86 +2328,9 @@ jobs:
                       updateSpinner()
                   }
 
-                  fun extractYouTubeId(rawUrl: String): String? {
-                      val trimmed = rawUrl.trim()
-                      val patterns = arrayOf(
-                          "(?:v=|v%3D|/v/|youtu\\.be/|/embed/|/shorts/|/live/|/e/|watch\\?feature=[^&]*&v=)([a-zA-Z0-9_-]{11})",
-                          "(?:[\\?&]v=)([a-zA-Z0-9_-]{11})",
-                          "([a-zA-Z0-9_-]{11})"
-                      )
-                      for (p in patterns) {
-                          val matcher = Pattern.compile(p, Pattern.CASE_INSENSITIVE).matcher(trimmed)
-                          if (matcher.find()) {
-                              return matcher.group(1)
-                          }
-                      }
-                      return null
-                  }
-
-                  fun fetchThumbnailAndTitle(input: String) {
-                      val videoId = extractYouTubeId(input)
-                      if (videoId == null) {
-                          return
-                      }
-
-                      btnClear.visibility = View.VISIBLE
-                      showDownloaderState(1)
-
-                      if (videoId == currentVideoId) {
-                          return
-                      }
-                      currentVideoId = videoId
-
-                      previewTitle.text = "Loading media..."
-                      previewDetails.text = "Fetching details from YouTube..."
-
-                      thread {
-                          try {
-                              val thumbUrl = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
-                              val conn = URL(thumbUrl).openConnection() as HttpURLConnection
-                              conn.doInput = true
-                              conn.connect()
-                              val bitmap = BitmapFactory.decodeStream(conn.inputStream)
-                              if (bitmap != null) {
-                                  runOnUiThread {
-                                      previewThumbnail.setImageBitmap(bitmap)
-                                      downloadingThumb.setImageBitmap(bitmap)
-                                  }
-                              }
-                          } catch (e: Exception) {}
-                      }
-
-                      thread {
-                          try {
-                              val oembedUrl = "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=$videoId&format=json"
-                              val conn = URL(oembedUrl).openConnection() as HttpURLConnection
-                              conn.setRequestProperty("User-Agent", "Mozilla/5.0")
-                              val reader = BufferedReader(InputStreamReader(conn.inputStream))
-                              val resp = reader.readText()
-                              reader.close()
-
-                              val json = JSONObject(resp)
-                              val title = json.optString("title", "YouTube Video")
-                              val author = json.optString("author_name", "YouTube Creator")
-
-                              runOnUiThread {
-                                  previewTitle.text = title
-                                  previewDetails.text = "$author • YouTube Stream"
-                                  downloadingTitle.text = title
-                              }
-                          } catch (e: Exception) {
-                              runOnUiThread {
-                                  previewTitle.text = "YouTube Video ($videoId)"
-                                  previewDetails.text = "Ready to download in True HD"
-                                  downloadingTitle.text = "YouTube Video ($videoId)"
-                              }
-                          }
-                      }
-                  }
-
                   urlInput.addTextChangedListener(object : TextWatcher {
                       override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                      override fun onTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
+                      override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                           val text = s?.toString()?.trim() ?: ""
                           if (text.isNotEmpty()) {
                               btnMainAction.text = "📥 DOWNLOAD"
@@ -2628,64 +2381,6 @@ jobs:
                       }
                   }
 
-                  fun attachDownloadListener() {
-                      DownloadService.setListener { event ->
-                          runOnUiThread {
-                              when (event) {
-                                  is DownloadService.DownloadEvent.Progress -> {
-                                      showDownloaderState(2)
-                                      circularProgressBar.progress = event.progress
-                                      txtCircularPercent.text = "${event.progress}%"
-                                      linearProgressBar.progress = event.progress
-                                      txtDownloadStats.text = event.stats
-                                  }
-                                  is DownloadService.DownloadEvent.Completed -> {
-                                      lastDownloadedFile = event.file
-                                      completedFileName.text = event.file.name + event.resolutionInfo
-                                      showDownloaderState(3)
-                                      refreshHistory()
-                                      Toast.makeText(this@MainActivity, "Download Complete!${event.resolutionInfo}", Toast.LENGTH_LONG).show()
-                                  }
-                                  is DownloadService.DownloadEvent.Error -> {
-                                      Toast.makeText(this@MainActivity, "Download Error: ${event.message}", Toast.LENGTH_LONG).show()
-                                      showDownloaderState(1)
-                                  }
-                                  is DownloadService.DownloadEvent.Cancelled -> {
-                                      showDownloaderState(1)
-                                      Toast.makeText(this@MainActivity, "Download cancelled", Toast.LENGTH_SHORT).show()
-                                  }
-                              }
-                          }
-                      }
-                  }
-
-                  fun executeDownload() {
-                      val rawInput = urlInput.text.toString().trim()
-                      val cleanId = currentVideoId ?: extractYouTubeId(rawInput)
-                      val url = if (cleanId != null) "https://www.youtube.com/watch?v=$cleanId" else rawInput
-                      val selectedQuality = qualitySpinner.selectedItem.toString()
-
-                      showDownloaderState(2)
-                      downloadingFormat.text = if (isAudio) "MP3 • $selectedQuality" else "MP4 • $selectedQuality"
-                      circularProgressBar.progress = 0
-                      txtCircularPercent.text = "0%"
-                      linearProgressBar.progress = 0
-                      txtDownloadStats.text = "Starting background download service..."
-
-                      val serviceIntent = Intent(this@MainActivity, DownloadService::class.java).apply {
-                          action = DownloadService.ACTION_START
-                          putExtra(DownloadService.EXTRA_URL, url)
-                          putExtra(DownloadService.EXTRA_TITLE, downloadingTitle.text.toString())
-                          putExtra(DownloadService.EXTRA_IS_AUDIO, isAudio)
-                          putExtra(DownloadService.EXTRA_QUALITY, selectedQuality)
-                      }
-                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                          startForegroundService(serviceIntent)
-                      } else {
-                          startService(serviceIntent)
-                      }
-                  }
-
                   btnStartDownload.setOnClickListener {
                       val rawInput = urlInput.text.toString().trim()
                       val cleanId = currentVideoId ?: extractYouTubeId(rawInput)
@@ -2729,7 +2424,13 @@ jobs:
                       startService(cancelIntent)
                       showDownloaderState(1)
                   }
-                  btnDownloadAnother.setOnClickListener { urlInput.setText(""); currentVideoId = null; showDownloaderState(0) }
+
+                  btnDownloadAnother.setOnClickListener {
+                      urlInput.setText("")
+                      currentVideoId = null
+                      showDownloaderState(0)
+                  }
+
                   btnMenu.setOnClickListener { switchTab(2) }
 
                   findViewById<View>(R.id.settingRowQuality).setOnClickListener {
@@ -2781,7 +2482,6 @@ jobs:
                       val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
                       if (!sharedText.isNullOrBlank()) {
                           switchTab(0)
-                          val urlInput = findViewById<EditText>(R.id.urlInput)
                           urlInput.setText(sharedText)
                           val detectedId = extractYouTubeId(sharedText)
                           if (detectedId != null) {
@@ -2798,19 +2498,381 @@ jobs:
                   attachDownloadListener()
                   if (DownloadService.isDownloading) {
                       showDownloaderState(2)
-                      findViewById<TextView>(R.id.downloadingTitle).text = DownloadService.currentTitle
-                      findViewById<TextView>(R.id.downloadingFormat).text = DownloadService.currentFormat
+                      downloadingTitle.text = DownloadService.currentTitle
+                      downloadingFormat.text = DownloadService.currentFormat
                       val p = DownloadService.currentProgress
-                      findViewById<ProgressBar>(R.id.circularProgressBar).progress = p
-                      findViewById<TextView>(R.id.txtCircularPercent).text = "$p%"
-                      findViewById<ProgressBar>(R.id.linearProgressBar).progress = p
-                      findViewById<TextView>(R.id.txtDownloadStats).text = "Downloading stream... $p%"
+                      circularProgressBar.progress = p
+                      txtCircularPercent.text = "$p%"
+                      linearProgressBar.progress = p
+                      txtDownloadStats.text = "Downloading stream... $p%"
                   }
               }
 
               override fun onStop() {
                   super.onStop()
                   DownloadService.setListener(null)
+              }
+
+              fun switchTab(index: Int) {
+                  val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager
+                  imm?.hideSoftInputFromWindow(window.decorView.windowToken, 0)
+                  currentFocus?.clearFocus()
+
+                  pageHome.visibility = if (index == 0) View.VISIBLE else View.GONE
+                  pageHistory.visibility = if (index == 1) View.VISIBLE else View.GONE
+                  pageSettings.visibility = if (index == 2) View.VISIBLE else View.GONE
+
+                  textTabHome.setTextColor(android.graphics.Color.parseColor(if (index == 0) "#4F46E5" else "#64748B"))
+                  textTabHistory.setTextColor(android.graphics.Color.parseColor(if (index == 1) "#4F46E5" else "#64748B"))
+                  textTabSettings.setTextColor(android.graphics.Color.parseColor(if (index == 2) "#4F46E5" else "#64748B"))
+
+                  iconTabHome.setColorFilter(android.graphics.Color.parseColor(if (index == 0) "#4F46E5" else "#64748B"))
+                  iconTabHistory.setColorFilter(android.graphics.Color.parseColor(if (index == 1) "#4F46E5" else "#64748B"))
+                  iconTabSettings.setColorFilter(android.graphics.Color.parseColor(if (index == 2) "#4F46E5" else "#64748B"))
+
+                  if (index == 1) refreshHistory()
+              }
+
+              fun showDownloaderState(state: Int) {
+                  viewHomeHero.visibility = if (state == 0) View.VISIBLE else View.GONE
+                  viewHomeFeatures.visibility = if (state == 0) View.VISIBLE else View.GONE
+                  btnMainAction.visibility = if (state == 0) View.VISIBLE else View.GONE
+                  viewPreviewCard.visibility = if (state == 1) View.VISIBLE else View.GONE
+                  viewDownloadingCard.visibility = if (state == 2) View.VISIBLE else View.GONE
+                  viewCompleteSection.visibility = if (state == 3) View.VISIBLE else View.GONE
+              }
+
+              private fun updateSpinner() {
+                  val options = if (isAudio) audioQualities else videoQualities
+                  qualityLabel.text = if (isAudio) "Bitrate:" else "Resolution:"
+                  val adapter = ArrayAdapter(this, R.layout.item_spinner_selected, options)
+                  adapter.setDropDownViewResource(R.layout.item_spinner_dropdown)
+                  qualitySpinner.adapter = adapter
+              }
+
+              private fun extractYouTubeId(rawUrl: String): String? {
+                  val trimmed = rawUrl.trim()
+                  val patterns = arrayOf(
+                      "(?:v=|v%3D|/v/|youtu\\.be/|/embed/|/shorts/|/live/|/e/|watch\\?feature=[^&]*&v=)([a-zA-Z0-9_-]{11})",
+                      "(?:[\\?&]v=)([a-zA-Z0-9_-]{11})",
+                      "([a-zA-Z0-9_-]{11})"
+                  )
+                  for (p in patterns) {
+                      val matcher = Pattern.compile(p, Pattern.CASE_INSENSITIVE).matcher(trimmed)
+                      if (matcher.find()) {
+                          return matcher.group(1)
+                      }
+                  }
+                  return null
+              }
+
+              private fun fetchThumbnailAndTitle(input: String) {
+                  val videoId = extractYouTubeId(input) ?: return
+
+                  btnClear.visibility = View.VISIBLE
+                  showDownloaderState(1)
+
+                  if (videoId == currentVideoId) {
+                      return
+                  }
+                  currentVideoId = videoId
+
+                  previewTitle.text = "Loading media..."
+                  previewDetails.text = "Fetching details from YouTube..."
+
+                  thread {
+                      try {
+                          val thumbUrl = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
+                          val conn = URL(thumbUrl).openConnection() as HttpURLConnection
+                          conn.doInput = true
+                          conn.connect()
+                          val bitmap = BitmapFactory.decodeStream(conn.inputStream)
+                          if (bitmap != null) {
+                              runOnUiThread {
+                                  previewThumbnail.setImageBitmap(bitmap)
+                                  downloadingThumb.setImageBitmap(bitmap)
+                              }
+                          }
+                      } catch (e: Exception) {}
+                  }
+
+                  thread {
+                      try {
+                          val oembedUrl = "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=$videoId&format=json"
+                          val conn = URL(oembedUrl).openConnection() as HttpURLConnection
+                          conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+                          val reader = BufferedReader(InputStreamReader(conn.inputStream))
+                          val resp = reader.readText()
+                          reader.close()
+
+                          val json = JSONObject(resp)
+                          val title = json.optString("title", "YouTube Video")
+                          val author = json.optString("author_name", "YouTube Creator")
+
+                          runOnUiThread {
+                              previewTitle.text = title
+                              previewDetails.text = "$author • YouTube Stream"
+                              downloadingTitle.text = title
+                          }
+                      } catch (e: Exception) {
+                          runOnUiThread {
+                              previewTitle.text = "YouTube Video ($videoId)"
+                              previewDetails.text = "Ready to download in True HD"
+                              downloadingTitle.text = "YouTube Video ($videoId)"
+                          }
+                      }
+                  }
+              }
+
+              private fun refreshHistory() {
+                  historyListContainer.removeAllViews()
+                  val targetDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FlowRip")
+                  val searchQuery = historySearchInput.text.toString().trim().lowercase()
+                  val files = targetDir.listFiles()?.filter {
+                      val typeMatches = when (historyFilter) {
+                          "AUDIO" -> it.name.endsWith(".mp3", ignoreCase = true)
+                          "VIDEO" -> it.name.endsWith(".mp4", ignoreCase = true)
+                          else -> it.name.endsWith(".mp3", ignoreCase = true) || it.name.endsWith(".mp4", ignoreCase = true)
+                      }
+                      val queryMatches = searchQuery.isEmpty() || it.name.lowercase().contains(searchQuery)
+                      typeMatches && queryMatches
+                  }?.sortedByDescending { it.lastModified() } ?: emptyList()
+
+                  if (files.isEmpty()) {
+                      val emptyText = TextView(this).apply {
+                          text = if (searchQuery.isNotEmpty()) "No results found for \"$searchQuery\"" else "No downloads yet.\nPaste a link to get started!"
+                          textSize = 14f
+                          setTextColor(android.graphics.Color.parseColor("#64748B"))
+                          gravity = android.view.Gravity.CENTER
+                          setPadding(0, 100, 0, 0)
+                      }
+                      historyListContainer.addView(emptyText)
+                      return
+                  }
+
+                  for (file in files) {
+                      val itemCard = androidx.cardview.widget.CardView(this).apply {
+                          radius = 28f
+                          cardElevation = 2f
+                          setCardBackgroundColor(android.graphics.Color.WHITE)
+                          val layoutParams = LinearLayout.LayoutParams(
+                              LinearLayout.LayoutParams.MATCH_PARENT,
+                              LinearLayout.LayoutParams.WRAP_CONTENT
+                          ).apply { setMargins(0, 0, 0, 24) }
+                          this.layoutParams = layoutParams
+                      }
+
+                      val row = LinearLayout(this).apply {
+                          orientation = LinearLayout.HORIZONTAL
+                          gravity = android.view.Gravity.CENTER_VERTICAL
+                          setPadding(24, 20, 24, 20)
+                      }
+
+                      // Thumbnail Card with Fallback Placeholder
+                      val thumbCard = androidx.cardview.widget.CardView(this).apply {
+                          radius = 16f
+                          cardElevation = 0f
+                          setCardBackgroundColor(android.graphics.Color.parseColor("#EEF2FF"))
+                          val lp = LinearLayout.LayoutParams(dpToPx(56), dpToPx(56)).apply {
+                              marginEnd = dpToPx(12)
+                          }
+                          layoutParams = lp
+                      }
+
+                      val thumbFrame = FrameLayout(this).apply {
+                          layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                      }
+
+                      val placeholderText = TextView(this).apply {
+                          text = if (file.name.endsWith(".mp3", ignoreCase = true)) "🎵" else "🎬"
+                          textSize = 22f
+                          gravity = android.view.Gravity.CENTER
+                          layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+                      }
+
+                      val thumbImg = ImageView(this).apply {
+                          layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+                          scaleType = ImageView.ScaleType.CENTER_CROP
+                      }
+
+                      thumbFrame.addView(placeholderText)
+                      thumbFrame.addView(thumbImg)
+                      thumbCard.addView(thumbFrame)
+
+                      // Extract thumbnail asynchronously
+                      thread {
+                          var bmp: Bitmap? = null
+                          try {
+                              val retriever = MediaMetadataRetriever()
+                              retriever.setDataSource(file.absolutePath)
+                              if (file.name.endsWith(".mp4", ignoreCase = true)) {
+                                  bmp = retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                                      ?: retriever.frameAtTime
+                              } else {
+                                  val art = retriever.embeddedPicture
+                                  if (art != null) {
+                                      bmp = BitmapFactory.decodeByteArray(art, 0, art.size)
+                                  }
+                              }
+                              retriever.release()
+                          } catch (e: Exception) {}
+
+                          if (bmp != null) {
+                              runOnUiThread {
+                                  thumbImg.setImageBitmap(bmp)
+                                  placeholderText.visibility = View.GONE
+                              }
+                          }
+                      }
+
+                      val infoCol = LinearLayout(this).apply {
+                          orientation = LinearLayout.VERTICAL
+                          layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                      }
+
+                      val title = TextView(this).apply {
+                          text = file.name
+                          textSize = 13f
+                          setTextColor(android.graphics.Color.parseColor("#0F172A"))
+                          setTypeface(null, android.graphics.Typeface.BOLD)
+                          maxLines = 1
+                          ellipsize = android.text.TextUtils.TruncateAt.END
+                      }
+
+                      val sub = TextView(this).apply {
+                          val sizeMb = "%.1f MB".format(file.length() / (1024.0 * 1024.0))
+                          val dateStr = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(file.lastModified()))
+                          text = "$sizeMb • $dateStr"
+                          textSize = 11f
+                          setTextColor(android.graphics.Color.parseColor("#64748B"))
+                      }
+
+                      infoCol.addView(title)
+                      infoCol.addView(sub)
+
+                      val actionsRow = LinearLayout(this).apply {
+                          orientation = LinearLayout.HORIZONTAL
+                          gravity = android.view.Gravity.CENTER_VERTICAL
+                      }
+
+                      val playBtn = Button(this).apply {
+                          text = "▶ Play"
+                          textSize = 11f
+                          setTextColor(android.graphics.Color.WHITE)
+                          backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#4F46E5"))
+                          layoutParams = LinearLayout.LayoutParams(
+                              LinearLayout.LayoutParams.WRAP_CONTENT,
+                              dpToPx(36)
+                          )
+                          setPadding(dpToPx(12), 0, dpToPx(12), 0)
+                          setOnClickListener { playFile(file) }
+                      }
+
+                      val deleteBtn = Button(this).apply {
+                          text = "🗑"
+                          textSize = 13f
+                          setTextColor(android.graphics.Color.parseColor("#EF4444"))
+                          backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#FEE2E2"))
+                          val lp = LinearLayout.LayoutParams(dpToPx(42), dpToPx(36)).apply {
+                              marginStart = dpToPx(6)
+                          }
+                          layoutParams = lp
+                          setPadding(0, 0, 0, 0)
+                          setOnClickListener {
+                              AlertDialog.Builder(this@MainActivity)
+                                  .setTitle("Delete File?")
+                                  .setMessage("Are you sure you want to delete:\n\"${file.name}\"?")
+                                  .setPositiveButton("Delete") { _, _ ->
+                                      try {
+                                          val deleted = file.delete()
+                                          if (deleted) {
+                                              MediaScannerConnection.scanFile(
+                                                  applicationContext,
+                                                  arrayOf(file.absolutePath),
+                                                  null,
+                                                  null
+                                              )
+                                              Toast.makeText(this@MainActivity, "File deleted", Toast.LENGTH_SHORT).show()
+                                              refreshHistory()
+                                          } else {
+                                              Toast.makeText(this@MainActivity, "Could not delete file", Toast.LENGTH_SHORT).show()
+                                          }
+                                      } catch (e: Exception) {
+                                          Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                      }
+                                  }
+                                  .setNegativeButton("Cancel", null)
+                                  .show()
+                          }
+                      }
+
+                      actionsRow.addView(playBtn)
+                      actionsRow.addView(deleteBtn)
+
+                      row.addView(thumbCard)
+                      row.addView(infoCol)
+                      row.addView(actionsRow)
+                      itemCard.addView(row)
+                      historyListContainer.addView(itemCard)
+                  }
+              }
+
+              private fun attachDownloadListener() {
+                  DownloadService.setListener { event ->
+                      runOnUiThread {
+                          when (event) {
+                              is DownloadService.DownloadEvent.Progress -> {
+                                  showDownloaderState(2)
+                                  circularProgressBar.progress = event.progress
+                                  txtCircularPercent.text = "${event.progress}%"
+                                  linearProgressBar.progress = event.progress
+                                  txtDownloadStats.text = event.stats
+                              }
+                              is DownloadService.DownloadEvent.Completed -> {
+                                  lastDownloadedFile = event.file
+                                  completedFileName.text = event.file.name + event.resolutionInfo
+                                  showDownloaderState(3)
+                                  refreshHistory()
+                                  Toast.makeText(this@MainActivity, "Download Complete!${event.resolutionInfo}", Toast.LENGTH_LONG).show()
+                              }
+                              is DownloadService.DownloadEvent.Error -> {
+                                  Toast.makeText(this@MainActivity, "Download Error: ${event.message}", Toast.LENGTH_LONG).show()
+                                  showDownloaderState(1)
+                              }
+                              is DownloadService.DownloadEvent.Cancelled -> {
+                                  showDownloaderState(1)
+                                  Toast.makeText(this@MainActivity, "Download cancelled", Toast.LENGTH_SHORT).show()
+                              }
+                          }
+                      }
+                  }
+              }
+
+              private fun executeDownload() {
+                  val rawInput = urlInput.text.toString().trim()
+                  val cleanId = currentVideoId ?: extractYouTubeId(rawInput)
+                  val url = if (cleanId != null) "https://www.youtube.com/watch?v=$cleanId" else rawInput
+                  val selectedQuality = qualitySpinner.selectedItem.toString()
+
+                  showDownloaderState(2)
+                  downloadingFormat.text = if (isAudio) "MP3 • $selectedQuality" else "MP4 • $selectedQuality"
+                  circularProgressBar.progress = 0
+                  txtCircularPercent.text = "0%"
+                  linearProgressBar.progress = 0
+                  txtDownloadStats.text = "Starting background download service..."
+
+                  val serviceIntent = Intent(this@MainActivity, DownloadService::class.java).apply {
+                      action = DownloadService.ACTION_START
+                      putExtra(DownloadService.EXTRA_URL, url)
+                      putExtra(DownloadService.EXTRA_TITLE, downloadingTitle.text.toString())
+                      putExtra(DownloadService.EXTRA_IS_AUDIO, isAudio)
+                      putExtra(DownloadService.EXTRA_QUALITY, selectedQuality)
+                  }
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      startForegroundService(serviceIntent)
+                  } else {
+                      startService(serviceIntent)
+                  }
               }
 
               private fun playFile(file: File) {
@@ -2890,5 +2952,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-ProService-v19-APK
+          name: FlowRip-ProService-v20-APK
           path: app/build/outputs/apk/**/*.apk
