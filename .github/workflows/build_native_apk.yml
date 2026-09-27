@@ -400,6 +400,10 @@ jobs:
                       private set
 
                   @Volatile
+                  var currentStatus = "Connecting to stream..."
+                      private set
+
+                  @Volatile
                   var lastError: String? = null
                       private set
 
@@ -576,37 +580,85 @@ jobs:
                           var lastSizeInfo = "--"
                           var lastEta = "--"
 
+                          var streamIndex = 1
+                          var stream1TotalBytes = 0L
+                          var isProcessingPhase = false
+
                           YoutubeDL.getInstance().execute(request, taskId) { progress, etaInSeconds, line ->
                               val rawLine = line
 
-                              // 1. Percentage
-                              var p = progress.toInt().coerceIn(0, 100)
-                              if (p <= 0 && rawLine.contains("%")) {
+                              // Check for stream transitions (stream 1 video -> stream 2 audio)
+                              if (rawLine.contains("[download] Destination:")) {
+                                  if (lastPercent > 10 || stream1TotalBytes > 0L) {
+                                      streamIndex = 2
+                                  }
+                              }
+
+                              // Check for processing phases (FFmpeg merge, audio extraction, metadata, thumbnails)
+                              if (rawLine.contains("[ExtractAudio]") || rawLine.contains("[ffmpeg]") ||
+                                  rawLine.contains("[Merger]") || rawLine.contains("Merging formats") ||
+                                  rawLine.contains("[Metadata]") || rawLine.contains("[EmbedThumbnail]") ||
+                                  rawLine.contains("[ThumbnailsConvertor]")) {
+                                  isProcessingPhase = true
+                              }
+
+                              // 1. Raw Stream Percentage parsing
+                              val streamRawPct: Float = if (progress > 0f) {
+                                  progress
+                              } else if (rawLine.contains("%")) {
                                   val pctMatcher = Pattern.compile("(\\d+(?:\\.\\d+)?)%").matcher(rawLine)
                                   if (pctMatcher.find()) {
-                                      pctMatcher.group(1)?.toFloatOrNull()?.let {
-                                          p = it.toInt().coerceIn(0, 100)
+                                      pctMatcher.group(1)?.toFloatOrNull() ?: 0f
+                                  } else 0f
+                              } else 0f
+
+                              // Calculate overall download percentage:
+                              var calculatedOverall = lastPercent
+                              if (isProcessingPhase) {
+                                  // In FFmpeg processing phase, download is 100% finished.
+                                  // Keep highest reached progress (at least 99% or 100%) and never decrease.
+                                  calculatedOverall = maxOf(lastPercent, if (isAudio) 100 else 99)
+                              } else if (streamRawPct > 0f) {
+                                  val rawVal = streamRawPct.coerceIn(0f, 100f)
+                                  if (isAudio) {
+                                      // MP3 has only 1 download stream (the audio stream)
+                                      calculatedOverall = rawVal.toInt().coerceIn(1, 100)
+                                  } else {
+                                      // MP4 with DASH: Stream 1 (video) represents ~85%, Stream 2 (audio) represents ~14%
+                                      if (streamIndex <= 1) {
+                                          calculatedOverall = (rawVal * 0.85f).toInt().coerceIn(1, 85)
+                                      } else {
+                                          calculatedOverall = (85 + rawVal * 0.14f).toInt().coerceIn(85, 99)
                                       }
                                   }
                               }
-                              if (p > 0) {
-                                  lastPercent = p
-                                  currentProgress = p
-                              }
+
+                              // STRICT MONOTONICITY: Percentage may increase or stay same, NEVER decrease!
+                              val monotonicPercent = maxOf(lastPercent, calculatedOverall).coerceIn(1, 100)
+                              lastPercent = monotonicPercent
+                              currentProgress = monotonicPercent
 
                               // 2. Real Download Speed
-                              val spdMatcher = Pattern.compile("at\\s+([~]?\\d+(?:\\.\\d+)?\\s*(?:[KMGTP]?i?B/s|B/s))", Pattern.CASE_INSENSITIVE).matcher(rawLine)
-                              if (spdMatcher.find()) {
-                                  val rawSpd = spdMatcher.group(1)?.trim() ?: ""
-                                  if (rawSpd.isNotEmpty() && !rawSpd.contains("Unknown", ignoreCase = true)) {
-                                      val cleanSpd = rawSpd.replace("iB/s", "B/s", ignoreCase = true)
-                                      lastSpeed = cleanSpd
-                                      currentSpeed = cleanSpd
+                              if (isProcessingPhase) {
+                                  lastSpeed = "--"
+                                  currentSpeed = "--"
+                              } else {
+                                  val spdMatcher = Pattern.compile("at\\s+([~]?\\d+(?:\\.\\d+)?\\s*(?:[KMGTP]?i?B/s|B/s))", Pattern.CASE_INSENSITIVE).matcher(rawLine)
+                                  if (spdMatcher.find()) {
+                                      val rawSpd = spdMatcher.group(1)?.trim() ?: ""
+                                      if (rawSpd.isNotEmpty() && !rawSpd.contains("Unknown", ignoreCase = true)) {
+                                          val cleanSpd = rawSpd.replace("iB/s", "B/s", ignoreCase = true)
+                                          lastSpeed = cleanSpd
+                                          currentSpeed = cleanSpd
+                                      }
                                   }
                               }
 
                               // 3. Real ETA
-                              if (etaInSeconds >= 0) {
+                              if (isProcessingPhase) {
+                                  lastEta = "--"
+                                  currentEta = "--"
+                              } else if (etaInSeconds >= 0) {
                                   val etaStr = if (etaInSeconds < 3600) {
                                       String.format(Locale.US, "ETA %02d:%02d", etaInSeconds / 60, etaInSeconds % 60)
                                   } else {
@@ -619,30 +671,44 @@ jobs:
                                   if (etaMatcher.find()) {
                                       val etaVal = etaMatcher.group(1)
                                       if (!etaVal.isNullOrEmpty() && !etaVal.contains("Unknown", ignoreCase = true)) {
-                                          val etaStr = "ETA $etaVal"
+                                          val etaStr = "ETA " + etaVal
                                           lastEta = etaStr
                                           currentEta = etaStr
                                       }
                                   }
                               }
 
-                              // 4. Downloaded Size / Total Size
+                              // 4. Downloaded Size / Total Size (Cumulative across streams)
                               val dlMatcher = Pattern.compile("(\\d+(?:\\.\\d+)?\\s*(?:[KMGTP]?i?B|B))\\s+of", Pattern.CASE_INSENSITIVE).matcher(rawLine)
                               val totMatcher = Pattern.compile("of\\s+~?\\s*(\\d+(?:\\.\\d+)?\\s*(?:[KMGTP]?i?B|B))", Pattern.CASE_INSENSITIVE).matcher(rawLine)
                               val singleSizeMatcher = Pattern.compile("\\[download\\]\\s+(\\d+(?:\\.\\d+)?\\s*(?:[KMGTP]?i?B|B))\\s+at", Pattern.CASE_INSENSITIVE).matcher(rawLine)
 
                               if (dlMatcher.find() && totMatcher.find()) {
-                                  val dlBytes = parseByteUnits(dlMatcher.group(1) ?: "")
-                                  val totBytes = parseByteUnits(totMatcher.group(1) ?: "")
-                                  if (dlBytes > 0 && totBytes > 0) {
-                                      lastSizeInfo = "${formatBytes(dlBytes)} / ${formatBytes(totBytes)}"
+                                  val currentDlBytes = parseByteUnits(dlMatcher.group(1) ?: "")
+                                  val currentTotBytes = parseByteUnits(totMatcher.group(1) ?: "")
+                                  if (currentDlBytes > 0 && currentTotBytes > 0) {
+                                      if (streamIndex <= 1) {
+                                          stream1TotalBytes = currentTotBytes
+                                          lastSizeInfo = "${formatBytes(currentDlBytes)} / ${formatBytes(currentTotBytes)}"
+                                      } else {
+                                          val overallDl = stream1TotalBytes + currentDlBytes
+                                          val overallTot = stream1TotalBytes + currentTotBytes
+                                          lastSizeInfo = "${formatBytes(overallDl)} / ${formatBytes(overallTot)}"
+                                      }
                                       currentSizeInfo = lastSizeInfo
                                   }
-                              } else if (totMatcher.find() && lastPercent > 0) {
-                                  val totBytes = parseByteUnits(totMatcher.group(1) ?: "")
-                                  if (totBytes > 0) {
-                                      val dlBytes = (totBytes * (lastPercent / 100.0)).toLong()
-                                      lastSizeInfo = "${formatBytes(dlBytes)} / ${formatBytes(totBytes)}"
+                              } else if (totMatcher.find() && streamRawPct > 0f) {
+                                  val currentTotBytes = parseByteUnits(totMatcher.group(1) ?: "")
+                                  if (currentTotBytes > 0) {
+                                      val currentDlBytes = (currentTotBytes * (streamRawPct / 100.0)).toLong()
+                                      if (streamIndex <= 1) {
+                                          stream1TotalBytes = currentTotBytes
+                                          lastSizeInfo = "${formatBytes(currentDlBytes)} / ${formatBytes(currentTotBytes)}"
+                                      } else {
+                                          val overallDl = stream1TotalBytes + currentDlBytes
+                                          val overallTot = stream1TotalBytes + currentTotBytes
+                                          lastSizeInfo = "${formatBytes(overallDl)} / ${formatBytes(overallTot)}"
+                                      }
                                       currentSizeInfo = lastSizeInfo
                                   }
                               } else if (singleSizeMatcher.find()) {
@@ -655,20 +721,27 @@ jobs:
 
                               // 5. Download phase status message
                               val statusText = when {
-                                  rawLine.contains("[ExtractAudio]") || rawLine.contains("[ffmpeg]") || rawLine.contains("Merging formats") ->
-                                      "Merging & processing audio..."
+                                  rawLine.contains("[ExtractAudio]") ->
+                                      "Extracting audio stream..."
                                   rawLine.contains("[Metadata]") ->
                                       "Embedding ID3 tags & artist info..."
                                   rawLine.contains("[EmbedThumbnail]") || rawLine.contains("[ThumbnailsConvertor]") ->
                                       "Embedding album artwork..."
-                                  lastPercent > 0 ->
-                                      "Downloading stream... $lastPercent%"
+                                  rawLine.contains("[Merger]") || rawLine.contains("Merging formats") || rawLine.contains("[ffmpeg]") ->
+                                      "Merging formats with FFmpeg..."
+                                  isProcessingPhase ->
+                                      "Processing media with FFmpeg..."
+                                  !isAudio && streamIndex >= 2 ->
+                                      "Downloading audio track... $monotonicPercent%"
+                                  monotonicPercent > 0 ->
+                                      "Downloading stream... $monotonicPercent%"
                                   else ->
                                       "Connecting to stream..."
                               }
+                                                  currentStatus = statusText
 
-                              postEvent(DownloadEvent.Progress(lastPercent, lastSpeed, lastSizeInfo, lastEta, statusText))
-                              updateNotification(currentTitle, lastPercent, lastSpeed, lastSizeInfo, lastEta, statusText)
+                              postEvent(DownloadEvent.Progress(monotonicPercent, lastSpeed, lastSizeInfo, lastEta, statusText))
+                              updateNotification(currentTitle, monotonicPercent, lastSpeed, lastSizeInfo, lastEta, statusText)
                           }
 
                           val downloadedFiles = targetDir.listFiles()?.toList() ?: emptyList()
@@ -701,9 +774,11 @@ jobs:
 
                           isDownloading = false
                           activeTaskId = null
+                          currentProgress = 100
                           currentSpeed = "--"
                           currentSizeInfo = "--"
                           currentEta = "--"
+                          currentStatus = "Download Complete!"
                           lastError = null
 
                           if (finishedFile != null) {
@@ -751,6 +826,7 @@ jobs:
                   currentSpeed = "--"
                   currentSizeInfo = "--"
                   currentEta = "--"
+                  currentStatus = "Cancelled"
                   lastError = null
 
                   if (taskId != null) {
@@ -3066,14 +3142,14 @@ jobs:
                       showDownloaderState(2)
                       downloadingTitle.text = DownloadService.currentTitle
                       downloadingFormat.text = DownloadService.currentFormat
-                      val p = DownloadService.currentProgress
+                      val p = maxOf(circularProgressBar.progress, DownloadService.currentProgress)
                       circularProgressBar.progress = p
                       txtCircularPercent.text = "$p%"
                       linearProgressBar.progress = p
                       txtDownloadSpeed.text = DownloadService.currentSpeed
                       txtDownloadSize.text = DownloadService.currentSizeInfo
                       txtDownloadEta.text = DownloadService.currentEta
-                      txtDownloadStats.text = "Downloading stream... $p%"
+                      txtDownloadStats.text = DownloadService.currentStatus
                   } else if (DownloadService.lastError != null) {
                       showErrorState(DownloadService.lastError ?: "Download failed.")
                   }
@@ -3392,9 +3468,10 @@ jobs:
                           when (event) {
                               is DownloadService.DownloadEvent.Progress -> {
                                   showDownloaderState(2)
-                                  circularProgressBar.progress = event.progress
-                                  txtCircularPercent.text = "${event.progress}%"
-                                  linearProgressBar.progress = event.progress
+                                  val p = maxOf(circularProgressBar.progress, event.progress)
+                                  circularProgressBar.progress = p
+                                  txtCircularPercent.text = "$p%"
+                                  linearProgressBar.progress = p
                                   txtDownloadSpeed.text = event.speed
                                   txtDownloadSize.text = event.sizeInfo
                                   txtDownloadEta.text = event.eta
@@ -3403,6 +3480,9 @@ jobs:
                               is DownloadService.DownloadEvent.Completed -> {
                                   lastDownloadedFile = event.file
                                   completedFileName.text = event.file.name + event.resolutionInfo
+                                  circularProgressBar.progress = 100
+                                  linearProgressBar.progress = 100
+                                  txtCircularPercent.text = "100%"
                                   txtDownloadSpeed.text = "--"
                                   txtDownloadSize.text = "--"
                                   txtDownloadEta.text = "--"
@@ -3417,6 +3497,9 @@ jobs:
                                   showErrorState(event.message)
                               }
                               is DownloadService.DownloadEvent.Cancelled -> {
+                                  circularProgressBar.progress = 0
+                                  linearProgressBar.progress = 0
+                                  txtCircularPercent.text = "0%"
                                   txtDownloadSpeed.text = "--"
                                   txtDownloadSize.text = "--"
                                   txtDownloadEta.text = "--"
