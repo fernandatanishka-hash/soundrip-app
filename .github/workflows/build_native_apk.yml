@@ -288,8 +288,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 24
-                  versionName "5.0.0"
+                  versionCode 25
+                  versionName "5.1.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -3470,6 +3470,7 @@ jobs:
           import android.view.View
           import android.view.ViewGroup
           import android.view.inputmethod.InputMethodManager
+          import android.view.inputmethod.EditorInfo
           import android.widget.*
           import androidx.appcompat.app.AlertDialog
           import androidx.appcompat.app.AppCompatActivity
@@ -3528,6 +3529,8 @@ jobs:
               private var isLoadingFormats = false
               private var lastFormatDetectionUrl: String? = null
               private var lastFormatErrorUrl: String? = null
+              private var activeDetectionUrl: String? = null
+              private var activeDetectionJobId: Long = 0L
 
               private var isAudio = true
               private var currentVideoId: String? = null
@@ -3852,27 +3855,41 @@ jobs:
                           if (text.isNotEmpty()) {
                               btnMainAction.text = "📥 DOWNLOAD"
                               btnClear.visibility = View.VISIBLE
-                              val detectedId = extractYouTubeId(text)
-                              if (detectedId != null) {
-                                  inspectUrlAndDetectFormats(text)
-                              } else if ((text.startsWith("http://") || text.startsWith("https://")) && text.length > 12 && !text.endsWith("/")) {
-                                  inspectUrlAndDetectFormats(text)
-                              }
+                              // Stage 5.1 Optimization: NEVER detect formats while the user is typing!
                           } else {
                               btnMainAction.text = "📋 PASTE LINK"
                               btnClear.visibility = View.GONE
                               currentVideoId = null
+                              lastFormatDetectionUrl = null
+                              lastFormatErrorUrl = null
+                              activeDetectionUrl = null
+                              activeDetectionJobId = System.currentTimeMillis()
+                              hideQualityLoading()
                               showDownloaderState(0)
                           }
                       }
                       override fun afterTextChanged(s: Editable?) {}
                   })
 
+                  urlInput.setOnEditorActionListener { _, actionId, _ ->
+                      if (actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO) {
+                          val currentText = urlInput.text.toString().trim()
+                          if (currentText.isNotEmpty()) {
+                              val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager
+                              imm?.hideSoftInputFromWindow(urlInput.windowToken, 0)
+                              inspectUrlAndDetectFormats(currentText)
+                              true
+                          } else false
+                      } else false
+                  }
+
                   btnClear.setOnClickListener {
                       urlInput.setText("")
                       currentVideoId = null
                       lastFormatDetectionUrl = null
                       lastFormatErrorUrl = null
+                      activeDetectionUrl = null
+                      activeDetectionJobId = System.currentTimeMillis()
                       hideQualityLoading()
                       showDownloaderState(0)
                   }
@@ -3942,6 +3959,8 @@ jobs:
                       currentVideoId = null
                       lastFormatDetectionUrl = null
                       lastFormatErrorUrl = null
+                      activeDetectionUrl = null
+                      activeDetectionJobId = System.currentTimeMillis()
                       hideQualityLoading()
                       showDownloaderState(0)
                   }
@@ -4302,6 +4321,32 @@ jobs:
                   return null
               }
 
+              private fun applyCachedFormats(cleanId: String?, cached: DetectedMediaFormats) {
+                  currentVideoId = cleanId
+                  activeDetectionUrl = null
+                  if (cached.title != null) previewTitle.text = cached.title
+                  if (cached.author != null) previewDetails.text = cached.author
+                  if (cached.thumbnailBitmap != null) {
+                      previewThumbnail.setImageBitmap(cached.thumbnailBitmap)
+                      downloadingThumb.setImageBitmap(cached.thumbnailBitmap)
+                  }
+                  detectedVideoQualities.clear()
+                  detectedVideoQualities.addAll(cached.videoQualities)
+                  detectedAudioQualities.clear()
+                  detectedAudioQualities.addAll(cached.audioQualities)
+                  hasVideoTrack = cached.hasVideo
+                  hasAudioTrack = cached.hasAudio
+
+                  if (!hasVideoTrack && hasAudioTrack && !isAudio) {
+                      setFormatSelection(true)
+                  } else if (!hasAudioTrack && hasVideoTrack && isAudio) {
+                      setFormatSelection(false)
+                  }
+
+                  hideQualityLoading()
+                  updateSpinner()
+              }
+
               private fun inspectUrlAndDetectFormats(rawUrl: String, forceRefresh: Boolean = false) {
                   val cleanId = extractYouTubeId(rawUrl)
                   val url = if (cleanId != null) "https://www.youtube.com/watch?v=$cleanId" else rawUrl.trim()
@@ -4310,29 +4355,22 @@ jobs:
                   btnClear.visibility = View.VISIBLE
                   showDownloaderState(1)
 
-                  // Check in-memory cache first to avoid re-extraction
+                  // 1. Check in-memory cache first to avoid redundant extraction
                   if (!forceRefresh) {
                       val cached = formatCache[url]
                       if (cached != null) {
-                          currentVideoId = cleanId
-                          if (cached.title != null) previewTitle.text = cached.title
-                          if (cached.author != null) previewDetails.text = cached.author
-                          if (cached.thumbnailBitmap != null) {
-                              previewThumbnail.setImageBitmap(cached.thumbnailBitmap)
-                              downloadingThumb.setImageBitmap(cached.thumbnailBitmap)
-                          }
-                          detectedVideoQualities.clear()
-                          detectedVideoQualities.addAll(cached.videoQualities)
-                          detectedAudioQualities.clear()
-                          detectedAudioQualities.addAll(cached.audioQualities)
-                          hasVideoTrack = cached.hasVideo
-                          hasAudioTrack = cached.hasAudio
-                          hideQualityLoading()
-                          updateSpinner()
+                          applyCachedFormats(cleanId, cached)
+                          return
+                      }
+                      // 2. In-flight request deduplication: if this exact URL is already being inspected, do not start another!
+                      if (url == activeDetectionUrl && isLoadingFormats) {
                           return
                       }
                   }
 
+                  val jobId = System.currentTimeMillis()
+                  activeDetectionJobId = jobId
+                  activeDetectionUrl = url
                   currentVideoId = cleanId
                   lastFormatDetectionUrl = url
                   lastFormatErrorUrl = null
@@ -4351,10 +4389,12 @@ jobs:
                               conn.doInput = true
                               conn.connect()
                               val bitmap = BitmapFactory.decodeStream(conn.inputStream)
-                              if (bitmap != null && lastFormatDetectionUrl == url) {
+                              if (bitmap != null && activeDetectionJobId == jobId && activeDetectionUrl == url) {
                                   runOnUiThread {
-                                      previewThumbnail.setImageBitmap(bitmap)
-                                      downloadingThumb.setImageBitmap(bitmap)
+                                      if (activeDetectionJobId == jobId && activeDetectionUrl == url) {
+                                          previewThumbnail.setImageBitmap(bitmap)
+                                          downloadingThumb.setImageBitmap(bitmap)
+                                      }
                                   }
                               }
                           } catch (e: Exception) {}
@@ -4372,11 +4412,13 @@ jobs:
                               val title = json.optString("title", "YouTube Video")
                               val author = json.optString("author_name", "YouTube Creator")
 
-                              if (lastFormatDetectionUrl == url) {
+                              if (activeDetectionJobId == jobId && activeDetectionUrl == url) {
                                   runOnUiThread {
-                                      previewTitle.text = title
-                                      previewDetails.text = "$author • YouTube Stream"
-                                      downloadingTitle.text = title
+                                      if (activeDetectionJobId == jobId && activeDetectionUrl == url) {
+                                          previewTitle.text = title
+                                          previewDetails.text = "$author • YouTube Stream"
+                                          downloadingTitle.text = title
+                                      }
                                   }
                               }
                           } catch (e: Exception) {}
@@ -4386,15 +4428,19 @@ jobs:
                       previewDetails.text = "Fetching stream details..."
                   }
 
-                  // Background thread for real yt-dlp format detection
+                  // Background thread for real yt-dlp format detection (lightest safe request)
                   thread {
                       try {
                           val request = YoutubeDLRequest(url)
                           request.addOption("--no-playlist")
                           request.addOption("--no-check-certificates")
+                          request.addOption("--skip-download")
+                          request.addOption("--no-warnings")
+                          request.addOption("--socket-timeout", "10")
                           val videoInfo = YoutubeDL.getInstance().getInfo(request)
 
-                          if (lastFormatDetectionUrl != url) return@thread
+                          // Cancel obsolete detection: if user changed URL, discard this result immediately!
+                          if (activeDetectionJobId != jobId || activeDetectionUrl != url) return@thread
 
                           val fetchedTitle = videoInfo.title
                           val fetchedUploader = videoInfo.uploader
@@ -4456,7 +4502,7 @@ jobs:
                               parsedAudio.add("128 kbps (Fast)")
                           }
 
-                          // In-memory cache
+                          // Complete cache entry
                           val currentThumb = (previewThumbnail.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
                           val detectedData = DetectedMediaFormats(
                               url = url,
@@ -4471,7 +4517,9 @@ jobs:
                           formatCache[url] = detectedData
 
                           runOnUiThread {
-                              if (lastFormatDetectionUrl != url) return@runOnUiThread
+                              if (activeDetectionJobId != jobId || activeDetectionUrl != url) return@runOnUiThread
+                              activeDetectionUrl = null
+
                               if (!fetchedTitle.isNullOrEmpty() && (previewTitle.text == "Loading media..." || previewTitle.text == "Inspecting stream...")) {
                                   previewTitle.text = fetchedTitle
                                   downloadingTitle.text = fetchedTitle
@@ -4501,7 +4549,8 @@ jobs:
                           }
                       } catch (e: Exception) {
                           runOnUiThread {
-                              if (lastFormatDetectionUrl != url) return@runOnUiThread
+                              if (activeDetectionJobId != jobId || activeDetectionUrl != url) return@runOnUiThread
+                              activeDetectionUrl = null
                               hideQualityLoading()
                               lastFormatErrorUrl = url
                               showErrorState("Could not detect available stream qualities: ${e.message ?: "Network or extraction error"}. Please check your connection and tap Retry.")
@@ -5200,5 +5249,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-Stage5-Dynamic-Formats-v24-APK
+          name: FlowRip-Stage5-Perf-Optimization-v25-APK
           path: app/build/outputs/apk/**/*.apk
