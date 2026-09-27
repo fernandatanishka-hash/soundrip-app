@@ -321,6 +321,7 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.7.0'
               implementation 'com.google.android.material:material:1.12.0'
               implementation 'androidx.cardview:cardview:1.0.0'
+                        implementation 'androidx.documentfile:documentfile:1.0.1'
 
               implementation 'io.github.junkfood02.youtubedl-android:library:0.18.1'
               implementation 'io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1'
@@ -330,7 +331,279 @@ jobs:
           EOF
 
           # 8b. DownloadService.kt (Foreground Download Service with Real Cancellation)
-                    cat << 'EOF' > app/src/main/java/com/soundrip/app/QueueManager.kt
+                              cat << 'EOF' > app/src/main/java/com/soundrip/app/StorageHelper.kt
+          package com.soundrip.app
+
+          import android.content.Context
+          import android.net.Uri
+          import android.os.Environment
+          import android.os.StatFs
+          import android.provider.DocumentsContract
+          import android.util.Log
+          import androidx.documentfile.provider.DocumentFile
+          import java.io.File
+
+          object StorageHelper {
+              private const val TAG = "StorageHelper"
+              const val PREFS_NAME = "flowrip_prefs"
+              const val KEY_DOWNLOAD_TREE_URI = "download_tree_uri"
+
+              data class HistoryItem(
+                  val name: String,
+                  val isAudio: Boolean,
+                  val sizeBytes: Long,
+                  val lastModified: Long,
+                  val file: File? = null,
+                  val uri: Uri? = null
+              )
+
+              fun getCustomTreeUri(context: Context): Uri? {
+                  val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                  val uriStr = prefs.getString(KEY_DOWNLOAD_TREE_URI, null) ?: return null
+                  val uri = try {
+                      Uri.parse(uriStr)
+                  } catch (e: Exception) {
+                      setCustomTreeUri(context, null)
+                      return null
+                  }
+
+                  // Verify that persistable permission is still active
+                  val hasPermission = try {
+                      val permissions = context.contentResolver.persistedUriPermissions
+                      permissions.any { it.uri == uri && it.isWritePermission }
+                  } catch (e: Exception) {
+                      false
+                  }
+
+                  if (!hasPermission) {
+                      Log.w(TAG, "Custom tree URI permission was revoked or expired: $uri")
+                      setCustomTreeUri(context, null)
+                      return null
+                  }
+
+                  // Verify directory is accessible and writable
+                  val docFile = try {
+                      DocumentFile.fromTreeUri(context, uri)
+                  } catch (e: Exception) {
+                      null
+                  }
+
+                  if (docFile == null || !docFile.exists() || !docFile.canWrite()) {
+                      Log.w(TAG, "Custom tree URI is not writable or no longer exists: $uri")
+                      setCustomTreeUri(context, null)
+                      return null
+                  }
+
+                  return uri
+              }
+
+              fun setCustomTreeUri(context: Context, uri: Uri?) {
+                  val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                  if (uri == null) {
+                      prefs.edit().remove(KEY_DOWNLOAD_TREE_URI).apply()
+                  } else {
+                      prefs.edit().putString(KEY_DOWNLOAD_TREE_URI, uri.toString()).apply()
+                  }
+              }
+
+              fun getDefaultDownloadDir(): File {
+                  val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                  val targetDir = File(publicDownloads, "FlowRip")
+                  if (!targetDir.exists()) {
+                      targetDir.mkdirs()
+                  }
+                  return targetDir
+              }
+
+              fun getStagingDir(): File {
+                  val stagingDir = File(getDefaultDownloadDir(), ".staging")
+                  if (!stagingDir.exists()) {
+                      stagingDir.mkdirs()
+                  }
+                  return stagingDir
+              }
+
+              fun getHumanReadableLocation(context: Context): String {
+                  val treeUri = getCustomTreeUri(context)
+                  if (treeUri == null) {
+                      return "FlowRip\nInternal storage / Download / FlowRip"
+                  }
+
+                  try {
+                      val docId = DocumentsContract.getTreeDocumentId(treeUri)
+                      val parts = docId.split(":")
+                      if (parts.size >= 2) {
+                          val volume = parts[0]
+                          val path = parts[1].replace("/", " / ")
+                          val folderName = path.substringAfterLast(" / ").ifEmpty { volume }
+                          val displayVolume = if (volume.equals("primary", ignoreCase = true)) "Internal storage" else "SD Card ($volume)"
+                          return "$folderName\n$displayVolume / $path"
+                      }
+                  } catch (e: Exception) {
+                      Log.w(TAG, "Could not decode docId from $treeUri: ${e.message}")
+                  }
+
+                  val doc = DocumentFile.fromTreeUri(context, treeUri)
+                  val name = doc?.name ?: "Custom Folder"
+                  return "$name\n$name (Storage Access Framework)"
+              }
+
+              fun getAvailableBytes(context: Context): Long {
+                  return try {
+                      val defaultDir = getDefaultDownloadDir()
+                      val stat = StatFs(defaultDir.absolutePath)
+                      stat.availableBytes
+                  } catch (e: Exception) {
+                      Log.w(TAG, "Error checking StatFs: ${e.message}")
+                      try {
+                          val stat = StatFs(context.filesDir.absolutePath)
+                          stat.availableBytes
+                      } catch (e2: Exception) {
+                          Long.MAX_VALUE
+                      }
+                  }
+              }
+
+              fun checkStorageAvailability(context: Context, isAudio: Boolean): Boolean {
+                  val minRequiredBytes = if (isAudio) 50L * 1024 * 1024 else 150L * 1024 * 1024
+                  val availableBytes = getAvailableBytes(context)
+                  return availableBytes >= minRequiredBytes
+              }
+
+              /**
+               * SAF-to-yt-dlp bridge:
+               * Copies a completed staged file into the user's selected SAF document tree directory.
+               * Handles filename collisions safely (e.g. "Song (1).mp3"), verifies byte integrity,
+               * and deletes the temporary staging file only after successful transfer.
+               */
+              fun copyToDocumentTree(context: Context, sourceFile: File, treeUri: Uri): Uri? {
+                  val treeDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return null
+                  if (!treeDoc.canWrite()) return null
+
+                  val originalName = sourceFile.name
+                  val isAudio = originalName.endsWith(".mp3", ignoreCase = true)
+                  val mimeType = if (isAudio) "audio/mpeg" else "video/mp4"
+
+                  var targetName = originalName
+                  var counter = 1
+                  val baseName = originalName.substringBeforeLast(".")
+                  val extension = originalName.substringAfterLast(".", "")
+
+                  while (treeDoc.findFile(targetName) != null) {
+                      targetName = if (extension.isNotEmpty()) "$baseName ($counter).$extension" else "$baseName ($counter)"
+                      counter++
+                  }
+
+                  val newDoc = treeDoc.createFile(mimeType, targetName) ?: return null
+
+                  var copySuccess = false
+                  try {
+                      context.contentResolver.openOutputStream(newDoc.uri)?.use { out ->
+                          sourceFile.inputStream().use { input ->
+                              input.copyTo(out)
+                          }
+                      }
+                      val targetLen = newDoc.length()
+                      if (targetLen > 0 && targetLen == sourceFile.length()) {
+                          copySuccess = true
+                      } else if (sourceFile.length() == 0L && targetLen == 0L) {
+                          copySuccess = true
+                      }
+                  } catch (e: Exception) {
+                      Log.e(TAG, "Failed to stream file to SAF destination: ${e.message}", e)
+                      copySuccess = false
+                  }
+
+                  if (copySuccess) {
+                      sourceFile.delete()
+                      return newDoc.uri
+                  } else {
+                      try {
+                          newDoc.delete()
+                      } catch (e: Exception) {}
+                      return null
+                  }
+              }
+
+              fun getHistoryItems(context: Context, filter: String, query: String): List<HistoryItem> {
+                  val result = mutableListOf<HistoryItem>()
+                  val seenNames = mutableSetOf<String>()
+                  val searchQuery = query.trim().lowercase()
+
+                  // 1. Scan default Downloads/FlowRip folder
+                  val defaultDir = getDefaultDownloadDir()
+                  defaultDir.listFiles()?.forEach { file ->
+                      if (!file.name.startsWith(".")) {
+                          val isMp3 = file.name.endsWith(".mp3", ignoreCase = true)
+                          val isMp4 = file.name.endsWith(".mp4", ignoreCase = true)
+                          if (isMp3 || isMp4) {
+                              val typeMatches = when (filter) {
+                                  "AUDIO" -> isMp3
+                                  "VIDEO" -> isMp4
+                                  else -> true
+                              }
+                              val queryMatches = searchQuery.isEmpty() || file.name.lowercase().contains(searchQuery)
+                              if (typeMatches && queryMatches) {
+                                  seenNames.add(file.name.lowercase())
+                                  result.add(
+                                      HistoryItem(
+                                          name = file.name,
+                                          isAudio = isMp3,
+                                          sizeBytes = file.length(),
+                                          lastModified = file.lastModified(),
+                                          file = file,
+                                          uri = null
+                                      )
+                                  )
+                              }
+                          }
+                      }
+                  }
+
+                  // 2. Scan custom SAF folder if active
+                  val customUri = getCustomTreeUri(context)
+                  if (customUri != null) {
+                      try {
+                          val treeDoc = DocumentFile.fromTreeUri(context, customUri)
+                          treeDoc?.listFiles()?.forEach { doc ->
+                              val name = doc.name ?: ""
+                              if (!name.startsWith(".")) {
+                                  val isMp3 = name.endsWith(".mp3", ignoreCase = true)
+                                  val isMp4 = name.endsWith(".mp4", ignoreCase = true)
+                                  if ((isMp3 || isMp4) && !seenNames.contains(name.lowercase())) {
+                                      val typeMatches = when (filter) {
+                                          "AUDIO" -> isMp3
+                                          "VIDEO" -> isMp4
+                                          else -> true
+                                      }
+                                      val queryMatches = searchQuery.isEmpty() || name.lowercase().contains(searchQuery)
+                                      if (typeMatches && queryMatches) {
+                                          seenNames.add(name.lowercase())
+                                          result.add(
+                                              HistoryItem(
+                                                  name = name,
+                                                  isAudio = isMp3,
+                                                  sizeBytes = doc.length(),
+                                                  lastModified = doc.lastModified(),
+                                                  file = null,
+                                                  uri = doc.uri
+                                              )
+                                          )
+                                      }
+                                  }
+                              }
+                          }
+                      } catch (e: Exception) {
+                          Log.w(TAG, "Error listing files from custom tree URI: ${e.message}")
+                      }
+                  }
+
+                  return result.sortedByDescending { it.lastModified }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/soundrip/app/QueueManager.kt
           package com.soundrip.app
 
           import android.content.Context
@@ -839,6 +1112,25 @@ jobs:
 
                   activeTaskId = taskId
 
+                  // Storage availability check before starting download
+                  if (!StorageHelper.checkStorageAvailability(applicationContext, isAudio)) {
+                      val errorMsg = "Not enough storage space available. Free some space or choose another download folder."
+                      Log.w(TAG, "Download rejected: insufficient storage space")
+                      QueueManager.markFailed(applicationContext, taskId, errorMsg)
+                      postEvent(DownloadEvent.Error(errorMsg))
+                      showFailureNotification(title, errorMsg)
+
+                      val nextItem = QueueManager.getNextEligibleItem(applicationContext)
+                      if (nextItem != null) {
+                          startDownloadTask(nextItem.id, nextItem.url, nextItem.title, nextItem.isAudio, nextItem.quality)
+                      } else {
+                          isDownloading = false
+                          stopForeground(true)
+                          stopSelf()
+                      }
+                      return
+                  }
+
                   val initialNotification = buildNotification(title, 0, "--", "--", "--", "Connecting to stream...")
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                       ServiceCompat.startForeground(
@@ -859,8 +1151,13 @@ jobs:
                               YoutubeDL.getInstance().init(applicationContext)
                           } catch (e: Exception) {}
 
-                          val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                          targetDir = File(publicDownloads, "FlowRip")
+                          val customTreeUri = StorageHelper.getCustomTreeUri(applicationContext)
+                          val isCustomLocation = (customTreeUri != null)
+                          targetDir = if (isCustomLocation) {
+                              StorageHelper.getStagingDir()
+                          } else {
+                              StorageHelper.getDefaultDownloadDir()
+                          }
                           if (!targetDir.exists()) targetDir.mkdirs()
 
                           latestFilesBefore = targetDir.listFiles()?.toList() ?: emptyList()
@@ -1094,7 +1391,24 @@ jobs:
                               } catch (e: Exception) {}
                           }
 
-                          finishedFile?.let { file ->
+                          var finalFile = finishedFile
+                          if (finishedFile != null && isCustomLocation && customTreeUri != null) {
+                              currentStatus = "Saving to custom folder..."
+                              postEvent(DownloadEvent.Progress(99, "--", "--", "--", currentStatus))
+                              val destinationUri = StorageHelper.copyToDocumentTree(applicationContext, finishedFile, customTreeUri)
+                              if (destinationUri != null) {
+                                  Log.d(TAG, "File successfully transferred to custom SAF folder: $destinationUri")
+                              } else {
+                                  Log.w(TAG, "SAF transfer failed; keeping file in default directory as safe fallback")
+                                  val fallbackFile = File(StorageHelper.getDefaultDownloadDir(), finishedFile.name)
+                                  if (finishedFile.exists()) {
+                                      finishedFile.renameTo(fallbackFile)
+                                      finalFile = fallbackFile
+                                  }
+                              }
+                          }
+
+                          finalFile?.let { file ->
                               MediaScannerConnection.scanFile(
                                   applicationContext,
                                   arrayOf(file.absolutePath),
@@ -1108,7 +1422,7 @@ jobs:
 
                           if (finishedFile != null) {
                               if (completedTaskId != null) {
-                                  QueueManager.markCompleted(applicationContext, completedTaskId, finishedFile)
+                                  QueueManager.markCompleted(applicationContext, completedTaskId, finalFile ?: finishedFile)
                               }
                               postEvent(DownloadEvent.Completed(finishedFile, resInfo))
                               showCompletionNotification(finishedFile.name, resInfo)
@@ -1227,6 +1541,11 @@ jobs:
               private fun cleanupPartialFiles(targetDir: File?) {
                   try {
                       targetDir?.listFiles()?.forEach { file ->
+                          if (file.name.endsWith(".part") || file.name.endsWith(".ytdl") || file.name.endsWith(".temp")) {
+                              file.delete()
+                          }
+                      }
+                      StorageHelper.getStagingDir().listFiles()?.forEach { file ->
                           if (file.name.endsWith(".part") || file.name.endsWith(".ytdl") || file.name.endsWith(".temp")) {
                               file.delete()
                           }
@@ -2793,6 +3112,79 @@ jobs:
                                           android:textColor="#94A3B8"
                                           android:textSize="22sp" />
                                   </LinearLayout>
+
+                                  <View
+                                      android:layout_width="match_parent"
+                                      android:layout_height="1dp"
+                                      android:background="#F1F5F9" />
+
+                                  <LinearLayout
+                                      android:id="@+id/settingRowLocation"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:orientation="vertical"
+                                      android:padding="18dp">
+
+                                      <LinearLayout
+                                          android:layout_width="match_parent"
+                                          android:layout_height="wrap_content"
+                                          android:orientation="horizontal"
+                                          android:gravity="center_vertical">
+
+                                          <LinearLayout
+                                              android:layout_width="0dp"
+                                              android:layout_height="wrap_content"
+                                              android:layout_weight="1"
+                                              android:orientation="vertical">
+
+                                              <TextView
+                                                  android:layout_width="wrap_content"
+                                                  android:layout_height="wrap_content"
+                                                  android:text="Download Location"
+                                                  android:textColor="#0F172A"
+                                                  android:textSize="14sp"
+                                                  android:textStyle="bold" />
+
+                                              <TextView
+                                                  android:id="@+id/txtDownloadLocation"
+                                                  android:layout_width="wrap_content"
+                                                  android:layout_height="wrap_content"
+                                                  android:text="FlowRip\nInternal storage / Download / FlowRip"
+                                                  android:textColor="#64748B"
+                                                  android:textSize="12sp"
+                                                  android:layout_marginTop="2dp"
+                                                  android:lineSpacingExtra="2dp" />
+                                          </LinearLayout>
+                                      </LinearLayout>
+
+                                      <LinearLayout
+                                          android:layout_width="match_parent"
+                                          android:layout_height="wrap_content"
+                                          android:orientation="horizontal"
+                                          android:layout_marginTop="12dp">
+
+                                          <Button
+                                              android:id="@+id/btnChangeLocation"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="36dp"
+                                              android:text="Change Folder"
+                                              android:textSize="12sp"
+                                              android:textColor="#FFFFFF"
+                                              android:backgroundTint="#4F46E5"
+                                              app:cornerRadius="18dp" />
+
+                                          <Button
+                                              android:id="@+id/btnResetLocation"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="36dp"
+                                              android:layout_marginStart="8dp"
+                                              android:text="Reset to Default"
+                                              android:textSize="12sp"
+                                              android:textColor="#64748B"
+                                              android:backgroundTint="#F1F5F9"
+                                              app:cornerRadius="18dp" />
+                                      </LinearLayout>
+                                  </LinearLayout>
                               </LinearLayout>
                           </androidx.cardview.widget.CardView>
 
@@ -3008,7 +3400,9 @@ jobs:
 
           import android.Manifest
           import android.content.Context
+          import android.app.Activity
           import android.content.Intent
+          import android.provider.DocumentsContract
           import android.content.SharedPreferences
           import android.content.pm.PackageManager
           import android.graphics.Bitmap
@@ -3059,6 +3453,7 @@ jobs:
                   const val PREFS_NAME = "flowrip_prefs"
                   const val KEY_DEFAULT_FORMAT = "key_default_format"
                   const val KEY_PREFERRED_QUALITY = "key_preferred_quality"
+                  const val REQUEST_CODE_SAF_FOLDER = 1005
               }
 
               private var isAudio = true
@@ -3139,6 +3534,11 @@ jobs:
 
               private lateinit var txtDefaultFormat: TextView
               private lateinit var txtDefaultQuality: TextView
+
+              private lateinit var settingRowLocation: View
+              private lateinit var txtDownloadLocation: TextView
+              private lateinit var btnChangeLocation: Button
+              private lateinit var btnResetLocation: Button
 
               private lateinit var viewQueueSection: LinearLayout
               private lateinit var txtQueueBadge: TextView
@@ -3226,6 +3626,34 @@ jobs:
                   txtDefaultFormat = findViewById(R.id.txtDefaultFormat)
                   txtDefaultQuality = findViewById(R.id.txtDefaultQuality)
 
+                  settingRowLocation = findViewById(R.id.settingRowLocation)
+                  txtDownloadLocation = findViewById(R.id.txtDownloadLocation)
+                  btnChangeLocation = findViewById(R.id.btnChangeLocation)
+                  btnResetLocation = findViewById(R.id.btnResetLocation)
+
+                  val openFolderPicker = {
+                      val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                          addFlags(
+                              Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                              Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                              Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                          )
+                      }
+                      startActivityForResult(intent, REQUEST_CODE_SAF_FOLDER)
+                  }
+
+                  settingRowLocation.setOnClickListener { openFolderPicker() }
+                  btnChangeLocation.setOnClickListener { openFolderPicker() }
+
+                  btnResetLocation.setOnClickListener {
+                      StorageHelper.setCustomTreeUri(this, null)
+                      updateLocationUI()
+                      refreshHistory()
+                      Toast.makeText(this, "Reset to default FlowRip folder", Toast.LENGTH_SHORT).show()
+                  }
+
+                  updateLocationUI()
+
                   viewQueueSection = findViewById(R.id.viewQueueSection)
                   txtQueueBadge = findViewById(R.id.txtQueueBadge)
                   btnClearQueue = findViewById(R.id.btnClearQueue)
@@ -3239,6 +3667,7 @@ jobs:
                   QueueManager.addListener(queueListener)
                   QueueManager.loadQueue(this)
                   refreshQueueUI()
+                  updateLocationUI()
 
                   // Samsung navigation bar protection
                   ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootContainer)) { _, insets ->
@@ -3593,11 +4022,37 @@ jobs:
                   QueueManager.removeListener(queueListener)
               }
 
+              override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+                  super.onActivityResult(requestCode, resultCode, data)
+                  if (requestCode == REQUEST_CODE_SAF_FOLDER && resultCode == Activity.RESULT_OK) {
+                      val treeUri = data?.data
+                      if (treeUri != null) {
+                          try {
+                              val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                              contentResolver.takePersistableUriPermission(treeUri, takeFlags)
+                              StorageHelper.setCustomTreeUri(this, treeUri)
+                              updateLocationUI()
+                              refreshHistory()
+                              Toast.makeText(this, "Download location updated", Toast.LENGTH_SHORT).show()
+                          } catch (e: Exception) {
+                              Toast.makeText(this, "Failed to persist folder permission: ${e.message}", Toast.LENGTH_SHORT).show()
+                          }
+                      }
+                  }
+              }
+
+              private fun updateLocationUI() {
+                  if (::txtDownloadLocation.isInitialized) {
+                      txtDownloadLocation.text = StorageHelper.getHumanReadableLocation(this)
+                  }
+              }
+
               override fun onResume() {
                   super.onResume()
                   attachDownloadListener()
                   QueueManager.loadQueue(this)
                   refreshQueueUI()
+                  updateLocationUI()
                   if (DownloadService.isDownloading) {
                       showDownloaderState(2)
                       downloadingTitle.text = DownloadService.currentTitle
@@ -3731,19 +4186,10 @@ jobs:
 
               private fun refreshHistory() {
                   historyListContainer.removeAllViews()
-                  val targetDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FlowRip")
-                  val searchQuery = historySearchInput.text.toString().trim().lowercase()
-                  val files = targetDir.listFiles()?.filter {
-                      val typeMatches = when (historyFilter) {
-                          "AUDIO" -> it.name.endsWith(".mp3", ignoreCase = true)
-                          "VIDEO" -> it.name.endsWith(".mp4", ignoreCase = true)
-                          else -> it.name.endsWith(".mp3", ignoreCase = true) || it.name.endsWith(".mp4", ignoreCase = true)
-                      }
-                      val queryMatches = searchQuery.isEmpty() || it.name.lowercase().contains(searchQuery)
-                      typeMatches && queryMatches
-                  }?.sortedByDescending { it.lastModified() } ?: emptyList()
+                  val searchQuery = historySearchInput.text.toString().trim()
+                  val items = StorageHelper.getHistoryItems(this, historyFilter, searchQuery)
 
-                  if (files.isEmpty()) {
+                  if (items.isEmpty()) {
                       val emptyText = TextView(this).apply {
                           text = if (searchQuery.isNotEmpty()) "No results found for \"$searchQuery\"" else "No downloads yet.\nPaste a link to get started!"
                           textSize = 14f
@@ -3755,16 +4201,16 @@ jobs:
                       return
                   }
 
-                  for (file in files) {
+                  for (item in items) {
                       val itemCard = androidx.cardview.widget.CardView(this).apply {
                           radius = 28f
                           cardElevation = 2f
                           setCardBackgroundColor(android.graphics.Color.WHITE)
-                          val layoutParams = LinearLayout.LayoutParams(
+                          val lp = LinearLayout.LayoutParams(
                               LinearLayout.LayoutParams.MATCH_PARENT,
                               LinearLayout.LayoutParams.WRAP_CONTENT
                           ).apply { setMargins(0, 0, 0, 24) }
-                          this.layoutParams = layoutParams
+                          this.layoutParams = lp
                       }
 
                       val row = LinearLayout(this).apply {
@@ -3773,7 +4219,6 @@ jobs:
                           setPadding(24, 20, 24, 20)
                       }
 
-                      // Thumbnail Card with Embedded ID3 Art or Fallback Placeholder
                       val thumbCard = androidx.cardview.widget.CardView(this).apply {
                           radius = 16f
                           cardElevation = 0f
@@ -3789,7 +4234,7 @@ jobs:
                       }
 
                       val placeholderText = TextView(this).apply {
-                          text = if (file.name.endsWith(".mp3", ignoreCase = true)) "🎵" else "🎬"
+                          text = if (item.isAudio) "🎵" else "🎬"
                           textSize = 22f
                           gravity = android.view.Gravity.CENTER
                           layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
@@ -3809,8 +4254,12 @@ jobs:
                           var bmp: Bitmap? = null
                           try {
                               val retriever = MediaMetadataRetriever()
-                              retriever.setDataSource(file.absolutePath)
-                              if (file.name.endsWith(".mp4", ignoreCase = true)) {
+                              if (item.file != null) {
+                                  retriever.setDataSource(item.file.absolutePath)
+                              } else if (item.uri != null) {
+                                  retriever.setDataSource(this@MainActivity, item.uri)
+                              }
+                              if (!item.isAudio) {
                                   bmp = retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                                       ?: retriever.frameAtTime
                               } else {
@@ -3836,7 +4285,7 @@ jobs:
                       }
 
                       val title = TextView(this).apply {
-                          text = file.name
+                          text = item.name
                           textSize = 13f
                           setTextColor(android.graphics.Color.parseColor("#0F172A"))
                           setTypeface(null, android.graphics.Typeface.BOLD)
@@ -3845,8 +4294,8 @@ jobs:
                       }
 
                       val sub = TextView(this).apply {
-                          val sizeMb = "%.1f MB".format(file.length() / (1024.0 * 1024.0))
-                          val dateStr = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(file.lastModified()))
+                          val sizeMb = "%.1f MB".format(item.sizeBytes / (1024.0 * 1024.0))
+                          val dateStr = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(item.lastModified))
                           text = "$sizeMb • $dateStr"
                           textSize = 11f
                           setTextColor(android.graphics.Color.parseColor("#64748B"))
@@ -3870,7 +4319,13 @@ jobs:
                               dpToPx(36)
                           )
                           setPadding(dpToPx(12), 0, dpToPx(12), 0)
-                          setOnClickListener { playFile(file) }
+                          setOnClickListener {
+                              if (item.file != null) {
+                                  playFile(item.file)
+                              } else if (item.uri != null) {
+                                  playUri(item.uri, item.isAudio)
+                              }
+                          }
                       }
 
                       val deleteBtn = Button(this).apply {
@@ -3886,17 +4341,24 @@ jobs:
                           setOnClickListener {
                               AlertDialog.Builder(this@MainActivity)
                                   .setTitle("Delete File?")
-                                  .setMessage("Are you sure you want to delete:\n\"${file.name}\"?")
+                                  .setMessage("Are you sure you want to delete:\n\"${item.name}\"?")
                                   .setPositiveButton("Delete") { _, _ ->
                                       try {
-                                          val deleted = file.delete()
+                                          var deleted = false
+                                          if (item.file != null) {
+                                              deleted = item.file.delete()
+                                              if (deleted) {
+                                                  MediaScannerConnection.scanFile(
+                                                      applicationContext,
+                                                      arrayOf(item.file.absolutePath),
+                                                      null,
+                                                      null
+                                                  )
+                                              }
+                                          } else if (item.uri != null) {
+                                              deleted = DocumentsContract.deleteDocument(contentResolver, item.uri)
+                                          }
                                           if (deleted) {
-                                              MediaScannerConnection.scanFile(
-                                                  applicationContext,
-                                                  arrayOf(file.absolutePath),
-                                                  null,
-                                                  null
-                                              )
                                               Toast.makeText(this@MainActivity, "File deleted", Toast.LENGTH_SHORT).show()
                                               refreshHistory()
                                           } else {
@@ -3919,6 +4381,18 @@ jobs:
                       row.addView(actionsRow)
                       itemCard.addView(row)
                       historyListContainer.addView(itemCard)
+                  }
+              }
+
+              private fun playUri(uri: Uri, isAudio: Boolean) {
+                  try {
+                      val intent = Intent(Intent.ACTION_VIEW).apply {
+                          setDataAndType(uri, if (isAudio) "audio/*" else "video/*")
+                          addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                      }
+                      startActivity(Intent.createChooser(intent, "Play media with"))
+                  } catch (e: Exception) {
+                      Toast.makeText(this, "Could not open media player", Toast.LENGTH_SHORT).show()
                   }
               }
 
@@ -4332,28 +4806,7 @@ jobs:
                       if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                           ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 102)
                       }
-                  }
-
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                      if (!Environment.isExternalStorageManager()) {
-                          AlertDialog.Builder(this)
-                              .setTitle("⚡ Storage Permission")
-                              .setMessage("FlowRip needs storage access to save your downloaded MP3s and MP4s directly into your phone's Downloads folder.")
-                              .setPositiveButton("Grant Access") { _, _ ->
-                                  try {
-                                      val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-                                          data = Uri.parse("package:$packageName")
-                                      }
-                                      startActivity(intent)
-                                  } catch (e: Exception) {
-                                      val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                                      startActivity(intent)
-                                  }
-                              }
-                              .setNegativeButton("Later", null)
-                              .show()
-                      }
-                  } else {
+                  } else if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
                       if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                           ActivityCompat.requestPermissions(
                               this,
@@ -4377,5 +4830,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-Stage3-Queue-v21-APK
+          name: FlowRip-Stage4-Storage-v22-APK
           path: app/build/outputs/apk/**/*.apk
