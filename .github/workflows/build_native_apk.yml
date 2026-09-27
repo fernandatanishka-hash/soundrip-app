@@ -288,8 +288,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 20
-                  versionName "20.0"
+                  versionCode 24
+                  versionName "5.0.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -1167,7 +1167,7 @@ jobs:
                           request.addOption("--no-update")
 
                           if (isAudio) {
-                              val bitrate = quality.split(" ")[0]
+                              val bitrate = quality.split(" ")[0].filter { it.isDigit() }.ifEmpty { "320" }
                               request.addOption("-x")
                               request.addOption("--audio-format", "mp3")
                               request.addOption("--audio-quality", bitrate)
@@ -1178,7 +1178,15 @@ jobs:
                           } else {
                               request.addOption("--add-metadata")
                               when {
-                                  quality.contains("1080p") || quality.contains("Best") -> {
+                                  quality.contains("2160p") || quality.contains("4K") -> {
+                                      request.addOption("-f", "bv*[height<=2160][width<=3840][ext=mp4]+ba[ext=m4a]/bv*[height<=2160][width<=3840]+ba/bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b")
+                                      request.addOption("--merge-output-format", "mp4")
+                                  }
+                                  quality.contains("1440p") || quality.contains("2K") -> {
+                                      request.addOption("-f", "bv*[height<=1440][width<=2560][ext=mp4]+ba[ext=m4a]/bv*[height<=1440][width<=2560]+ba/bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b")
+                                      request.addOption("--merge-output-format", "mp4")
+                                  }
+                                  quality.contains("1080p") -> {
                                       request.addOption("-f", "bv*[height<=1920][width<=1920][ext=mp4]+ba[ext=m4a]/bv*[height<=1920][width<=1920]+ba/bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b")
                                       request.addOption("--merge-output-format", "mp4")
                                   }
@@ -1192,6 +1200,14 @@ jobs:
                                   }
                                   quality.contains("360p") -> {
                                       request.addOption("-f", "bv*[height<=640][width<=640][ext=mp4]+ba[ext=m4a]/bv*[height<=640][width<=640]+ba/bv*+ba/b")
+                                      request.addOption("--merge-output-format", "mp4")
+                                  }
+                                  quality.contains("240p") -> {
+                                      request.addOption("-f", "bv*[height<=426][width<=426][ext=mp4]+ba[ext=m4a]/bv*[height<=426][width<=426]+ba/bv*+ba/b")
+                                      request.addOption("--merge-output-format", "mp4")
+                                  }
+                                  quality.contains("144p") -> {
+                                      request.addOption("-f", "bv*[height<=256][width<=256][ext=mp4]+ba[ext=m4a]/bv*[height<=256][width<=256]+ba/bv*+ba/b")
                                       request.addOption("--merge-output-format", "mp4")
                                   }
                                   else -> {
@@ -2330,16 +2346,47 @@ jobs:
                                       </LinearLayout>
                                   </LinearLayout>
 
-                                  <!-- Quality Dropdown -->
+                                  <!-- Quality Dropdown & Loading Indicator -->
                                   <TextView
                                       android:id="@+id/qualityLabel"
                                       android:layout_width="wrap_content"
                                       android:layout_height="wrap_content"
-                                      android:text="Bitrate:"
+                                      android:text="Quality:"
                                       android:textColor="#0F172A"
                                       android:textSize="12sp"
                                       android:textStyle="bold"
                                       android:layout_marginTop="14dp" />
+
+                                  <!-- Dynamic Quality Detection Loading State -->
+                                  <LinearLayout
+                                      android:id="@+id/layoutQualityLoading"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="44dp"
+                                      android:layout_marginTop="6dp"
+                                      android:background="@drawable/bg_card_unselected"
+                                      android:orientation="horizontal"
+                                      android:gravity="center_vertical"
+                                      android:paddingStart="14dp"
+                                      android:paddingEnd="14dp"
+                                      android:visibility="gone">
+
+                                      <ProgressBar
+                                          android:id="@+id/progressQualityLoading"
+                                          android:layout_width="18dp"
+                                          android:layout_height="18dp"
+                                          android:indeterminate="true"
+                                          android:indeterminateTint="#4F46E5" />
+
+                                      <TextView
+                                          android:id="@+id/txtQualityLoading"
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:layout_marginStart="10dp"
+                                          android:text="Detecting available stream qualities..."
+                                          android:textColor="#64748B"
+                                          android:textSize="12sp"
+                                          android:textStyle="bold" />
+                                  </LinearLayout>
 
                                   <Spinner
                                       android:id="@+id/qualitySpinner"
@@ -3446,6 +3493,7 @@ jobs:
           import java.io.InputStreamReader
           import java.net.HttpURLConnection
           import java.net.URL
+          import java.util.concurrent.ConcurrentHashMap
           import java.text.SimpleDateFormat
           import java.util.*
           import java.util.regex.Pattern
@@ -3460,9 +3508,28 @@ jobs:
                   const val REQUEST_CODE_SAF_FOLDER = 1005
               }
 
+              data class DetectedMediaFormats(
+                  val url: String,
+                  val title: String?,
+                  val author: String?,
+                  val thumbnailBitmap: Bitmap?,
+                  val videoQualities: List<String>,
+                  val audioQualities: List<String>,
+                  val hasVideo: Boolean,
+                  val hasAudio: Boolean,
+                  val timestamp: Long = System.currentTimeMillis()
+              )
+
+              private val formatCache = ConcurrentHashMap<String, DetectedMediaFormats>()
+              private var detectedVideoQualities = mutableListOf<String>()
+              private var detectedAudioQualities = mutableListOf<String>()
+              private var hasVideoTrack = true
+              private var hasAudioTrack = true
+              private var isLoadingFormats = false
+              private var lastFormatDetectionUrl: String? = null
+              private var lastFormatErrorUrl: String? = null
+
               private var isAudio = true
-              private val audioQualities = arrayOf("320 kbps (HQ Audio)", "256 kbps", "192 kbps (Standard)", "128 kbps (Fast)")
-              private val videoQualities = arrayOf("Best Available (1080p / 4K)", "1080p (Full HD)", "720p (HD)", "480p", "360p")
               private var currentVideoId: String? = null
               private var startAppAd: StartAppAd? = null
               private var lastDownloadedFile: File? = null
@@ -3505,6 +3572,9 @@ jobs:
               private lateinit var radioDotMp4: TextView
               private lateinit var qualityLabel: TextView
               private lateinit var qualitySpinner: Spinner
+              private lateinit var layoutQualityLoading: View
+              private lateinit var txtQualityLoading: TextView
+              private lateinit var progressQualityLoading: ProgressBar
 
               private lateinit var downloadingThumb: ImageView
               private lateinit var downloadingTitle: TextView
@@ -3596,6 +3666,9 @@ jobs:
                   radioDotMp4 = findViewById(R.id.radioDotMp4)
                   qualityLabel = findViewById(R.id.qualityLabel)
                   qualitySpinner = findViewById(R.id.qualitySpinner)
+                  layoutQualityLoading = findViewById(R.id.layoutQualityLoading)
+                  txtQualityLoading = findViewById(R.id.txtQualityLoading)
+                  progressQualityLoading = findViewById(R.id.progressQualityLoading)
 
                   downloadingThumb = findViewById(R.id.downloadingThumb)
                   downloadingTitle = findViewById(R.id.downloadingTitle)
@@ -3781,7 +3854,9 @@ jobs:
                               btnClear.visibility = View.VISIBLE
                               val detectedId = extractYouTubeId(text)
                               if (detectedId != null) {
-                                  fetchThumbnailAndTitle(text)
+                                  inspectUrlAndDetectFormats(text)
+                              } else if ((text.startsWith("http://") || text.startsWith("https://")) && text.length > 12 && !text.endsWith("/")) {
+                                  inspectUrlAndDetectFormats(text)
                               }
                           } else {
                               btnMainAction.text = "📋 PASTE LINK"
@@ -3796,6 +3871,9 @@ jobs:
                   btnClear.setOnClickListener {
                       urlInput.setText("")
                       currentVideoId = null
+                      lastFormatDetectionUrl = null
+                      lastFormatErrorUrl = null
+                      hideQualityLoading()
                       showDownloaderState(0)
                   }
 
@@ -3806,22 +3884,12 @@ jobs:
                           val clip = clipboard.primaryClip?.getItemAt(0)?.text?.toString()?.trim()
                           if (!clip.isNullOrEmpty()) {
                               urlInput.setText(clip)
-                              val detectedId = extractYouTubeId(clip)
-                              if (detectedId != null) {
-                                  fetchThumbnailAndTitle(clip)
-                              } else {
-                                  Toast.makeText(this, "Link in clipboard is not a recognized YouTube URL", Toast.LENGTH_SHORT).show()
-                              }
+                              inspectUrlAndDetectFormats(clip)
                           } else {
-                              Toast.makeText(this, "Clipboard is empty. Copy a YouTube link first!", Toast.LENGTH_SHORT).show()
+                              Toast.makeText(this, "Clipboard is empty. Copy a link first!", Toast.LENGTH_SHORT).show()
                           }
                       } else {
-                          val detectedId = extractYouTubeId(currentText)
-                          if (detectedId != null) {
-                              fetchThumbnailAndTitle(currentText)
-                          } else {
-                              Toast.makeText(this, "Please paste a valid YouTube video link", Toast.LENGTH_SHORT).show()
-                          }
+                          inspectUrlAndDetectFormats(currentText)
                       }
                   }
 
@@ -3872,6 +3940,9 @@ jobs:
                   btnDownloadAnother.setOnClickListener {
                       urlInput.setText("")
                       currentVideoId = null
+                      lastFormatDetectionUrl = null
+                      lastFormatErrorUrl = null
+                      hideQualityLoading()
                       showDownloaderState(0)
                   }
 
@@ -3879,6 +3950,10 @@ jobs:
 
                   // Retry & Dismiss actions
                   btnRetryDownload.setOnClickListener {
+                      if (lastFormatErrorUrl != null && !DownloadService.isDownloading) {
+                          inspectUrlAndDetectFormats(lastFormatErrorUrl!!, forceRefresh = true)
+                          return@setOnClickListener
+                      }
                       val retryUrl = DownloadService.lastFailedUrl.ifEmpty { urlInput.text.toString().trim() }
                       val retryTitle = DownloadService.lastFailedTitle.ifEmpty { downloadingTitle.text.toString() }
                       val retryIsAudio = DownloadService.lastFailedIsAudio
@@ -3890,6 +3965,7 @@ jobs:
                   }
 
                   btnDismissError.setOnClickListener {
+                      lastFormatErrorUrl = null
                       showDownloaderState(if (urlInput.text.isNotEmpty()) 1 else 0)
                   }
 
@@ -3978,21 +4054,122 @@ jobs:
                   }
               }
 
+              private fun showQualityLoading() {
+                  isLoadingFormats = true
+                  layoutQualityLoading.visibility = View.VISIBLE
+                  qualitySpinner.visibility = View.GONE
+                  btnStartDownload.isEnabled = false
+                  btnStartDownload.text = "⏳ DETECTING QUALITIES..."
+                  btnStartDownload.alpha = 0.6f
+              }
+
+              private fun hideQualityLoading() {
+                  isLoadingFormats = false
+                  layoutQualityLoading.visibility = View.GONE
+                  qualitySpinner.visibility = View.VISIBLE
+                  btnStartDownload.isEnabled = true
+                  btnStartDownload.text = "⬇ START DOWNLOAD"
+                  btnStartDownload.alpha = 1.0f
+              }
+
+              private fun selectBestMatchingQuality(options: List<String>, isAudio: Boolean, savedPreference: String): Int {
+                  if (options.isEmpty()) return -1
+                  if (savedPreference == "Best Available" || options.size == 1) return 0
+
+                  if (isAudio) {
+                      val targetBitrate = when {
+                          savedPreference.contains("320") -> 320
+                          savedPreference.contains("256") -> 256
+                          savedPreference.contains("192") -> 192
+                          savedPreference.contains("128") -> 128
+                          else -> 320
+                      }
+                      for ((idx, opt) in options.withIndex()) {
+                          val optBitrate = opt.filter { it.isDigit() }.take(3).toIntOrNull() ?: 0
+                          if (optBitrate <= targetBitrate && optBitrate > 0) {
+                              return idx
+                          }
+                      }
+                      return 0
+                  } else {
+                      val targetRes = when {
+                          savedPreference.contains("2160") || savedPreference.contains("4K") -> 2160
+                          savedPreference.contains("1440") || savedPreference.contains("2K") -> 1440
+                          savedPreference.contains("1080") -> 1080
+                          savedPreference.contains("720") -> 720
+                          savedPreference.contains("480") -> 480
+                          savedPreference.contains("360") -> 360
+                          savedPreference.contains("240") -> 240
+                          savedPreference.contains("144") -> 144
+                          else -> 1080
+                      }
+                      for ((idx, opt) in options.withIndex()) {
+                          val optRes = when {
+                              opt.contains("2160") -> 2160
+                              opt.contains("1440") -> 1440
+                              opt.contains("1080") -> 1080
+                              opt.contains("720") -> 720
+                              opt.contains("480") -> 480
+                              opt.contains("360") -> 360
+                              opt.contains("240") -> 240
+                              opt.contains("144") -> 144
+                              else -> 0
+                          }
+                          if (optRes <= targetRes && optRes > 0) {
+                              return idx
+                          }
+                      }
+                      return 0
+                  }
+              }
+
               private fun updateSpinner() {
-                  val options = if (isAudio) audioQualities else videoQualities
+                  if (isLoadingFormats) {
+                      showQualityLoading()
+                      return
+                  }
+
+                  if (isAudio && !hasAudioTrack) {
+                      qualityLabel.text = "Bitrate:"
+                      qualitySpinner.adapter = ArrayAdapter(this, R.layout.item_spinner_selected, arrayOf("No audio track in this media"))
+                      btnStartDownload.isEnabled = false
+                      btnStartDownload.text = "⚠️ NO AUDIO STREAM"
+                      btnStartDownload.alpha = 0.5f
+                      return
+                  }
+
+                  if (!isAudio && !hasVideoTrack) {
+                      qualityLabel.text = "Resolution:"
+                      qualitySpinner.adapter = ArrayAdapter(this, R.layout.item_spinner_selected, arrayOf("No video track in this media"))
+                      btnStartDownload.isEnabled = false
+                      btnStartDownload.text = "⚠️ NO VIDEO STREAM"
+                      btnStartDownload.alpha = 0.5f
+                      return
+                  }
+
+                  val options = if (isAudio) detectedAudioQualities else detectedVideoQualities
                   qualityLabel.text = if (isAudio) "Bitrate:" else "Resolution:"
+
+                  if (options.isEmpty()) {
+                      val emptyMsg = if (isAudio) "No audio formats available" else "No video formats available"
+                      val adapter = ArrayAdapter(this, R.layout.item_spinner_selected, arrayOf(emptyMsg))
+                      qualitySpinner.adapter = adapter
+                      btnStartDownload.isEnabled = false
+                      btnStartDownload.alpha = 0.5f
+                      return
+                  }
+
+                  btnStartDownload.isEnabled = true
+                  btnStartDownload.alpha = 1.0f
+                  btnStartDownload.text = "⬇ START DOWNLOAD"
+
                   val adapter = ArrayAdapter(this, R.layout.item_spinner_selected, options)
                   adapter.setDropDownViewResource(R.layout.item_spinner_dropdown)
                   qualitySpinner.adapter = adapter
 
                   // Match with user's saved quality preference
                   val savedQuality = prefs.getString(KEY_PREFERRED_QUALITY, "Best Available") ?: "Best Available"
-                  val targetIndex = when {
-                      savedQuality.contains("1080p") || savedQuality.contains("320") -> if (isAudio) 0 else 1
-                      savedQuality.contains("720p") || savedQuality.contains("192") -> if (isAudio) 2 else 2
-                      savedQuality.contains("480p") || savedQuality.contains("128") -> if (isAudio) 3 else 3
-                      else -> 0 // "Best Available"
-                  }
+                  val targetIndex = selectBestMatchingQuality(options, isAudio, savedQuality)
                   if (targetIndex in options.indices) {
                       qualitySpinner.setSelection(targetIndex)
                   }
@@ -4011,12 +4188,7 @@ jobs:
                       if (!sharedText.isNullOrBlank()) {
                           switchTab(0)
                           urlInput.setText(sharedText)
-                          val detectedId = extractYouTubeId(sharedText)
-                          if (detectedId != null) {
-                              fetchThumbnailAndTitle(sharedText)
-                          } else {
-                              Toast.makeText(this, "Shared link is not a recognized YouTube URL", Toast.LENGTH_SHORT).show()
-                          }
+                          inspectUrlAndDetectFormats(sharedText)
                       }
                   }
               }
@@ -4130,59 +4302,209 @@ jobs:
                   return null
               }
 
-              private fun fetchThumbnailAndTitle(input: String) {
-                  val videoId = extractYouTubeId(input) ?: return
+              private fun inspectUrlAndDetectFormats(rawUrl: String, forceRefresh: Boolean = false) {
+                  val cleanId = extractYouTubeId(rawUrl)
+                  val url = if (cleanId != null) "https://www.youtube.com/watch?v=$cleanId" else rawUrl.trim()
+                  if (url.isEmpty()) return
 
                   btnClear.visibility = View.VISIBLE
                   showDownloaderState(1)
 
-                  if (videoId == currentVideoId) {
-                      return
+                  // Check in-memory cache first to avoid re-extraction
+                  if (!forceRefresh) {
+                      val cached = formatCache[url]
+                      if (cached != null) {
+                          currentVideoId = cleanId
+                          if (cached.title != null) previewTitle.text = cached.title
+                          if (cached.author != null) previewDetails.text = cached.author
+                          if (cached.thumbnailBitmap != null) {
+                              previewThumbnail.setImageBitmap(cached.thumbnailBitmap)
+                              downloadingThumb.setImageBitmap(cached.thumbnailBitmap)
+                          }
+                          detectedVideoQualities.clear()
+                          detectedVideoQualities.addAll(cached.videoQualities)
+                          detectedAudioQualities.clear()
+                          detectedAudioQualities.addAll(cached.audioQualities)
+                          hasVideoTrack = cached.hasVideo
+                          hasAudioTrack = cached.hasAudio
+                          hideQualityLoading()
+                          updateSpinner()
+                          return
+                      }
                   }
-                  currentVideoId = videoId
 
-                  previewTitle.text = "Loading media..."
-                  previewDetails.text = "Fetching details from YouTube..."
+                  currentVideoId = cleanId
+                  lastFormatDetectionUrl = url
+                  lastFormatErrorUrl = null
 
+                  // Show loading state: spinner hidden, loading indicator visible, download button disabled
+                  showQualityLoading()
+
+                  // Fast preview metadata for YouTube
+                  if (cleanId != null) {
+                      previewTitle.text = "Loading media..."
+                      previewDetails.text = "Fetching details from YouTube..."
+                      thread {
+                          try {
+                              val thumbUrl = "https://img.youtube.com/vi/$cleanId/hqdefault.jpg"
+                              val conn = URL(thumbUrl).openConnection() as HttpURLConnection
+                              conn.doInput = true
+                              conn.connect()
+                              val bitmap = BitmapFactory.decodeStream(conn.inputStream)
+                              if (bitmap != null && lastFormatDetectionUrl == url) {
+                                  runOnUiThread {
+                                      previewThumbnail.setImageBitmap(bitmap)
+                                      downloadingThumb.setImageBitmap(bitmap)
+                                  }
+                              }
+                          } catch (e: Exception) {}
+                      }
+                      thread {
+                          try {
+                              val oembedUrl = "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=$cleanId&format=json"
+                              val conn = URL(oembedUrl).openConnection() as HttpURLConnection
+                              conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+                              val reader = BufferedReader(InputStreamReader(conn.inputStream))
+                              val resp = reader.readText()
+                              reader.close()
+
+                              val json = JSONObject(resp)
+                              val title = json.optString("title", "YouTube Video")
+                              val author = json.optString("author_name", "YouTube Creator")
+
+                              if (lastFormatDetectionUrl == url) {
+                                  runOnUiThread {
+                                      previewTitle.text = title
+                                      previewDetails.text = "$author • YouTube Stream"
+                                      downloadingTitle.text = title
+                                  }
+                              }
+                          } catch (e: Exception) {}
+                      }
+                  } else {
+                      previewTitle.text = "Inspecting stream..."
+                      previewDetails.text = "Fetching stream details..."
+                  }
+
+                  // Background thread for real yt-dlp format detection
                   thread {
                       try {
-                          val thumbUrl = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
-                          val conn = URL(thumbUrl).openConnection() as HttpURLConnection
-                          conn.doInput = true
-                          conn.connect()
-                          val bitmap = BitmapFactory.decodeStream(conn.inputStream)
-                          if (bitmap != null) {
-                              runOnUiThread {
-                                  previewThumbnail.setImageBitmap(bitmap)
-                                  downloadingThumb.setImageBitmap(bitmap)
+                          val request = YoutubeDLRequest(url)
+                          request.addOption("--no-playlist")
+                          request.addOption("--no-check-certificates")
+                          val videoInfo = YoutubeDL.getInstance().getInfo(request)
+
+                          if (lastFormatDetectionUrl != url) return@thread
+
+                          val fetchedTitle = videoInfo.title
+                          val fetchedUploader = videoInfo.uploader
+                          val formats = videoInfo.formats ?: arrayListOf()
+
+                          val detectedRes = mutableSetOf<Int>()
+                          var videoAvailable = false
+                          var audioAvailable = false
+
+                          for (f in formats) {
+                              val isVideoFormat = (f.vcodec != null && f.vcodec != "none") || (f.height > 0)
+                              val isAudioFormat = (f.acodec != null && f.acodec != "none") || (f.vcodec == "none" && (f.abr > 0 || f.tbr > 0))
+
+                              if (isVideoFormat) {
+                                  videoAvailable = true
+                                  val dim = if (f.height > 0 && f.width > 0) minOf(f.height, f.width) else f.height
+                                  val note = f.formatNote ?: ""
+                                  when {
+                                      dim >= 2160 || note.contains("2160") -> detectedRes.add(2160)
+                                      dim >= 1440 || note.contains("1440") -> detectedRes.add(1440)
+                                      dim >= 1080 || note.contains("1080") -> detectedRes.add(1080)
+                                      dim >= 720 || note.contains("720") -> detectedRes.add(720)
+                                      dim >= 480 || note.contains("480") -> detectedRes.add(480)
+                                      dim >= 360 || note.contains("360") -> detectedRes.add(360)
+                                      dim >= 240 || note.contains("240") -> detectedRes.add(240)
+                                      dim >= 144 || note.contains("144") -> detectedRes.add(144)
+                                      dim > 0 -> detectedRes.add(dim)
+                                  }
+                              }
+                              if (isAudioFormat) {
+                                  audioAvailable = true
                               }
                           }
-                      } catch (e: Exception) {}
-                  }
 
-                  thread {
-                      try {
-                          val oembedUrl = "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=$videoId&format=json"
-                          val conn = URL(oembedUrl).openConnection() as HttpURLConnection
-                          conn.setRequestProperty("User-Agent", "Mozilla/5.0")
-                          val reader = BufferedReader(InputStreamReader(conn.inputStream))
-                          val resp = reader.readText()
-                          reader.close()
+                          // Build ordered video qualities
+                          val parsedVideo = mutableListOf<String>()
+                          if (2160 in detectedRes) parsedVideo.add("2160p (4K UHD)")
+                          if (1440 in detectedRes) parsedVideo.add("1440p (2K QHD)")
+                          if (1080 in detectedRes) parsedVideo.add("1080p (Full HD)")
+                          if (720 in detectedRes) parsedVideo.add("720p (HD)")
+                          if (480 in detectedRes) parsedVideo.add("480p")
+                          if (360 in detectedRes) parsedVideo.add("360p")
+                          if (240 in detectedRes) parsedVideo.add("240p")
+                          if (144 in detectedRes) parsedVideo.add("144p")
 
-                          val json = JSONObject(resp)
-                          val title = json.optString("title", "YouTube Video")
-                          val author = json.optString("author_name", "YouTube Creator")
+                          // Safe fallback for video: if no heights parsed but video stream or raw format exists
+                          if (parsedVideo.isEmpty()) {
+                              if (videoAvailable || formats.isEmpty()) {
+                                  parsedVideo.add("Best Available")
+                              }
+                          }
+
+                          // Build usable audio qualities
+                          val parsedAudio = mutableListOf<String>()
+                          if (audioAvailable || formats.isEmpty()) {
+                              parsedAudio.add("320 kbps (HQ Audio)")
+                              parsedAudio.add("256 kbps")
+                              parsedAudio.add("192 kbps (Standard)")
+                              parsedAudio.add("128 kbps (Fast)")
+                          }
+
+                          // In-memory cache
+                          val currentThumb = (previewThumbnail.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                          val detectedData = DetectedMediaFormats(
+                              url = url,
+                              title = fetchedTitle,
+                              author = fetchedUploader,
+                              thumbnailBitmap = currentThumb,
+                              videoQualities = parsedVideo,
+                              audioQualities = parsedAudio,
+                              hasVideo = videoAvailable || parsedVideo.isNotEmpty(),
+                              hasAudio = audioAvailable || parsedAudio.isNotEmpty()
+                          )
+                          formatCache[url] = detectedData
 
                           runOnUiThread {
-                              previewTitle.text = title
-                              previewDetails.text = "$author • YouTube Stream"
-                              downloadingTitle.text = title
+                              if (lastFormatDetectionUrl != url) return@runOnUiThread
+                              if (!fetchedTitle.isNullOrEmpty() && (previewTitle.text == "Loading media..." || previewTitle.text == "Inspecting stream...")) {
+                                  previewTitle.text = fetchedTitle
+                                  downloadingTitle.text = fetchedTitle
+                              }
+                              if (!fetchedUploader.isNullOrEmpty() && (previewDetails.text.contains("Fetching") || previewDetails.text.contains("Inspecting"))) {
+                                  previewDetails.text = "$fetchedUploader • Verified Stream"
+                              }
+
+                              detectedVideoQualities.clear()
+                              detectedVideoQualities.addAll(parsedVideo)
+
+                              detectedAudioQualities.clear()
+                              detectedAudioQualities.addAll(parsedAudio)
+
+                              hasVideoTrack = detectedData.hasVideo
+                              hasAudioTrack = detectedData.hasAudio
+
+                              // Auto-adjust format selection if media is audio-only or video-only
+                              if (!hasVideoTrack && hasAudioTrack && !isAudio) {
+                                  setFormatSelection(true)
+                              } else if (!hasAudioTrack && hasVideoTrack && isAudio) {
+                                  setFormatSelection(false)
+                              }
+
+                              hideQualityLoading()
+                              updateSpinner()
                           }
                       } catch (e: Exception) {
                           runOnUiThread {
-                              previewTitle.text = "YouTube Video ($videoId)"
-                              previewDetails.text = "Ready to download in True HD"
-                              downloadingTitle.text = "YouTube Video ($videoId)"
+                              if (lastFormatDetectionUrl != url) return@runOnUiThread
+                              hideQualityLoading()
+                              lastFormatErrorUrl = url
+                              showErrorState("Could not detect available stream qualities: ${e.message ?: "Network or extraction error"}. Please check your connection and tap Retry.")
                           }
                       }
                   }
@@ -4493,11 +4815,22 @@ jobs:
               }
 
               private fun startDownloadFlow() {
+                  if (isLoadingFormats) {
+                      Toast.makeText(this, "Please wait, detecting available stream qualities...", Toast.LENGTH_SHORT).show()
+                      return
+                  }
                   val rawInput = urlInput.text.toString().trim()
                   val cleanId = currentVideoId ?: extractYouTubeId(rawInput)
                   val url = if (cleanId != null) "https://www.youtube.com/watch?v=$cleanId" else rawInput
+                  if (url.isEmpty()) return
+
                   val selectedQuality = qualitySpinner.selectedItem?.toString() ?: "Best"
-                  val resolvedTitle = if (previewTitle.text.toString().isNotEmpty() && previewTitle.text != "Loading media...") {
+                  if (selectedQuality.contains("No audio") || selectedQuality.contains("No video")) {
+                      Toast.makeText(this, "Selected format is not available for this media", Toast.LENGTH_SHORT).show()
+                      return
+                  }
+
+                  val resolvedTitle = if (previewTitle.text.toString().isNotEmpty() && previewTitle.text != "Loading media..." && previewTitle.text != "Inspecting stream...") {
                       previewTitle.text.toString()
                   } else {
                       downloadingTitle.text.toString().takeIf { it.isNotEmpty() && it != "Downloading media..." } ?: "Media File"
@@ -4505,6 +4838,8 @@ jobs:
 
                   urlInput.text?.clear()
                   currentVideoId = null
+                  lastFormatDetectionUrl = null
+                  lastFormatErrorUrl = null
 
                   executeDownloadTask(url, resolvedTitle, isAudio, selectedQuality)
               }
@@ -4865,5 +5200,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-Stage4-Storage-Fix-v23-APK
+          name: FlowRip-Stage5-Dynamic-Formats-v24-APK
           path: app/build/outputs/apk/**/*.apk
