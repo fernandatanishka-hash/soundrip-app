@@ -330,6 +330,335 @@ jobs:
           EOF
 
           # 8b. DownloadService.kt (Foreground Download Service with Real Cancellation)
+                    cat << 'EOF' > app/src/main/java/com/soundrip/app/QueueManager.kt
+          package com.soundrip.app
+
+          import android.content.Context
+          import android.content.Intent
+          import android.os.Build
+          import android.util.Log
+          import org.json.JSONArray
+          import org.json.JSONObject
+          import java.io.File
+          import java.util.UUID
+
+          enum class QueueStatus {
+              QUEUED,
+              DOWNLOADING,
+              COMPLETED,
+              FAILED,
+              CANCELLED
+          }
+
+          data class QueueItem(
+              val id: String = UUID.randomUUID().toString(),
+              val url: String,
+              var title: String,
+              val format: String,
+              val quality: String,
+              val isAudio: Boolean,
+              var status: QueueStatus = QueueStatus.QUEUED,
+              var progress: Int = 0,
+              var speed: String = "--",
+              var eta: String = "--",
+              var sizeInfo: String = "--",
+              var error: String? = null,
+              val timestamp: Long = System.currentTimeMillis()
+          ) {
+              fun toJson(): JSONObject {
+                  val obj = JSONObject()
+                  obj.put("id", id)
+                  obj.put("url", url)
+                  obj.put("title", title)
+                  obj.put("format", format)
+                  obj.put("quality", quality)
+                  obj.put("isAudio", isAudio)
+                  obj.put("status", status.name)
+                  obj.put("progress", progress)
+                  obj.put("speed", speed)
+                  obj.put("eta", eta)
+                  obj.put("sizeInfo", sizeInfo)
+                  obj.put("error", error ?: "")
+                  obj.put("timestamp", timestamp)
+                  return obj
+              }
+
+              companion object {
+                  fun fromJson(obj: JSONObject): QueueItem {
+                      val statusStr = obj.optString("status", "QUEUED")
+                      val parsedStatus = try {
+                          QueueStatus.valueOf(statusStr)
+                      } catch (e: Exception) {
+                          QueueStatus.QUEUED
+                      }
+                      return QueueItem(
+                          id = obj.optString("id", UUID.randomUUID().toString()),
+                          url = obj.optString("url", ""),
+                          title = obj.optString("title", "Media File"),
+                          format = obj.optString("format", "MP3"),
+                          quality = obj.optString("quality", "Best"),
+                          isAudio = obj.optBoolean("isAudio", true),
+                          status = parsedStatus,
+                          progress = obj.optInt("progress", 0),
+                          speed = obj.optString("speed", "--"),
+                          eta = obj.optString("eta", "--"),
+                          sizeInfo = obj.optString("sizeInfo", "--"),
+                          error = obj.optString("error").takeIf { it.isNotEmpty() },
+                          timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+                      )
+                  }
+              }
+          }
+
+          object QueueManager {
+              private const val TAG = "QueueManager"
+              private const val PREFS_NAME = "flowrip_queue_prefs"
+              private const val KEY_QUEUE = "key_queue_items_json"
+
+              private val queueItems = mutableListOf<QueueItem>()
+              private var isLoaded = false
+              private val listeners = mutableListOf<() -> Unit>()
+
+              @Synchronized
+              fun addListener(listener: () -> Unit) {
+                  if (!listeners.contains(listener)) {
+                      listeners.add(listener)
+                  }
+              }
+
+              @Synchronized
+              fun removeListener(listener: () -> Unit) {
+                  listeners.remove(listener)
+              }
+
+              fun notifyListeners() {
+                  val copy = synchronized(this) { listeners.toList() }
+                  copy.forEach {
+                      try {
+                          it.invoke()
+                      } catch (e: Exception) {
+                          Log.e(TAG, "Listener error: ${e.message}")
+                      }
+                  }
+              }
+
+              @Synchronized
+              fun loadQueue(context: Context) {
+                  if (isLoaded) return
+                  val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                  val jsonStr = prefs.getString(KEY_QUEUE, null)
+                  queueItems.clear()
+                  if (!jsonStr.isNullOrEmpty()) {
+                      try {
+                          val array = JSONArray(jsonStr)
+                          for (i in 0 until array.length()) {
+                              val item = QueueItem.fromJson(array.getJSONObject(i))
+                              // If process was killed while downloading, restore as QUEUED
+                              if (item.status == QueueStatus.DOWNLOADING) {
+                                  item.status = QueueStatus.QUEUED
+                                  item.progress = 0
+                                  item.speed = "--"
+                                  item.eta = "--"
+                              }
+                              queueItems.add(item)
+                          }
+                      } catch (e: Exception) {
+                          Log.e(TAG, "Failed to load queue from storage: ${e.message}")
+                      }
+                  }
+                  isLoaded = true
+              }
+
+              @Synchronized
+              fun saveQueue(context: Context) {
+                  val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                  val array = JSONArray()
+                  queueItems.forEach { array.put(it.toJson()) }
+                  prefs.edit().putString(KEY_QUEUE, array.toString()).apply()
+              }
+
+              @Synchronized
+              fun getItems(context: Context): List<QueueItem> {
+                  loadQueue(context)
+                  return queueItems.toList()
+              }
+
+              @Synchronized
+              fun getItem(context: Context, id: String): QueueItem? {
+                  loadQueue(context)
+                  return queueItems.find { it.id == id }
+              }
+
+              @Synchronized
+              fun getActiveItem(context: Context): QueueItem? {
+                  loadQueue(context)
+                  return queueItems.find { it.status == QueueStatus.DOWNLOADING }
+              }
+
+              @Synchronized
+              fun getNextEligibleItem(context: Context): QueueItem? {
+                  loadQueue(context)
+                  return queueItems.find { it.status == QueueStatus.QUEUED }
+              }
+
+              @Synchronized
+              fun enqueue(context: Context, item: QueueItem): Boolean {
+                  loadQueue(context)
+                  queueItems.add(item)
+                  saveQueue(context)
+                  notifyListeners()
+
+                  if (!DownloadService.isDownloading) {
+                      startNext(context)
+                      return true
+                  }
+                  return false
+              }
+
+              @Synchronized
+              fun startNext(context: Context) {
+                  loadQueue(context)
+                  if (DownloadService.isDownloading) return
+
+                  val nextItem = queueItems.find { it.status == QueueStatus.QUEUED } ?: return
+                  nextItem.status = QueueStatus.DOWNLOADING
+                  nextItem.progress = 0
+                  saveQueue(context)
+                  notifyListeners()
+
+                  val intent = Intent(context, DownloadService::class.java).apply {
+                      action = DownloadService.ACTION_START
+                      putExtra(DownloadService.EXTRA_TASK_ID, nextItem.id)
+                      putExtra(DownloadService.EXTRA_URL, nextItem.url)
+                      putExtra(DownloadService.EXTRA_TITLE, nextItem.title)
+                      putExtra(DownloadService.EXTRA_IS_AUDIO, nextItem.isAudio)
+                      putExtra(DownloadService.EXTRA_QUALITY, nextItem.quality)
+                  }
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      context.startForegroundService(intent)
+                  } else {
+                      context.startService(intent)
+                  }
+              }
+
+              @Synchronized
+              fun updateProgress(context: Context, taskId: String, progress: Int, speed: String, sizeInfo: String, eta: String) {
+                  loadQueue(context)
+                  val item = queueItems.find { it.id == taskId } ?: return
+                  item.status = QueueStatus.DOWNLOADING
+                  item.progress = maxOf(item.progress, progress)
+                  item.speed = speed
+                  item.sizeInfo = sizeInfo
+                  item.eta = eta
+                  notifyListeners()
+              }
+
+              @Synchronized
+              fun markCompleted(context: Context, taskId: String, file: File) {
+                  loadQueue(context)
+                  val item = queueItems.find { it.id == taskId }
+                  if (item != null) {
+                      item.status = QueueStatus.COMPLETED
+                      item.progress = 100
+                      item.speed = "--"
+                      item.eta = "--"
+                      item.title = file.name
+                      saveQueue(context)
+                      notifyListeners()
+                  }
+              }
+
+              @Synchronized
+              fun markFailed(context: Context, taskId: String, error: String) {
+                  loadQueue(context)
+                  val item = queueItems.find { it.id == taskId }
+                  if (item != null) {
+                      item.status = QueueStatus.FAILED
+                      item.error = error
+                      item.speed = "--"
+                      item.eta = "--"
+                      saveQueue(context)
+                      notifyListeners()
+                  }
+              }
+
+              @Synchronized
+              fun markCancelled(context: Context, taskId: String) {
+                  loadQueue(context)
+                  val item = queueItems.find { it.id == taskId }
+                  if (item != null) {
+                      item.status = QueueStatus.CANCELLED
+                      item.speed = "--"
+                      item.eta = "--"
+                      saveQueue(context)
+                      notifyListeners()
+                  }
+              }
+
+              @Synchronized
+              fun removeItem(context: Context, id: String): Boolean {
+                  loadQueue(context)
+                  val index = queueItems.indexOfFirst { it.id == id }
+                  if (index != -1) {
+                      val item = queueItems[index]
+                      val wasActive = (item.status == QueueStatus.DOWNLOADING)
+                      queueItems.removeAt(index)
+                      saveQueue(context)
+                      notifyListeners()
+
+                      if (wasActive) {
+                          val cancelIntent = Intent(context, DownloadService::class.java).apply {
+                              action = DownloadService.ACTION_CANCEL
+                          }
+                          context.startService(cancelIntent)
+                      }
+                      return true
+                  }
+                  return false
+              }
+
+              @Synchronized
+              fun retryItem(context: Context, id: String): QueueItem? {
+                  loadQueue(context)
+                  val oldIndex = queueItems.indexOfFirst { it.id == id }
+                  if (oldIndex != -1) {
+                      val oldItem = queueItems[oldIndex]
+                      val freshItem = QueueItem(
+                          id = UUID.randomUUID().toString(),
+                          url = oldItem.url,
+                          title = oldItem.title,
+                          format = oldItem.format,
+                          quality = oldItem.quality,
+                          isAudio = oldItem.isAudio,
+                          status = QueueStatus.QUEUED,
+                          progress = 0,
+                          speed = "--",
+                          eta = "--",
+                          sizeInfo = "--",
+                          error = null
+                      )
+                      queueItems[oldIndex] = freshItem
+                      saveQueue(context)
+                      notifyListeners()
+
+                      if (!DownloadService.isDownloading) {
+                          startNext(context)
+                      }
+                      return freshItem
+                  }
+                  return null
+              }
+
+              @Synchronized
+              fun clearFinished(context: Context) {
+                  loadQueue(context)
+                  queueItems.removeAll { it.status == QueueStatus.COMPLETED || it.status == QueueStatus.CANCELLED }
+                  saveQueue(context)
+                  notifyListeners()
+              }
+          }
+          EOF
+
           cat << 'EOF' > app/src/main/java/com/soundrip/app/DownloadService.kt
           package com.soundrip.app
 
@@ -366,6 +695,7 @@ jobs:
                   const val ACTION_START = "com.soundrip.app.action.START_DOWNLOAD"
                   const val ACTION_CANCEL = "com.soundrip.app.action.CANCEL_DOWNLOAD"
 
+                  const val EXTRA_TASK_ID = "EXTRA_TASK_ID"
                   const val EXTRA_URL = "EXTRA_URL"
                   const val EXTRA_TITLE = "EXTRA_TITLE"
                   const val EXTRA_IS_AUDIO = "EXTRA_IS_AUDIO"
@@ -475,13 +805,14 @@ jobs:
               override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
                   when (intent?.action) {
                       ACTION_START -> {
+                          val taskId = intent.getStringExtra(EXTRA_TASK_ID) ?: ("task_" + System.currentTimeMillis())
                           val url = intent.getStringExtra(EXTRA_URL) ?: ""
                           val title = intent.getStringExtra(EXTRA_TITLE) ?: "Media File"
                           val isAudio = intent.getBooleanExtra(EXTRA_IS_AUDIO, false)
                           val quality = intent.getStringExtra(EXTRA_QUALITY) ?: "Best"
 
                           if (url.isNotEmpty() && !isDownloading) {
-                              startDownloadTask(url, title, isAudio, quality)
+                              startDownloadTask(taskId, url, title, isAudio, quality)
                           }
                       }
                       ACTION_CANCEL -> {
@@ -491,7 +822,7 @@ jobs:
                   return START_NOT_STICKY
               }
 
-              private fun startDownloadTask(url: String, title: String, isAudio: Boolean, quality: String) {
+              private fun startDownloadTask(taskId: String, url: String, title: String, isAudio: Boolean, quality: String) {
                   isDownloading = true
                   currentProgress = 0
                   currentSpeed = "--"
@@ -506,7 +837,6 @@ jobs:
                   lastFailedIsAudio = isAudio
                   lastFailedQuality = quality
 
-                  val taskId = "task_" + System.currentTimeMillis()
                   activeTaskId = taskId
 
                   val initialNotification = buildNotification(title, 0, "--", "--", "--", "Connecting to stream...")
@@ -637,6 +967,7 @@ jobs:
                               val monotonicPercent = maxOf(lastPercent, calculatedOverall).coerceIn(1, 100)
                               lastPercent = monotonicPercent
                               currentProgress = monotonicPercent
+                              QueueManager.updateProgress(applicationContext, taskId, monotonicPercent, currentSpeed, currentSizeInfo, currentEta)
 
                               // 2. Real Download Speed
                               if (isProcessingPhase) {
@@ -772,29 +1103,46 @@ jobs:
                               )
                           }
 
-                          isDownloading = false
+                          val completedTaskId = activeTaskId
                           activeTaskId = null
-                          currentProgress = 100
-                          currentSpeed = "--"
-                          currentSizeInfo = "--"
-                          currentEta = "--"
-                          currentStatus = "Download Complete!"
-                          lastError = null
 
                           if (finishedFile != null) {
+                              if (completedTaskId != null) {
+                                  QueueManager.markCompleted(applicationContext, completedTaskId, finishedFile)
+                              }
                               postEvent(DownloadEvent.Completed(finishedFile, resInfo))
                               showCompletionNotification(finishedFile.name, resInfo)
                           } else {
                               val errMsg = "Download completed, but target file was not found."
                               lastError = errMsg
+                              if (completedTaskId != null) {
+                                  QueueManager.markFailed(applicationContext, completedTaskId, errMsg)
+                              }
                               postEvent(DownloadEvent.Error(errMsg))
                           }
-                          stopForeground(true)
-                          stopSelf()
+
+                          // Sequential Queue: Check for next eligible queued item
+                          val nextItem = QueueManager.getNextEligibleItem(applicationContext)
+                          if (nextItem != null) {
+                              Log.d(TAG, "Sequential Queue: Starting next queued item: ${nextItem.title} (${nextItem.id})")
+                              nextItem.status = QueueStatus.DOWNLOADING
+                              QueueManager.saveQueue(applicationContext)
+                              startDownloadTask(nextItem.id, nextItem.url, nextItem.title, nextItem.isAudio, nextItem.quality)
+                          } else {
+                              isDownloading = false
+                              currentProgress = 100
+                              currentSpeed = "--"
+                              currentSizeInfo = "--"
+                              currentEta = "--"
+                              currentStatus = "All downloads complete"
+                              lastError = null
+                              stopForeground(true)
+                              stopSelf()
+                          }
 
                       } catch (e: Exception) {
                           val wasCancelled = (activeTaskId == null)
-                          isDownloading = false
+                          val failedTaskId = activeTaskId
                           activeTaskId = null
                           currentSpeed = "--"
                           currentSizeInfo = "--"
@@ -802,6 +1150,9 @@ jobs:
 
                           if (wasCancelled) {
                               cleanupPartialFiles(targetDir)
+                              if (failedTaskId != null) {
+                                  QueueManager.markCancelled(applicationContext, failedTaskId)
+                              }
                               postEvent(DownloadEvent.Cancelled)
                           } else {
                               val rawMsg = e.message ?: "Unknown error"
@@ -809,11 +1160,25 @@ jobs:
                               val userFriendlyMsg = extractUserFriendlyError(rawMsg)
                               lastError = userFriendlyMsg
                               cleanupPartialFiles(targetDir)
+                              if (failedTaskId != null) {
+                                  QueueManager.markFailed(applicationContext, failedTaskId, userFriendlyMsg)
+                              }
                               postEvent(DownloadEvent.Error(userFriendlyMsg))
                               showFailureNotification(title, userFriendlyMsg)
                           }
-                          stopForeground(true)
-                          stopSelf()
+
+                          // Sequential Queue: Move to next item after error or cancellation
+                          val nextItem = QueueManager.getNextEligibleItem(applicationContext)
+                          if (nextItem != null) {
+                              Log.d(TAG, "Sequential Queue: Moving to next item after error/cancellation: ${nextItem.title} (${nextItem.id})")
+                              nextItem.status = QueueStatus.DOWNLOADING
+                              QueueManager.saveQueue(applicationContext)
+                              startDownloadTask(nextItem.id, nextItem.url, nextItem.title, nextItem.isAudio, nextItem.quality)
+                          } else {
+                              isDownloading = false
+                              stopForeground(true)
+                              stopSelf()
+                          }
                       }
                   }
               }
@@ -830,6 +1195,7 @@ jobs:
                   lastError = null
 
                   if (taskId != null) {
+                      QueueManager.markCancelled(applicationContext, taskId)
                       thread {
                           try {
                               YoutubeDL.getInstance().destroyProcessById(taskId)
@@ -844,8 +1210,18 @@ jobs:
 
                   notificationManager?.cancel(NOTIFICATION_ID)
                   postEvent(DownloadEvent.Cancelled)
-                  stopForeground(true)
-                  stopSelf()
+                  // The background download thread will catch the destroyed process and advance to the next queued item,
+                  // or if no download thread was active, check directly:
+                  val nextItem = QueueManager.getNextEligibleItem(applicationContext)
+                  if (nextItem != null) {
+                      Log.d(TAG, "Sequential Queue: Cancelled active, advancing to next: ${nextItem.title}")
+                      nextItem.status = QueueStatus.DOWNLOADING
+                      QueueManager.saveQueue(applicationContext)
+                      startDownloadTask(nextItem.id, nextItem.url, nextItem.title, nextItem.isAudio, nextItem.quality)
+                  } else {
+                      stopForeground(true)
+                      stopSelf()
+                  }
               }
 
               private fun cleanupPartialFiles(targetDir: File?) {
@@ -2081,6 +2457,63 @@ jobs:
                               </LinearLayout>
                           </androidx.cardview.widget.CardView>
 
+                          <!-- DOWNLOAD QUEUE SECTION -->
+                          <LinearLayout
+                              android:id="@+id/viewQueueSection"
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:orientation="vertical"
+                              android:layout_marginTop="20dp"
+                              android:visibility="gone">
+
+                              <!-- Section Header -->
+                              <LinearLayout
+                                  android:layout_width="match_parent"
+                                  android:layout_height="wrap_content"
+                                  android:orientation="horizontal"
+                                  android:gravity="center_vertical"
+                                  android:layout_marginBottom="12dp">
+
+                                  <TextView
+                                      android:layout_width="0dp"
+                                      android:layout_height="wrap_content"
+                                      android:layout_weight="1"
+                                      android:text="Download Queue"
+                                      android:textColor="#0F172A"
+                                      android:textSize="18sp"
+                                      android:textStyle="bold" />
+
+                                  <TextView
+                                      android:id="@+id/txtQueueBadge"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:background="@drawable/bg_badge"
+                                      android:paddingHorizontal="10dp"
+                                      android:paddingVertical="4dp"
+                                      android:text="0 items"
+                                      android:textColor="#4F46E5"
+                                      android:textSize="11sp"
+                                      android:textStyle="bold" />
+
+                                  <TextView
+                                      android:id="@+id/btnClearQueue"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:layout_marginStart="8dp"
+                                      android:text="Clear Finished"
+                                      android:textColor="#64748B"
+                                      android:textSize="12sp"
+                                      android:padding="6dp" />
+                              </LinearLayout>
+
+                              <!-- Queue Items Container -->
+                              <LinearLayout
+                                  android:id="@+id/queueListContainer"
+                                  android:layout_width="match_parent"
+                                  android:layout_height="wrap_content"
+                                  android:orientation="vertical" />
+                          </LinearLayout>
+
                       </LinearLayout>
                   </ScrollView>
 
@@ -2707,6 +3140,12 @@ jobs:
               private lateinit var txtDefaultFormat: TextView
               private lateinit var txtDefaultQuality: TextView
 
+              private lateinit var viewQueueSection: LinearLayout
+              private lateinit var txtQueueBadge: TextView
+              private lateinit var btnClearQueue: TextView
+              private lateinit var queueListContainer: LinearLayout
+              private val queueListener = { runOnUiThread { refreshQueueUI() } }
+
               private fun dpToPx(dp: Int): Int {
                   return (dp * resources.displayMetrics.density).toInt()
               }
@@ -2786,6 +3225,20 @@ jobs:
 
                   txtDefaultFormat = findViewById(R.id.txtDefaultFormat)
                   txtDefaultQuality = findViewById(R.id.txtDefaultQuality)
+
+                  viewQueueSection = findViewById(R.id.viewQueueSection)
+                  txtQueueBadge = findViewById(R.id.txtQueueBadge)
+                  btnClearQueue = findViewById(R.id.btnClearQueue)
+                  queueListContainer = findViewById(R.id.queueListContainer)
+
+                  btnClearQueue.setOnClickListener {
+                      QueueManager.clearFinished(this)
+                      refreshQueueUI()
+                  }
+
+                  QueueManager.addListener(queueListener)
+                  QueueManager.loadQueue(this)
+                  refreshQueueUI()
 
                   // Samsung navigation bar protection
                   ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootContainer)) { _, insets ->
@@ -3135,9 +3588,16 @@ jobs:
                   }
               }
 
+              override fun onDestroy() {
+                  super.onDestroy()
+                  QueueManager.removeListener(queueListener)
+              }
+
               override fun onResume() {
                   super.onResume()
                   attachDownloadListener()
+                  QueueManager.loadQueue(this)
+                  refreshQueueUI()
                   if (DownloadService.isDownloading) {
                       showDownloaderState(2)
                       downloadingTitle.text = DownloadService.currentTitle
@@ -3468,6 +3928,8 @@ jobs:
                           when (event) {
                               is DownloadService.DownloadEvent.Progress -> {
                                   showDownloaderState(2)
+                                  downloadingTitle.text = DownloadService.currentTitle
+                                  downloadingFormat.text = DownloadService.currentFormat
                                   val p = maxOf(circularProgressBar.progress, event.progress)
                                   circularProgressBar.progress = p
                                   txtCircularPercent.text = "$p%"
@@ -3476,25 +3938,55 @@ jobs:
                                   txtDownloadSize.text = event.sizeInfo
                                   txtDownloadEta.text = event.eta
                                   txtDownloadStats.text = event.stats
+                                  refreshQueueUI()
                               }
                               is DownloadService.DownloadEvent.Completed -> {
                                   lastDownloadedFile = event.file
                                   completedFileName.text = event.file.name + event.resolutionInfo
-                                  circularProgressBar.progress = 100
-                                  linearProgressBar.progress = 100
-                                  txtCircularPercent.text = "100%"
-                                  txtDownloadSpeed.text = "--"
-                                  txtDownloadSize.text = "--"
-                                  txtDownloadEta.text = "--"
-                                  showDownloaderState(3)
                                   refreshHistory()
+                                  refreshQueueUI()
+                                  val nextItem = QueueManager.getActiveItem(this@MainActivity)
+                                      ?: QueueManager.getNextEligibleItem(this@MainActivity)
+                                  if (nextItem != null) {
+                                      downloadingTitle.text = nextItem.title
+                                      downloadingFormat.text = "${nextItem.format} • ${nextItem.quality}"
+                                      circularProgressBar.progress = 0
+                                      txtCircularPercent.text = "0%"
+                                      linearProgressBar.progress = 0
+                                      txtDownloadSpeed.text = "--"
+                                      txtDownloadSize.text = "--"
+                                      txtDownloadEta.text = "--"
+                                      txtDownloadStats.text = "Starting next download..."
+                                      showDownloaderState(2)
+                                  } else {
+                                      circularProgressBar.progress = 100
+                                      linearProgressBar.progress = 100
+                                      txtCircularPercent.text = "100%"
+                                      txtDownloadSpeed.text = "--"
+                                      txtDownloadSize.text = "--"
+                                      txtDownloadEta.text = "--"
+                                      showDownloaderState(3)
+                                  }
                                   Toast.makeText(this@MainActivity, "Download Complete!${event.resolutionInfo}", Toast.LENGTH_LONG).show()
                               }
                               is DownloadService.DownloadEvent.Error -> {
                                   txtDownloadSpeed.text = "--"
                                   txtDownloadSize.text = "--"
                                   txtDownloadEta.text = "--"
-                                  showErrorState(event.message)
+                                  refreshQueueUI()
+                                  val nextItem = QueueManager.getActiveItem(this@MainActivity)
+                                      ?: QueueManager.getNextEligibleItem(this@MainActivity)
+                                  if (nextItem != null) {
+                                      downloadingTitle.text = nextItem.title
+                                      downloadingFormat.text = "${nextItem.format} • ${nextItem.quality}"
+                                      circularProgressBar.progress = 0
+                                      txtCircularPercent.text = "0%"
+                                      linearProgressBar.progress = 0
+                                      txtDownloadStats.text = "Starting next download..."
+                                      showDownloaderState(2)
+                                  } else {
+                                      showErrorState(event.message)
+                                  }
                               }
                               is DownloadService.DownloadEvent.Cancelled -> {
                                   circularProgressBar.progress = 0
@@ -3503,8 +3995,19 @@ jobs:
                                   txtDownloadSpeed.text = "--"
                                   txtDownloadSize.text = "--"
                                   txtDownloadEta.text = "--"
-                                  showDownloaderState(1)
-                                  Toast.makeText(this@MainActivity, "Download cancelled", Toast.LENGTH_SHORT).show()
+                                  refreshQueueUI()
+                                  val nextItem = QueueManager.getActiveItem(this@MainActivity)
+                                      ?: QueueManager.getNextEligibleItem(this@MainActivity)
+                                  if (nextItem != null) {
+                                      downloadingTitle.text = nextItem.title
+                                      downloadingFormat.text = "${nextItem.format} • ${nextItem.quality}"
+                                      circularProgressBar.progress = 0
+                                      txtDownloadStats.text = "Starting next download..."
+                                      showDownloaderState(2)
+                                  } else {
+                                      showDownloaderState(1)
+                                      Toast.makeText(this@MainActivity, "Download cancelled", Toast.LENGTH_SHORT).show()
+                                  }
                               }
                           }
                       }
@@ -3516,32 +4019,284 @@ jobs:
                   val cleanId = currentVideoId ?: extractYouTubeId(rawInput)
                   val url = if (cleanId != null) "https://www.youtube.com/watch?v=$cleanId" else rawInput
                   val selectedQuality = qualitySpinner.selectedItem?.toString() ?: "Best"
-                  val title = downloadingTitle.text.toString()
-                  executeDownloadTask(url, title, isAudio, selectedQuality)
+                  val resolvedTitle = if (previewTitle.text.toString().isNotEmpty() && previewTitle.text != "Loading media...") {
+                      previewTitle.text.toString()
+                  } else {
+                      downloadingTitle.text.toString().takeIf { it.isNotEmpty() && it != "Downloading media..." } ?: "Media File"
+                  }
+
+                  urlInput.text?.clear()
+                  currentVideoId = null
+
+                  executeDownloadTask(url, resolvedTitle, isAudio, selectedQuality)
               }
 
               private fun executeDownloadTask(url: String, title: String, isAudioSelection: Boolean, selectedQuality: String) {
-                  showDownloaderState(2)
-                  downloadingFormat.text = if (isAudioSelection) "MP3 • $selectedQuality" else "MP4 • $selectedQuality"
-                  circularProgressBar.progress = 0
-                  txtCircularPercent.text = "0%"
-                  linearProgressBar.progress = 0
-                  txtDownloadSpeed.text = "--"
-                  txtDownloadSize.text = "--"
-                  txtDownloadEta.text = "--"
-                  txtDownloadStats.text = "Starting background download service..."
-
-                  val serviceIntent = Intent(this@MainActivity, DownloadService::class.java).apply {
-                      action = DownloadService.ACTION_START
-                      putExtra(DownloadService.EXTRA_URL, url)
-                      putExtra(DownloadService.EXTRA_TITLE, title)
-                      putExtra(DownloadService.EXTRA_IS_AUDIO, isAudioSelection)
-                      putExtra(DownloadService.EXTRA_QUALITY, selectedQuality)
-                  }
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                      startForegroundService(serviceIntent)
+                  val item = QueueItem(
+                      url = url,
+                      title = title,
+                      format = if (isAudioSelection) "MP3" else "MP4",
+                      quality = selectedQuality,
+                      isAudio = isAudioSelection
+                  )
+                  val startedNow = QueueManager.enqueue(this@MainActivity, item)
+                  if (startedNow) {
+                      showDownloaderState(2)
+                      downloadingTitle.text = item.title
+                      downloadingFormat.text = "${item.format} • ${item.quality}"
+                      circularProgressBar.progress = 0
+                      txtCircularPercent.text = "0%"
+                      linearProgressBar.progress = 0
+                      txtDownloadSpeed.text = "--"
+                      txtDownloadSize.text = "--"
+                      txtDownloadEta.text = "--"
+                      txtDownloadStats.text = "Starting background download service..."
                   } else {
-                      startService(serviceIntent)
+                      Toast.makeText(this@MainActivity, "Added to download queue: ${item.title}", Toast.LENGTH_SHORT).show()
+                      if (DownloadService.isDownloading) {
+                          showDownloaderState(2)
+                      } else {
+                          showDownloaderState(0)
+                      }
+                  }
+                  refreshQueueUI()
+              }
+
+              private fun refreshQueueUI() {
+                  val items = QueueManager.getItems(this)
+                  if (items.isEmpty()) {
+                      viewQueueSection.visibility = View.GONE
+                      return
+                  }
+
+                  viewQueueSection.visibility = View.VISIBLE
+                  txtQueueBadge.text = "${items.size} ${if (items.size == 1) "item" else "items"}"
+                  queueListContainer.removeAllViews()
+
+                  items.forEach { item ->
+                      val itemCard = androidx.cardview.widget.CardView(this).apply {
+                          radius = 28f
+                          cardElevation = 2f
+                          setCardBackgroundColor(android.graphics.Color.WHITE)
+                          val lp = LinearLayout.LayoutParams(
+                              LinearLayout.LayoutParams.MATCH_PARENT,
+                              LinearLayout.LayoutParams.WRAP_CONTENT
+                          )
+                          lp.bottomMargin = dpToPx(10)
+                          layoutParams = lp
+                      }
+
+                      val cardInner = LinearLayout(this).apply {
+                          orientation = LinearLayout.VERTICAL
+                          setPadding(dpToPx(14), dpToPx(12), dpToPx(14), dpToPx(12))
+                      }
+
+                      val topRow = LinearLayout(this).apply {
+                          orientation = LinearLayout.HORIZONTAL
+                          gravity = android.view.Gravity.CENTER_VERTICAL
+                      }
+
+                      val formatBadge = TextView(this).apply {
+                          text = "${item.format} • ${item.quality}"
+                          textSize = 10f
+                          typeface = android.graphics.Typeface.DEFAULT_BOLD
+                          setTextColor(if (item.isAudio) android.graphics.Color.parseColor("#4F46E5") else android.graphics.Color.parseColor("#059669"))
+                          setBackgroundResource(R.drawable.bg_badge)
+                          setPadding(dpToPx(8), dpToPx(3), dpToPx(8), dpToPx(3))
+                      }
+                      topRow.addView(formatBadge)
+
+                      val statusBadge = TextView(this).apply {
+                          val lp = LinearLayout.LayoutParams(
+                              0,
+                              LinearLayout.LayoutParams.WRAP_CONTENT,
+                              1f
+                          )
+                          lp.marginStart = dpToPx(8)
+                          layoutParams = lp
+                          textSize = 11f
+                          typeface = android.graphics.Typeface.DEFAULT_BOLD
+                          when (item.status) {
+                              QueueStatus.DOWNLOADING -> {
+                                  text = "⚡ Active (${item.progress}%)"
+                                  setTextColor(android.graphics.Color.parseColor("#4F46E5"))
+                              }
+                              QueueStatus.QUEUED -> {
+                                  text = "⏳ Waiting"
+                                  setTextColor(android.graphics.Color.parseColor("#64748B"))
+                              }
+                              QueueStatus.COMPLETED -> {
+                                  text = "✓ Completed"
+                                  setTextColor(android.graphics.Color.parseColor("#10B981"))
+                              }
+                              QueueStatus.FAILED -> {
+                                  text = "✗ Failed"
+                                  setTextColor(android.graphics.Color.parseColor("#EF4444"))
+                              }
+                              QueueStatus.CANCELLED -> {
+                                  text = "⊘ Cancelled"
+                                  setTextColor(android.graphics.Color.parseColor("#94A3B8"))
+                              }
+                          }
+                      }
+                      topRow.addView(statusBadge)
+
+                      when (item.status) {
+                          QueueStatus.DOWNLOADING -> {
+                              val cancelBtn = TextView(this).apply {
+                                  text = "Cancel"
+                                  setTextColor(android.graphics.Color.parseColor("#EF4444"))
+                                  textSize = 11f
+                                  typeface = android.graphics.Typeface.DEFAULT_BOLD
+                                  setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
+                                  setOnClickListener {
+                                      val cancelIntent = Intent(this@MainActivity, DownloadService::class.java).apply {
+                                          action = DownloadService.ACTION_CANCEL
+                                      }
+                                      startService(cancelIntent)
+                                  }
+                              }
+                              topRow.addView(cancelBtn)
+                          }
+                          QueueStatus.QUEUED -> {
+                              val removeBtn = TextView(this).apply {
+                                  text = "Remove"
+                                  setTextColor(android.graphics.Color.parseColor("#EF4444"))
+                                  textSize = 11f
+                                  setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
+                                  setOnClickListener {
+                                      QueueManager.removeItem(this@MainActivity, item.id)
+                                      refreshQueueUI()
+                                  }
+                              }
+                              topRow.addView(removeBtn)
+                          }
+                          QueueStatus.FAILED -> {
+                              val retryBtn = TextView(this).apply {
+                                  text = "Retry"
+                                  setTextColor(android.graphics.Color.parseColor("#4F46E5"))
+                                  textSize = 11f
+                                  typeface = android.graphics.Typeface.DEFAULT_BOLD
+                                  setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
+                                  setOnClickListener {
+                                      QueueManager.retryItem(this@MainActivity, item.id)
+                                      refreshQueueUI()
+                                  }
+                              }
+                              val removeBtn = TextView(this).apply {
+                                  text = "Remove"
+                                  setTextColor(android.graphics.Color.parseColor("#94A3B8"))
+                                  textSize = 11f
+                                  setPadding(dpToPx(6), dpToPx(4), dpToPx(6), dpToPx(4))
+                                  setOnClickListener {
+                                      QueueManager.removeItem(this@MainActivity, item.id)
+                                      refreshQueueUI()
+                                  }
+                              }
+                              topRow.addView(retryBtn)
+                              topRow.addView(removeBtn)
+                          }
+                          QueueStatus.COMPLETED, QueueStatus.CANCELLED -> {
+                              val removeBtn = TextView(this).apply {
+                                  text = "Dismiss"
+                                  setTextColor(android.graphics.Color.parseColor("#94A3B8"))
+                                  textSize = 11f
+                                  setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
+                                  setOnClickListener {
+                                      QueueManager.removeItem(this@MainActivity, item.id)
+                                      refreshQueueUI()
+                                  }
+                              }
+                              topRow.addView(removeBtn)
+                          }
+                      }
+
+                      cardInner.addView(topRow)
+
+                      val titleView = TextView(this).apply {
+                          text = item.title
+                          textSize = 13f
+                          typeface = android.graphics.Typeface.DEFAULT_BOLD
+                          setTextColor(android.graphics.Color.parseColor("#0F172A"))
+                          maxLines = 2
+                          ellipsize = android.text.TextUtils.TruncateAt.END
+                          val lp = LinearLayout.LayoutParams(
+                              LinearLayout.LayoutParams.MATCH_PARENT,
+                              LinearLayout.LayoutParams.WRAP_CONTENT
+                          )
+                          lp.topMargin = dpToPx(6)
+                          layoutParams = lp
+                      }
+                      cardInner.addView(titleView)
+
+                      when (item.status) {
+                          QueueStatus.DOWNLOADING -> {
+                              val miniProgress = ProgressBar(
+                                  this,
+                                  null,
+                                  android.R.attr.progressBarStyleHorizontal
+                              ).apply {
+                                  val lp = LinearLayout.LayoutParams(
+                                      LinearLayout.LayoutParams.MATCH_PARENT,
+                                      dpToPx(4)
+                                  )
+                                  lp.topMargin = dpToPx(8)
+                                  layoutParams = lp
+                                  max = 100
+                                  progress = item.progress
+                                  progressTintList = android.content.res.ColorStateList.valueOf(
+                                      android.graphics.Color.parseColor("#6366F1")
+                                  )
+                              }
+                              val metricsView = TextView(this).apply {
+                                  text = "${item.progress}% • ${item.speed} • ETA ${item.eta} • ${item.sizeInfo}"
+                                  textSize = 11f
+                                  setTextColor(android.graphics.Color.parseColor("#64748B"))
+                                  val lp = LinearLayout.LayoutParams(
+                                      LinearLayout.LayoutParams.MATCH_PARENT,
+                                      LinearLayout.LayoutParams.WRAP_CONTENT
+                                  )
+                                  lp.topMargin = dpToPx(4)
+                                  layoutParams = lp
+                              }
+                              cardInner.addView(miniProgress)
+                              cardInner.addView(metricsView)
+                          }
+                          QueueStatus.FAILED -> {
+                              val errorView = TextView(this).apply {
+                                  text = item.error ?: "Download failed"
+                                  textSize = 11f
+                                  setTextColor(android.graphics.Color.parseColor("#DC2626"))
+                                  maxLines = 2
+                                  ellipsize = android.text.TextUtils.TruncateAt.END
+                                  val lp = LinearLayout.LayoutParams(
+                                      LinearLayout.LayoutParams.MATCH_PARENT,
+                                      LinearLayout.LayoutParams.WRAP_CONTENT
+                                  )
+                                  lp.topMargin = dpToPx(4)
+                                  layoutParams = lp
+                              }
+                              cardInner.addView(errorView)
+                          }
+                          QueueStatus.QUEUED -> {
+                              val waitView = TextView(this).apply {
+                                  text = "Waiting in queue..."
+                                  textSize = 11f
+                                  setTextColor(android.graphics.Color.parseColor("#94A3B8"))
+                                  val lp = LinearLayout.LayoutParams(
+                                      LinearLayout.LayoutParams.MATCH_PARENT,
+                                      LinearLayout.LayoutParams.WRAP_CONTENT
+                                  )
+                                  lp.topMargin = dpToPx(4)
+                                  layoutParams = lp
+                              }
+                              cardInner.addView(waitView)
+                          }
+                          else -> {}
+                      }
+
+                      itemCard.addView(cardInner)
+                      queueListContainer.addView(itemCard)
                   }
               }
 
@@ -3622,5 +4377,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-Stage2-v20-APK
+          name: FlowRip-Stage3-Queue-v21-APK
           path: app/build/outputs/apk/**/*.apk
