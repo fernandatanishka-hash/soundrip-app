@@ -346,16 +346,20 @@ jobs:
           import android.os.Build
           import android.os.Environment
           import android.os.IBinder
+          import android.util.Log
           import androidx.core.app.NotificationCompat
           import androidx.core.app.ServiceCompat
           import com.yausername.youtubedl_android.YoutubeDL
           import com.yausername.youtubedl_android.YoutubeDLRequest
           import java.io.File
+          import java.util.Locale
+          import java.util.regex.Pattern
           import kotlin.concurrent.thread
 
           class DownloadService : Service() {
 
               companion object {
+                  private const val TAG = "DownloadService"
                   const val CHANNEL_ID = "flowrip_download_channel"
                   const val NOTIFICATION_ID = 1001
 
@@ -376,11 +380,43 @@ jobs:
                       private set
 
                   @Volatile
+                  var currentSpeed = "--"
+                      private set
+
+                  @Volatile
+                  var currentSizeInfo = "--"
+                      private set
+
+                  @Volatile
+                  var currentEta = "--"
+                      private set
+
+                  @Volatile
                   var currentTitle = ""
                       private set
 
                   @Volatile
                   var currentFormat = ""
+                      private set
+
+                  @Volatile
+                  var lastError: String? = null
+                      private set
+
+                  @Volatile
+                  var lastFailedUrl: String = ""
+                      private set
+
+                  @Volatile
+                  var lastFailedTitle: String = ""
+                      private set
+
+                  @Volatile
+                  var lastFailedIsAudio: Boolean = true
+                      private set
+
+                  @Volatile
+                  var lastFailedQuality: String = ""
                       private set
 
                   private var activeListener: ((DownloadEvent) -> Unit)? = null
@@ -395,7 +431,13 @@ jobs:
               }
 
               sealed class DownloadEvent {
-                  data class Progress(val progress: Int, val stats: String) : DownloadEvent()
+                  data class Progress(
+                      val progress: Int,
+                      val speed: String,
+                      val sizeInfo: String,
+                      val eta: String,
+                      val stats: String
+                  ) : DownloadEvent()
                   data class Completed(val file: File, val resolutionInfo: String) : DownloadEvent()
                   data class Error(val message: String) : DownloadEvent()
                   object Cancelled : DownloadEvent()
@@ -448,12 +490,22 @@ jobs:
               private fun startDownloadTask(url: String, title: String, isAudio: Boolean, quality: String) {
                   isDownloading = true
                   currentProgress = 0
+                  currentSpeed = "--"
+                  currentSizeInfo = "--"
+                  currentEta = "--"
                   currentTitle = title
                   currentFormat = if (isAudio) "MP3 • $quality" else "MP4 • $quality"
+                  lastError = null
+
+                  lastFailedUrl = url
+                  lastFailedTitle = title
+                  lastFailedIsAudio = isAudio
+                  lastFailedQuality = quality
+
                   val taskId = "task_" + System.currentTimeMillis()
                   activeTaskId = taskId
 
-                  val initialNotification = buildNotification(title, "Connecting to stream...", 0, true)
+                  val initialNotification = buildNotification(title, 0, "--", "--", "--", "Connecting to stream...")
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                       ServiceCompat.startForeground(
                           this,
@@ -466,7 +518,7 @@ jobs:
                   }
 
                   thread(start = true, name = "FlowRipDownloadThread") {
-                      var latestFilesBefore: List<File> = emptyList()
+                      var latestFilesBefore: List<File>
                       var targetDir: File? = null
                       try {
                           try {
@@ -488,7 +540,12 @@ jobs:
                               request.addOption("-x")
                               request.addOption("--audio-format", "mp3")
                               request.addOption("--audio-quality", bitrate)
+                              // Stage 2: Embed full ID3 metadata, artist, title, and album artwork via FFmpeg
+                              request.addOption("--add-metadata")
+                              request.addOption("--embed-thumbnail")
+                              request.addOption("--convert-thumbnails", "jpg")
                           } else {
+                              request.addOption("--add-metadata")
                               when {
                                   quality.contains("1080p") || quality.contains("Best") -> {
                                       request.addOption("-f", "bv*[height<=1920][width<=1920][ext=mp4]+ba[ext=m4a]/bv*[height<=1920][width<=1920]+ba/bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b")
@@ -514,12 +571,104 @@ jobs:
                           }
                           request.addOption("-o", "${targetDir.absolutePath}/%(title)s.%(ext)s")
 
-                          YoutubeDL.getInstance().execute(request, taskId) { progress, _, _ ->
-                              val p = progress.toInt().coerceIn(1, 100)
-                              currentProgress = p
-                              val stats = "Downloading stream... $p%"
-                              postEvent(DownloadEvent.Progress(p, stats))
-                              updateNotification(currentTitle, "$p% completed", p, false)
+                          var lastPercent = 0
+                          var lastSpeed = "--"
+                          var lastSizeInfo = "--"
+                          var lastEta = "--"
+
+                          YoutubeDL.getInstance().execute(request, taskId) { progress, etaInSeconds, line ->
+                              val rawLine = line
+
+                              // 1. Percentage
+                              var p = progress.toInt().coerceIn(0, 100)
+                              if (p <= 0 && rawLine.contains("%")) {
+                                  val pctMatcher = Pattern.compile("(\\d+(?:\\.\\d+)?)%").matcher(rawLine)
+                                  if (pctMatcher.find()) {
+                                      pctMatcher.group(1)?.toFloatOrNull()?.let {
+                                          p = it.toInt().coerceIn(0, 100)
+                                      }
+                                  }
+                              }
+                              if (p > 0) {
+                                  lastPercent = p
+                                  currentProgress = p
+                              }
+
+                              // 2. Real Download Speed
+                              val spdMatcher = Pattern.compile("at\\s+([~]?\\d+(?:\\.\\d+)?\\s*(?:[KMGTP]?i?B/s|B/s))", Pattern.CASE_INSENSITIVE).matcher(rawLine)
+                              if (spdMatcher.find()) {
+                                  val rawSpd = spdMatcher.group(1)?.trim() ?: ""
+                                  if (rawSpd.isNotEmpty() && !rawSpd.contains("Unknown", ignoreCase = true)) {
+                                      val cleanSpd = rawSpd.replace("iB/s", "B/s", ignoreCase = true)
+                                      lastSpeed = cleanSpd
+                                      currentSpeed = cleanSpd
+                                  }
+                              }
+
+                              // 3. Real ETA
+                              if (etaInSeconds >= 0) {
+                                  val etaStr = if (etaInSeconds < 3600) {
+                                      String.format(Locale.US, "ETA %02d:%02d", etaInSeconds / 60, etaInSeconds % 60)
+                                  } else {
+                                      String.format(Locale.US, "ETA %02d:%02d:%02d", etaInSeconds / 3600, (etaInSeconds % 3600) / 60, etaInSeconds % 60)
+                                  }
+                                  lastEta = etaStr
+                                  currentEta = etaStr
+                              } else {
+                                  val etaMatcher = Pattern.compile("ETA\\s+(\\d+:\\d+(?::\\d+)?)", Pattern.CASE_INSENSITIVE).matcher(rawLine)
+                                  if (etaMatcher.find()) {
+                                      val etaVal = etaMatcher.group(1)
+                                      if (!etaVal.isNullOrEmpty() && !etaVal.contains("Unknown", ignoreCase = true)) {
+                                          val etaStr = "ETA $etaVal"
+                                          lastEta = etaStr
+                                          currentEta = etaStr
+                                      }
+                                  }
+                              }
+
+                              // 4. Downloaded Size / Total Size
+                              val dlMatcher = Pattern.compile("(\\d+(?:\\.\\d+)?\\s*(?:[KMGTP]?i?B|B))\\s+of", Pattern.CASE_INSENSITIVE).matcher(rawLine)
+                              val totMatcher = Pattern.compile("of\\s+~?\\s*(\\d+(?:\\.\\d+)?\\s*(?:[KMGTP]?i?B|B))", Pattern.CASE_INSENSITIVE).matcher(rawLine)
+                              val singleSizeMatcher = Pattern.compile("\\[download\\]\\s+(\\d+(?:\\.\\d+)?\\s*(?:[KMGTP]?i?B|B))\\s+at", Pattern.CASE_INSENSITIVE).matcher(rawLine)
+
+                              if (dlMatcher.find() && totMatcher.find()) {
+                                  val dlBytes = parseByteUnits(dlMatcher.group(1) ?: "")
+                                  val totBytes = parseByteUnits(totMatcher.group(1) ?: "")
+                                  if (dlBytes > 0 && totBytes > 0) {
+                                      lastSizeInfo = "${formatBytes(dlBytes)} / ${formatBytes(totBytes)}"
+                                      currentSizeInfo = lastSizeInfo
+                                  }
+                              } else if (totMatcher.find() && lastPercent > 0) {
+                                  val totBytes = parseByteUnits(totMatcher.group(1) ?: "")
+                                  if (totBytes > 0) {
+                                      val dlBytes = (totBytes * (lastPercent / 100.0)).toLong()
+                                      lastSizeInfo = "${formatBytes(dlBytes)} / ${formatBytes(totBytes)}"
+                                      currentSizeInfo = lastSizeInfo
+                                  }
+                              } else if (singleSizeMatcher.find()) {
+                                  val b = parseByteUnits(singleSizeMatcher.group(1) ?: "")
+                                  if (b > 0) {
+                                      lastSizeInfo = formatBytes(b)
+                                      currentSizeInfo = lastSizeInfo
+                                  }
+                              }
+
+                              // 5. Download phase status message
+                              val statusText = when {
+                                  rawLine.contains("[ExtractAudio]") || rawLine.contains("[ffmpeg]") || rawLine.contains("Merging formats") ->
+                                      "Merging & processing audio..."
+                                  rawLine.contains("[Metadata]") ->
+                                      "Embedding ID3 tags & artist info..."
+                                  rawLine.contains("[EmbedThumbnail]") || rawLine.contains("[ThumbnailsConvertor]") ->
+                                      "Embedding album artwork..."
+                                  lastPercent > 0 ->
+                                      "Downloading stream... $lastPercent%"
+                                  else ->
+                                      "Connecting to stream..."
+                              }
+
+                              postEvent(DownloadEvent.Progress(lastPercent, lastSpeed, lastSizeInfo, lastEta, statusText))
+                              updateNotification(currentTitle, lastPercent, lastSpeed, lastSizeInfo, lastEta, statusText)
                           }
 
                           val downloadedFiles = targetDir.listFiles()?.toList() ?: emptyList()
@@ -552,25 +701,41 @@ jobs:
 
                           isDownloading = false
                           activeTaskId = null
+                          currentSpeed = "--"
+                          currentSizeInfo = "--"
+                          currentEta = "--"
+                          lastError = null
+
                           if (finishedFile != null) {
                               postEvent(DownloadEvent.Completed(finishedFile, resInfo))
                               showCompletionNotification(finishedFile.name, resInfo)
                           } else {
-                              postEvent(DownloadEvent.Error("Completed, but target file not found"))
+                              val errMsg = "Download completed, but target file was not found."
+                              lastError = errMsg
+                              postEvent(DownloadEvent.Error(errMsg))
                           }
                           stopForeground(true)
                           stopSelf()
 
                       } catch (e: Exception) {
-                          if (activeTaskId == null) {
+                          val wasCancelled = (activeTaskId == null)
+                          isDownloading = false
+                          activeTaskId = null
+                          currentSpeed = "--"
+                          currentSizeInfo = "--"
+                          currentEta = "--"
+
+                          if (wasCancelled) {
                               cleanupPartialFiles(targetDir)
                               postEvent(DownloadEvent.Cancelled)
                           } else {
-                              isDownloading = false
-                              activeTaskId = null
-                              val msg = e.message ?: "Download failed"
-                              postEvent(DownloadEvent.Error(msg))
+                              val rawMsg = e.message ?: "Unknown error"
+                              Log.e(TAG, "Download error during execution: $rawMsg", e)
+                              val userFriendlyMsg = extractUserFriendlyError(rawMsg)
+                              lastError = userFriendlyMsg
                               cleanupPartialFiles(targetDir)
+                              postEvent(DownloadEvent.Error(userFriendlyMsg))
+                              showFailureNotification(title, userFriendlyMsg)
                           }
                           stopForeground(true)
                           stopSelf()
@@ -583,18 +748,25 @@ jobs:
                   activeTaskId = null
                   isDownloading = false
                   currentProgress = 0
+                  currentSpeed = "--"
+                  currentSizeInfo = "--"
+                  currentEta = "--"
+                  lastError = null
 
                   if (taskId != null) {
                       thread {
                           try {
                               YoutubeDL.getInstance().destroyProcessById(taskId)
-                          } catch (e: Exception) {}
+                          } catch (e: Exception) {
+                              Log.w(TAG, "Error destroying task $taskId: ${e.message}")
+                          }
                       }
                   }
                   val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
                   val targetDir = File(publicDownloads, "FlowRip")
                   cleanupPartialFiles(targetDir)
 
+                  notificationManager?.cancel(NOTIFICATION_ID)
                   postEvent(DownloadEvent.Cancelled)
                   stopForeground(true)
                   stopSelf()
@@ -612,9 +784,11 @@ jobs:
 
               private fun buildNotification(
                   title: String,
-                  content: String,
-                  progress: Int,
-                  isIndeterminate: Boolean
+                  percent: Int,
+                  speed: String,
+                  sizeInfo: String,
+                  eta: String,
+                  statusText: String
               ): Notification {
                   val openAppIntent = Intent(this, MainActivity::class.java).apply {
                       flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -636,20 +810,47 @@ jobs:
                       PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
                   )
 
+                  val contentSubText = buildString {
+                      if (speed != "--") append(speed)
+                      if (sizeInfo != "--") {
+                          if (isNotEmpty()) append(" • ")
+                          append(sizeInfo)
+                      }
+                      if (eta != "--") {
+                          if (isNotEmpty()) append(" • ")
+                          append(eta)
+                      }
+                  }
+
+                  val contentLine = if (contentSubText.isNotEmpty()) {
+                      "$percent% • $contentSubText"
+                  } else {
+                      statusText
+                  }
+
+                  val isIndeterminate = percent <= 0
+
                   return NotificationCompat.Builder(this, CHANNEL_ID)
                       .setContentTitle(title)
-                      .setContentText(content)
+                      .setContentText(contentLine)
                       .setSmallIcon(R.drawable.ic_launcher_emblem)
                       .setContentIntent(openAppPendingIntent)
                       .setOngoing(true)
                       .setOnlyAlertOnce(true)
-                      .setProgress(100, progress, isIndeterminate)
+                      .setProgress(100, percent.coerceIn(0, 100), isIndeterminate)
                       .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", cancelPendingIntent)
                       .build()
               }
 
-              private fun updateNotification(title: String, content: String, progress: Int, isIndeterminate: Boolean) {
-                  val notification = buildNotification(title, content, progress, isIndeterminate)
+              private fun updateNotification(
+                  title: String,
+                  percent: Int,
+                  speed: String,
+                  sizeInfo: String,
+                  eta: String,
+                  statusText: String
+              ) {
+                  val notification = buildNotification(title, percent, speed, sizeInfo, eta, statusText)
                   notificationManager?.notify(NOTIFICATION_ID, notification)
               }
 
@@ -676,9 +877,90 @@ jobs:
                   notificationManager?.notify(NOTIFICATION_ID + 1, notification)
               }
 
+              private fun showFailureNotification(title: String, reason: String) {
+                  val openAppIntent = Intent(this, MainActivity::class.java).apply {
+                      flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                  }
+                  val openAppPendingIntent = PendingIntent.getActivity(
+                      this,
+                      0,
+                      openAppIntent,
+                      PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+                  )
+
+                  val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+                      .setContentTitle("Download Failed")
+                      .setContentText("$title: $reason")
+                      .setSmallIcon(R.drawable.ic_launcher_emblem)
+                      .setContentIntent(openAppPendingIntent)
+                      .setAutoCancel(true)
+                      .setOngoing(false)
+                      .build()
+
+                  notificationManager?.notify(NOTIFICATION_ID + 2, notification)
+              }
+
+              private fun parseByteUnits(str: String): Long {
+                  val clean = str.trim()
+                  val matcher = Pattern.compile("([0-9.]+)\\s*([a-zA-Z]+)").matcher(clean)
+                  if (!matcher.find()) return 0L
+                  val num = matcher.group(1)?.toDoubleOrNull() ?: return 0L
+                  val unit = matcher.group(2)?.lowercase(Locale.US) ?: ""
+                  val mult = when (unit) {
+                      "b" -> 1.0
+                      "kib" -> 1024.0
+                      "kb" -> 1000.0
+                      "mib" -> 1024.0 * 1024.0
+                      "mb" -> 1000.0 * 1000.0
+                      "gib" -> 1024.0 * 1024.0 * 1024.0
+                      "gb" -> 1000.0 * 1000.0 * 1000.0
+                      else -> 1024.0 * 1024.0
+                  }
+                  return (num * mult).toLong()
+              }
+
+              private fun formatBytes(bytes: Long): String {
+                  if (bytes < 1024) return "$bytes B"
+                  val kb = bytes / 1024.0
+                  if (kb < 1024) return String.format(Locale.US, "%.1f KB", kb)
+                  val mb = kb / 1024.0
+                  if (mb < 1024) return String.format(Locale.US, "%.1f MB", mb)
+                  val gb = mb / 1024.0
+                  return String.format(Locale.US, "%.2f GB", gb)
+              }
+
+              private fun extractUserFriendlyError(rawMessage: String?): String {
+                  if (rawMessage.isNullOrBlank()) return "Download interrupted. Please check your network connection."
+                  val lower = rawMessage.lowercase(Locale.US)
+                  return when {
+                      lower.contains("unknownhostexception") || lower.contains("timed out") ||
+                      lower.contains("connection refused") || lower.contains("no route to host") ||
+                      lower.contains("network is unreachable") || lower.contains("connection reset") ->
+                          "Network error. Please check your internet connection."
+                      lower.contains("video unavailable") || lower.contains("private video") ||
+                      lower.contains("deleted video") || lower.contains("this video is unavailable") ->
+                          "This video is unavailable or has been removed."
+                      lower.contains("sign in to confirm") || lower.contains("bot") || lower.contains("confirm you're not a bot") ->
+                          "YouTube bot verification requested for this video. Please try again later."
+                      lower.contains("enospc") || lower.contains("no space left") ->
+                          "Storage error: No free space left on device."
+                      lower.contains("permission denied") ->
+                          "Storage access denied. Please grant file permissions in Settings."
+                      lower.contains("http error 403") || lower.contains("403: forbidden") ->
+                          "Stream token expired or forbidden. Please retry to refresh stream."
+                      lower.contains("requested format is not available") ->
+                          "Requested format/quality is not available for this stream."
+                      else ->
+                          "Download failed. Please check your connection and tap Retry."
+                  }
+              }
+
               override fun onDestroy() {
                   isDownloading = false
                   activeTaskId = null
+                  currentSpeed = "--"
+                  currentSizeInfo = "--"
+                  currentEta = "--"
                   super.onDestroy()
               }
           }
@@ -1436,6 +1718,112 @@ jobs:
                                       android:textColor="#64748B"
                                       android:textSize="12sp"
                                       android:layout_marginTop="8dp" />
+                                  <!-- Live Download Metrics Bar (Speed, Size, ETA) -->
+                                  <LinearLayout
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:orientation="horizontal"
+                                      android:layout_marginTop="14dp"
+                                      android:background="@drawable/bg_badge"
+                                      android:padding="12dp">
+
+                                      <!-- Speed Metric -->
+                                      <LinearLayout
+                                          android:layout_width="0dp"
+                                          android:layout_height="wrap_content"
+                                          android:layout_weight="1"
+                                          android:gravity="center"
+                                          android:orientation="vertical">
+
+                                          <TextView
+                                              android:id="@+id/txtDownloadSpeed"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="--"
+                                              android:textColor="#0F172A"
+                                              android:textSize="13sp"
+                                              android:textStyle="bold"
+                                              android:maxLines="1" />
+
+                                          <TextView
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="SPEED"
+                                              android:textColor="#94A3B8"
+                                              android:textSize="9sp"
+                                              android:textStyle="bold"
+                                              android:layout_marginTop="2dp" />
+                                      </LinearLayout>
+
+                                      <View
+                                          android:layout_width="1dp"
+                                          android:layout_height="24dp"
+                                          android:layout_gravity="center_vertical"
+                                          android:background="#E2E8F0" />
+
+                                      <!-- Size Metric -->
+                                      <LinearLayout
+                                          android:layout_width="0dp"
+                                          android:layout_height="wrap_content"
+                                          android:layout_weight="1.3"
+                                          android:gravity="center"
+                                          android:orientation="vertical">
+
+                                          <TextView
+                                              android:id="@+id/txtDownloadSize"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="--"
+                                              android:textColor="#0F172A"
+                                              android:textSize="13sp"
+                                              android:textStyle="bold"
+                                              android:maxLines="1" />
+
+                                          <TextView
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="DOWNLOADED"
+                                              android:textColor="#94A3B8"
+                                              android:textSize="9sp"
+                                              android:textStyle="bold"
+                                              android:layout_marginTop="2dp" />
+                                      </LinearLayout>
+
+                                      <View
+                                          android:layout_width="1dp"
+                                          android:layout_height="24dp"
+                                          android:layout_gravity="center_vertical"
+                                          android:background="#E2E8F0" />
+
+                                      <!-- ETA Metric -->
+                                      <LinearLayout
+                                          android:layout_width="0dp"
+                                          android:layout_height="wrap_content"
+                                          android:layout_weight="1"
+                                          android:gravity="center"
+                                          android:orientation="vertical">
+
+                                          <TextView
+                                              android:id="@+id/txtDownloadEta"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="--"
+                                              android:textColor="#0F172A"
+                                              android:textSize="13sp"
+                                              android:textStyle="bold"
+                                              android:maxLines="1" />
+
+                                          <TextView
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="REMAINING"
+                                              android:textColor="#94A3B8"
+                                              android:textSize="9sp"
+                                              android:textStyle="bold"
+                                              android:layout_marginTop="2dp" />
+                                      </LinearLayout>
+                                  </LinearLayout>
+
 
                                   <Button
                                       android:id="@+id/btnCancel"
@@ -1545,6 +1933,78 @@ jobs:
                                       android:padding="6dp" />
                               </LinearLayout>
                           </androidx.cardview.widget.CardView>
+
+                          <!-- DOWNLOAD ERROR & RETRY SECTION -->
+                          <androidx.cardview.widget.CardView
+                              android:id="@+id/viewErrorSection"
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:layout_marginTop="20dp"
+                              android:visibility="gone"
+                              app:cardCornerRadius="20dp"
+                              app:cardElevation="4dp"
+                              app:cardBackgroundColor="#FFFFFF">
+
+                              <LinearLayout
+                                  android:layout_width="match_parent"
+                                  android:layout_height="wrap_content"
+                                  android:orientation="vertical"
+                                  android:gravity="center_horizontal"
+                                  android:padding="24dp">
+
+                                  <TextView
+                                      android:layout_width="60dp"
+                                      android:layout_height="60dp"
+                                      android:text="⚠️"
+                                      android:textSize="30sp"
+                                      android:gravity="center"
+                                      android:background="@drawable/bg_badge" />
+
+                                  <TextView
+                                      android:id="@+id/txtErrorTitle"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="Download Failed"
+                                      android:textColor="#0F172A"
+                                      android:textSize="18sp"
+                                      android:textStyle="bold"
+                                      android:layout_marginTop="12dp" />
+
+                                  <TextView
+                                      android:id="@+id/txtErrorMessage"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:text="Unable to download this video. Please check your internet connection."
+                                      android:textColor="#64748B"
+                                      android:textSize="13sp"
+                                      android:gravity="center"
+                                      android:layout_marginTop="6dp" />
+
+                                  <Button
+                                      android:id="@+id/btnRetryDownload"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="48dp"
+                                      android:text="↺ RETRY DOWNLOAD"
+                                      android:textColor="#FFFFFF"
+                                      android:textSize="14sp"
+                                      android:textStyle="bold"
+                                      android:backgroundTint="#4F46E5"
+                                      android:layout_marginTop="20dp"
+                                      app:cornerRadius="24dp" />
+
+                                  <TextView
+                                      android:id="@+id/btnDismissError"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="Back to Downloader"
+                                      android:textColor="#64748B"
+                                      android:textSize="13sp"
+                                      android:textStyle="bold"
+                                      android:layout_marginTop="14dp"
+                                      android:padding="8dp" />
+                              </LinearLayout>
+                          </androidx.cardview.widget.CardView>
+
                       </LinearLayout>
                   </ScrollView>
 
@@ -2038,7 +2498,9 @@ jobs:
           package com.soundrip.app
 
           import android.Manifest
+          import android.content.Context
           import android.content.Intent
+          import android.content.SharedPreferences
           import android.content.pm.PackageManager
           import android.graphics.Bitmap
           import android.graphics.BitmapFactory
@@ -2084,6 +2546,12 @@ jobs:
 
           class MainActivity : AppCompatActivity() {
 
+              companion object {
+                  const val PREFS_NAME = "flowrip_prefs"
+                  const val KEY_DEFAULT_FORMAT = "key_default_format"
+                  const val KEY_PREFERRED_QUALITY = "key_preferred_quality"
+              }
+
               private var isAudio = true
               private val audioQualities = arrayOf("320 kbps (HQ Audio)", "256 kbps", "192 kbps (Standard)", "128 kbps (Fast)")
               private val videoQualities = arrayOf("Best Available (1080p / 4K)", "1080p (Full HD)", "720p (HD)", "480p", "360p")
@@ -2091,8 +2559,9 @@ jobs:
               private var startAppAd: StartAppAd? = null
               private var lastDownloadedFile: File? = null
               private var historyFilter = "ALL"
+              private lateinit var prefs: SharedPreferences
 
-              // Views
+              // Main views
               private lateinit var pageHome: View
               private lateinit var pageHistory: View
               private lateinit var pageSettings: View
@@ -2112,6 +2581,7 @@ jobs:
               private lateinit var viewPreviewCard: View
               private lateinit var viewDownloadingCard: View
               private lateinit var viewCompleteSection: View
+              private lateinit var viewErrorSection: View
 
               private lateinit var urlInput: EditText
               private lateinit var btnClear: TextView
@@ -2134,6 +2604,9 @@ jobs:
               private lateinit var circularProgressBar: ProgressBar
               private lateinit var txtCircularPercent: TextView
               private lateinit var linearProgressBar: ProgressBar
+              private lateinit var txtDownloadSpeed: TextView
+              private lateinit var txtDownloadSize: TextView
+              private lateinit var txtDownloadEta: TextView
               private lateinit var txtDownloadStats: TextView
               private lateinit var btnCancel: Button
 
@@ -2143,12 +2616,20 @@ jobs:
               private lateinit var btnDownloadAnother: TextView
               private lateinit var btnMenu: TextView
 
+              private lateinit var txtErrorTitle: TextView
+              private lateinit var txtErrorMessage: TextView
+              private lateinit var btnRetryDownload: Button
+              private lateinit var btnDismissError: TextView
+
               private lateinit var historyListContainer: LinearLayout
               private lateinit var historySearchInput: EditText
               private lateinit var btnClearHistorySearch: TextView
               private lateinit var chipAll: Button
               private lateinit var chipAudio: Button
               private lateinit var chipVideo: Button
+
+              private lateinit var txtDefaultFormat: TextView
+              private lateinit var txtDefaultQuality: TextView
 
               private fun dpToPx(dp: Int): Int {
                   return (dp * resources.displayMetrics.density).toInt()
@@ -2157,6 +2638,8 @@ jobs:
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
+
+                  prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
                   // Find views
                   pageHome = findViewById(R.id.pageHome)
@@ -2178,6 +2661,7 @@ jobs:
                   viewPreviewCard = findViewById(R.id.viewPreviewCard)
                   viewDownloadingCard = findViewById(R.id.viewDownloadingCard)
                   viewCompleteSection = findViewById(R.id.viewCompleteSection)
+                  viewErrorSection = findViewById(R.id.viewErrorSection)
 
                   urlInput = findViewById(R.id.urlInput)
                   btnClear = findViewById(R.id.btnClear)
@@ -2200,6 +2684,9 @@ jobs:
                   circularProgressBar = findViewById(R.id.circularProgressBar)
                   txtCircularPercent = findViewById(R.id.txtCircularPercent)
                   linearProgressBar = findViewById(R.id.linearProgressBar)
+                  txtDownloadSpeed = findViewById(R.id.txtDownloadSpeed)
+                  txtDownloadSize = findViewById(R.id.txtDownloadSize)
+                  txtDownloadEta = findViewById(R.id.txtDownloadEta)
                   txtDownloadStats = findViewById(R.id.txtDownloadStats)
                   btnCancel = findViewById(R.id.btnCancel)
 
@@ -2209,6 +2696,11 @@ jobs:
                   btnDownloadAnother = findViewById(R.id.btnDownloadAnother)
                   btnMenu = findViewById(R.id.btnMenu)
 
+                  txtErrorTitle = findViewById(R.id.txtErrorTitle)
+                  txtErrorMessage = findViewById(R.id.txtErrorMessage)
+                  btnRetryDownload = findViewById(R.id.btnRetryDownload)
+                  btnDismissError = findViewById(R.id.btnDismissError)
+
                   historyListContainer = findViewById(R.id.historyListContainer)
                   historySearchInput = findViewById(R.id.historySearchInput)
                   btnClearHistorySearch = findViewById(R.id.btnClearHistorySearch)
@@ -2216,13 +2708,19 @@ jobs:
                   chipAudio = findViewById(R.id.chipAudio)
                   chipVideo = findViewById(R.id.chipVideo)
 
-                  // Navigation insets padding for Samsung & full-screen displays
+                  txtDefaultFormat = findViewById(R.id.txtDefaultFormat)
+                  txtDefaultQuality = findViewById(R.id.txtDefaultQuality)
+
+                  // Samsung navigation bar protection
                   ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootContainer)) { _, insets ->
                       val navInsets = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
                       val bottomNavSection = findViewById<View>(R.id.bottomNavSection)
                       bottomNavSection.setPadding(0, 0, 0, navInsets.bottom)
                       insets
                   }
+
+                  // Apply persistent settings on startup
+                  applyPersistentSettings()
 
                   try {
                       StartAppSDK.init(this, "208492019", false)
@@ -2304,28 +2802,12 @@ jobs:
                       refreshHistory()
                   }
 
-                  updateSpinner()
-
                   cardMp3.setOnClickListener {
-                      isAudio = true
-                      cardMp3.setBackgroundResource(R.drawable.bg_card_selected)
-                      cardMp4.setBackgroundResource(R.drawable.bg_card_unselected)
-                      radioDotMp3.text = "●"
-                      radioDotMp3.setTextColor(android.graphics.Color.parseColor("#4F46E5"))
-                      radioDotMp4.text = "○"
-                      radioDotMp4.setTextColor(android.graphics.Color.parseColor("#94A3B8"))
-                      updateSpinner()
+                      setFormatSelection(true)
                   }
 
                   cardMp4.setOnClickListener {
-                      isAudio = false
-                      cardMp4.setBackgroundResource(R.drawable.bg_card_selected)
-                      cardMp3.setBackgroundResource(R.drawable.bg_card_unselected)
-                      radioDotMp4.text = "●"
-                      radioDotMp4.setTextColor(android.graphics.Color.parseColor("#4F46E5"))
-                      radioDotMp3.text = "○"
-                      radioDotMp3.setTextColor(android.graphics.Color.parseColor("#94A3B8"))
-                      updateSpinner()
+                      setFormatSelection(false)
                   }
 
                   urlInput.addTextChangedListener(object : TextWatcher {
@@ -2391,20 +2873,20 @@ jobs:
                       try {
                           adShown = startAppAd?.showAd(object : AdDisplayListener {
                               override fun adHidden(ad: Ad?) {
-                                  executeDownload()
+                                  startDownloadFlow()
                                   startAppAd?.loadAd(StartAppAd.AdMode.AUTOMATIC)
                               }
                               override fun adDisplayed(ad: Ad?) {}
                               override fun adClicked(ad: Ad?) {}
                               override fun adNotDisplayed(ad: Ad?) {
-                                  executeDownload()
+                                  startDownloadFlow()
                                   startAppAd?.loadAd(StartAppAd.AdMode.AUTOMATIC)
                               }
                           }) ?: false
                       } catch (e: Exception) {}
 
                       if (!adShown) {
-                          executeDownload()
+                          startDownloadFlow()
                           startAppAd?.loadAd(StartAppAd.AdMode.AUTOMATIC)
                       }
                   }
@@ -2433,26 +2915,54 @@ jobs:
 
                   btnMenu.setOnClickListener { switchTab(2) }
 
+                  // Retry & Dismiss actions
+                  btnRetryDownload.setOnClickListener {
+                      val retryUrl = DownloadService.lastFailedUrl.ifEmpty { urlInput.text.toString().trim() }
+                      val retryTitle = DownloadService.lastFailedTitle.ifEmpty { downloadingTitle.text.toString() }
+                      val retryIsAudio = DownloadService.lastFailedIsAudio
+                      val retryQuality = DownloadService.lastFailedQuality.ifEmpty { qualitySpinner.selectedItem?.toString() ?: "Best" }
+
+                      if (retryUrl.isNotEmpty() && !DownloadService.isDownloading) {
+                          executeDownloadTask(retryUrl, retryTitle, retryIsAudio, retryQuality)
+                      }
+                  }
+
+                  btnDismissError.setOnClickListener {
+                      showDownloaderState(if (urlInput.text.isNotEmpty()) 1 else 0)
+                  }
+
+                  // Persistent Settings Dialogs
                   findViewById<View>(R.id.settingRowQuality).setOnClickListener {
+                      val qualityOptions = arrayOf("Best Available", "320 kbps (HQ) / 1080p", "192 kbps / 720p", "128 kbps / 480p")
                       AlertDialog.Builder(this)
                           .setTitle("Preferred Download Quality")
-                          .setItems(arrayOf("Best Available", "320 kbps (HQ) / 1080p", "192 kbps / 720p", "128 kbps / 480p")) { _, which ->
-                              findViewById<TextView>(R.id.txtDefaultQuality).text = arrayOf("Best Available", "320 kbps (HQ) / 1080p", "192 kbps / 720p", "128 kbps / 480p")[which]
+                          .setItems(qualityOptions) { _, which ->
+                              val chosen = qualityOptions[which]
+                              txtDefaultQuality.text = chosen
+                              prefs.edit().putString(KEY_PREFERRED_QUALITY, chosen).apply()
+                              updateSpinner()
+                              Toast.makeText(this, "Default quality set to $chosen", Toast.LENGTH_SHORT).show()
                           }.show()
                   }
 
                   findViewById<View>(R.id.settingRowFormat).setOnClickListener {
+                      val formatOptions = arrayOf("MP3 (Audio Only)", "MP4 (Video)")
                       AlertDialog.Builder(this)
                           .setTitle("Default Format")
-                          .setItems(arrayOf("MP3 (Audio Only)", "MP4 (Video)")) { _, which ->
-                              findViewById<TextView>(R.id.txtDefaultFormat).text = if (which == 0) "MP3 (Audio)" else "MP4 (Video)"
+                          .setItems(formatOptions) { _, which ->
+                              val isMp3 = (which == 0)
+                              val chosenFormat = if (isMp3) "MP3" else "MP4"
+                              txtDefaultFormat.text = formatOptions[which]
+                              prefs.edit().putString(KEY_DEFAULT_FORMAT, chosenFormat).apply()
+                              setFormatSelection(isMp3)
+                              Toast.makeText(this, "Default format set to ${formatOptions[which]}", Toast.LENGTH_SHORT).show()
                           }.show()
                   }
 
                   findViewById<View>(R.id.settingRowAbout).setOnClickListener {
                       AlertDialog.Builder(this)
                           .setTitle("About FlowRip Studio")
-                          .setMessage("FlowRip Studio v1.0.0\nHigh-Performance Native YouTube Downloader.\nPowered by yt-dlp & FFmpeg.")
+                          .setMessage("FlowRip Studio v20.0 (Stage 2)\nHigh-Performance Native YouTube Downloader.\nPowered by yt-dlp & FFmpeg.")
                           .setPositiveButton("OK", null)
                           .show()
                   }
@@ -2467,6 +2977,62 @@ jobs:
                               YoutubeDL.getInstance().updateYoutubeDL(applicationContext, YoutubeDL.UpdateChannel.STABLE)
                           } catch (e: Exception) {}
                       } catch (e: Exception) {}
+                  }
+              }
+
+              private fun applyPersistentSettings() {
+                  val savedFormat = prefs.getString(KEY_DEFAULT_FORMAT, "MP3") ?: "MP3"
+                  val savedQuality = prefs.getString(KEY_PREFERRED_QUALITY, "Best Available") ?: "Best Available"
+
+                  txtDefaultFormat.text = if (savedFormat == "MP3") "MP3 (Audio Only)" else "MP4 (Video)"
+                  txtDefaultQuality.text = savedQuality
+
+                  isAudio = (savedFormat == "MP3")
+                  updateFormatUI()
+                  updateSpinner()
+              }
+
+              private fun setFormatSelection(audioSelected: Boolean) {
+                  isAudio = audioSelected
+                  updateFormatUI()
+                  updateSpinner()
+              }
+
+              private fun updateFormatUI() {
+                  if (isAudio) {
+                      cardMp3.setBackgroundResource(R.drawable.bg_card_selected)
+                      cardMp4.setBackgroundResource(R.drawable.bg_card_unselected)
+                      radioDotMp3.text = "●"
+                      radioDotMp3.setTextColor(android.graphics.Color.parseColor("#4F46E5"))
+                      radioDotMp4.text = "○"
+                      radioDotMp4.setTextColor(android.graphics.Color.parseColor("#94A3B8"))
+                  } else {
+                      cardMp4.setBackgroundResource(R.drawable.bg_card_selected)
+                      cardMp3.setBackgroundResource(R.drawable.bg_card_unselected)
+                      radioDotMp4.text = "●"
+                      radioDotMp4.setTextColor(android.graphics.Color.parseColor("#4F46E5"))
+                      radioDotMp3.text = "○"
+                      radioDotMp3.setTextColor(android.graphics.Color.parseColor("#94A3B8"))
+                  }
+              }
+
+              private fun updateSpinner() {
+                  val options = if (isAudio) audioQualities else videoQualities
+                  qualityLabel.text = if (isAudio) "Bitrate:" else "Resolution:"
+                  val adapter = ArrayAdapter(this, R.layout.item_spinner_selected, options)
+                  adapter.setDropDownViewResource(R.layout.item_spinner_dropdown)
+                  qualitySpinner.adapter = adapter
+
+                  // Match with user's saved quality preference
+                  val savedQuality = prefs.getString(KEY_PREFERRED_QUALITY, "Best Available") ?: "Best Available"
+                  val targetIndex = when {
+                      savedQuality.contains("1080p") || savedQuality.contains("320") -> if (isAudio) 0 else 1
+                      savedQuality.contains("720p") || savedQuality.contains("192") -> if (isAudio) 2 else 2
+                      savedQuality.contains("480p") || savedQuality.contains("128") -> if (isAudio) 3 else 3
+                      else -> 0 // "Best Available"
+                  }
+                  if (targetIndex in options.indices) {
+                      qualitySpinner.setSelection(targetIndex)
                   }
               }
 
@@ -2504,7 +3070,12 @@ jobs:
                       circularProgressBar.progress = p
                       txtCircularPercent.text = "$p%"
                       linearProgressBar.progress = p
+                      txtDownloadSpeed.text = DownloadService.currentSpeed
+                      txtDownloadSize.text = DownloadService.currentSizeInfo
+                      txtDownloadEta.text = DownloadService.currentEta
                       txtDownloadStats.text = "Downloading stream... $p%"
+                  } else if (DownloadService.lastError != null) {
+                      showErrorState(DownloadService.lastError ?: "Download failed.")
                   }
               }
 
@@ -2540,14 +3111,12 @@ jobs:
                   viewPreviewCard.visibility = if (state == 1) View.VISIBLE else View.GONE
                   viewDownloadingCard.visibility = if (state == 2) View.VISIBLE else View.GONE
                   viewCompleteSection.visibility = if (state == 3) View.VISIBLE else View.GONE
+                  viewErrorSection.visibility = if (state == 4) View.VISIBLE else View.GONE
               }
 
-              private fun updateSpinner() {
-                  val options = if (isAudio) audioQualities else videoQualities
-                  qualityLabel.text = if (isAudio) "Bitrate:" else "Resolution:"
-                  val adapter = ArrayAdapter(this, R.layout.item_spinner_selected, options)
-                  adapter.setDropDownViewResource(R.layout.item_spinner_dropdown)
-                  qualitySpinner.adapter = adapter
+              private fun showErrorState(message: String) {
+                  showDownloaderState(4)
+                  txtErrorMessage.text = message
               }
 
               private fun extractYouTubeId(rawUrl: String): String? {
@@ -2668,7 +3237,7 @@ jobs:
                           setPadding(24, 20, 24, 20)
                       }
 
-                      // Thumbnail Card with Fallback Placeholder
+                      // Thumbnail Card with Embedded ID3 Art or Fallback Placeholder
                       val thumbCard = androidx.cardview.widget.CardView(this).apply {
                           radius = 16f
                           cardElevation = 0f
@@ -2699,7 +3268,7 @@ jobs:
                       thumbFrame.addView(thumbImg)
                       thumbCard.addView(thumbFrame)
 
-                      // Extract thumbnail asynchronously
+                      // Extract thumbnail / embedded ID3 picture asynchronously
                       thread {
                           var bmp: Bitmap? = null
                           try {
@@ -2826,20 +3395,31 @@ jobs:
                                   circularProgressBar.progress = event.progress
                                   txtCircularPercent.text = "${event.progress}%"
                                   linearProgressBar.progress = event.progress
+                                  txtDownloadSpeed.text = event.speed
+                                  txtDownloadSize.text = event.sizeInfo
+                                  txtDownloadEta.text = event.eta
                                   txtDownloadStats.text = event.stats
                               }
                               is DownloadService.DownloadEvent.Completed -> {
                                   lastDownloadedFile = event.file
                                   completedFileName.text = event.file.name + event.resolutionInfo
+                                  txtDownloadSpeed.text = "--"
+                                  txtDownloadSize.text = "--"
+                                  txtDownloadEta.text = "--"
                                   showDownloaderState(3)
                                   refreshHistory()
                                   Toast.makeText(this@MainActivity, "Download Complete!${event.resolutionInfo}", Toast.LENGTH_LONG).show()
                               }
                               is DownloadService.DownloadEvent.Error -> {
-                                  Toast.makeText(this@MainActivity, "Download Error: ${event.message}", Toast.LENGTH_LONG).show()
-                                  showDownloaderState(1)
+                                  txtDownloadSpeed.text = "--"
+                                  txtDownloadSize.text = "--"
+                                  txtDownloadEta.text = "--"
+                                  showErrorState(event.message)
                               }
                               is DownloadService.DownloadEvent.Cancelled -> {
+                                  txtDownloadSpeed.text = "--"
+                                  txtDownloadSize.text = "--"
+                                  txtDownloadEta.text = "--"
                                   showDownloaderState(1)
                                   Toast.makeText(this@MainActivity, "Download cancelled", Toast.LENGTH_SHORT).show()
                               }
@@ -2848,24 +3428,31 @@ jobs:
                   }
               }
 
-              private fun executeDownload() {
+              private fun startDownloadFlow() {
                   val rawInput = urlInput.text.toString().trim()
                   val cleanId = currentVideoId ?: extractYouTubeId(rawInput)
                   val url = if (cleanId != null) "https://www.youtube.com/watch?v=$cleanId" else rawInput
-                  val selectedQuality = qualitySpinner.selectedItem.toString()
+                  val selectedQuality = qualitySpinner.selectedItem?.toString() ?: "Best"
+                  val title = downloadingTitle.text.toString()
+                  executeDownloadTask(url, title, isAudio, selectedQuality)
+              }
 
+              private fun executeDownloadTask(url: String, title: String, isAudioSelection: Boolean, selectedQuality: String) {
                   showDownloaderState(2)
-                  downloadingFormat.text = if (isAudio) "MP3 • $selectedQuality" else "MP4 • $selectedQuality"
+                  downloadingFormat.text = if (isAudioSelection) "MP3 • $selectedQuality" else "MP4 • $selectedQuality"
                   circularProgressBar.progress = 0
                   txtCircularPercent.text = "0%"
                   linearProgressBar.progress = 0
+                  txtDownloadSpeed.text = "--"
+                  txtDownloadSize.text = "--"
+                  txtDownloadEta.text = "--"
                   txtDownloadStats.text = "Starting background download service..."
 
                   val serviceIntent = Intent(this@MainActivity, DownloadService::class.java).apply {
                       action = DownloadService.ACTION_START
                       putExtra(DownloadService.EXTRA_URL, url)
-                      putExtra(DownloadService.EXTRA_TITLE, downloadingTitle.text.toString())
-                      putExtra(DownloadService.EXTRA_IS_AUDIO, isAudio)
+                      putExtra(DownloadService.EXTRA_TITLE, title)
+                      putExtra(DownloadService.EXTRA_IS_AUDIO, isAudioSelection)
                       putExtra(DownloadService.EXTRA_QUALITY, selectedQuality)
                   }
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -2952,5 +3539,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-ProService-v20-APK
+          name: FlowRip-Stage2-v20-APK
           path: app/build/outputs/apk/**/*.apk
