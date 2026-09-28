@@ -324,8 +324,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 27
-                  versionName "6.0.0"
+                  versionCode 28
+                  versionName "7.0.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -638,6 +638,80 @@ jobs:
           }
           EOF
 
+          cat << 'EOF' > app/src/main/java/com/soundrip/app/NetworkHelper.kt
+          package com.soundrip.app
+
+          import android.content.Context
+          import android.net.ConnectivityManager
+          import android.net.Network
+          import android.net.NetworkCapabilities
+          import android.net.NetworkRequest
+          import android.os.Build
+          import android.util.Log
+
+          object NetworkHelper {
+              private const val TAG = "NetworkHelper"
+              private const val PREFS_NAME = "flowrip_prefs"
+              const val KEY_WIFI_ONLY = "pref_wifi_only"
+
+              fun isWifiOnlyEnabled(context: Context): Boolean {
+                  val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                  return prefs.getBoolean(KEY_WIFI_ONLY, false)
+              }
+
+              fun setWifiOnlyEnabled(context: Context, enabled: Boolean) {
+                  val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                  prefs.edit().putBoolean(KEY_WIFI_ONLY, enabled).apply()
+                  Log.d(TAG, "Wi-Fi Only setting persisted: $enabled")
+              }
+
+              fun isWifiConnected(context: Context): Boolean {
+                  try {
+                      val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+                      val activeNetwork = cm.activeNetwork ?: return false
+                      val caps = cm.getNetworkCapabilities(activeNetwork) ?: return false
+
+                      val hasInternet = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                      val isValidated = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                          caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                      } else true
+                      val isWifi = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+
+                      return hasInternet && isValidated && isWifi
+                  } catch (e: Exception) {
+                      Log.w(TAG, "Error checking Wi-Fi connectivity: ${e.message}")
+                      return false
+                  }
+              }
+
+              fun isInternetConnected(context: Context): Boolean {
+                  try {
+                      val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+                      val activeNetwork = cm.activeNetwork ?: return false
+                      val caps = cm.getNetworkCapabilities(activeNetwork) ?: return false
+
+                      val hasInternet = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                      val isValidated = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                          caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                      } else true
+
+                      return hasInternet && isValidated
+                  } catch (e: Exception) {
+                      Log.w(TAG, "Error checking internet connectivity: ${e.message}")
+                      return false
+                  }
+              }
+
+              fun isDownloadEligible(context: Context): Boolean {
+                  return if (isWifiOnlyEnabled(context)) {
+                      isWifiConnected(context)
+                  } else {
+                      isInternetConnected(context)
+                  }
+              }
+          }
+          EOF
+
           cat << 'EOF' > app/src/main/java/com/soundrip/app/QueueManager.kt
           package com.soundrip.app
 
@@ -659,6 +733,12 @@ jobs:
               CANCELLED
           }
 
+          enum class PauseReason {
+              NONE,
+              MANUAL,
+              WAITING_WIFI
+          }
+
           data class QueueItem(
               val id: String = UUID.randomUUID().toString(),
               val url: String,
@@ -667,6 +747,7 @@ jobs:
               val quality: String,
               val isAudio: Boolean,
               var status: QueueStatus = QueueStatus.QUEUED,
+              var pauseReason: PauseReason = PauseReason.NONE,
               var progress: Int = 0,
               var speed: String = "--",
               var eta: String = "--",
@@ -683,6 +764,7 @@ jobs:
                   obj.put("quality", quality)
                   obj.put("isAudio", isAudio)
                   obj.put("status", status.name)
+                  obj.put("pauseReason", pauseReason.name)
                   obj.put("progress", progress)
                   obj.put("speed", speed)
                   obj.put("eta", eta)
@@ -700,6 +782,12 @@ jobs:
                       } catch (e: Exception) {
                           QueueStatus.QUEUED
                       }
+                      val pauseReasonStr = obj.optString("pauseReason", "NONE")
+                      val parsedReason = try {
+                          PauseReason.valueOf(pauseReasonStr)
+                      } catch (e: Exception) {
+                          PauseReason.NONE
+                      }
                       return QueueItem(
                           id = obj.optString("id", UUID.randomUUID().toString()),
                           url = obj.optString("url", ""),
@@ -708,6 +796,7 @@ jobs:
                           quality = obj.optString("quality", "Best"),
                           isAudio = obj.optBoolean("isAudio", true),
                           status = parsedStatus,
+                          pauseReason = parsedReason,
                           progress = obj.optInt("progress", 0),
                           speed = obj.optString("speed", "--"),
                           eta = obj.optString("eta", "--"),
@@ -762,9 +851,12 @@ jobs:
                           val array = JSONArray(jsonStr)
                           for (i in 0 until array.length()) {
                               val item = QueueItem.fromJson(array.getJSONObject(i))
-                              // If process was killed while downloading, restore safely as PAUSED so user can resume
+                              // If process was killed while downloading, restore safely as PAUSED
                               if (item.status == QueueStatus.DOWNLOADING) {
                                   item.status = QueueStatus.PAUSED
+                                  val wifiOnly = NetworkHelper.isWifiOnlyEnabled(context)
+                                  val wifiConnected = NetworkHelper.isWifiConnected(context)
+                                  item.pauseReason = if (wifiOnly && !wifiConnected) PauseReason.WAITING_WIFI else PauseReason.MANUAL
                                   item.speed = "--"
                                   item.eta = "--"
                               }
@@ -810,10 +902,23 @@ jobs:
               }
 
               @Synchronized
+              fun getWaitingWifiItem(context: Context): QueueItem? {
+                  loadQueue(context)
+                  return queueItems.find { it.status == QueueStatus.PAUSED && it.pauseReason == PauseReason.WAITING_WIFI }
+              }
+
+              @Synchronized
               fun getNextEligibleItem(context: Context): QueueItem? {
                   loadQueue(context)
-                  // If an item is currently PAUSED or DOWNLOADING, queue must NOT advance
+                  // If an item is currently PAUSED or DOWNLOADING, sequential queue must NOT advance
                   if (queueItems.any { it.status == QueueStatus.PAUSED || it.status == QueueStatus.DOWNLOADING }) {
+                      return null
+                  }
+                  // Wi-Fi Only constraint check
+                  if (NetworkHelper.isWifiOnlyEnabled(context) && !NetworkHelper.isWifiConnected(context)) {
+                      return null
+                  }
+                  if (!NetworkHelper.isInternetConnected(context)) {
                       return null
                   }
                   return queueItems.find { it.status == QueueStatus.QUEUED }
@@ -827,6 +932,11 @@ jobs:
                   notifyListeners()
 
                   if (!DownloadService.isDownloading && !DownloadService.isPaused && !queueItems.any { it.status == QueueStatus.PAUSED }) {
+                      // Check Wi-Fi Only before auto-starting
+                      if (NetworkHelper.isWifiOnlyEnabled(context) && !NetworkHelper.isWifiConnected(context)) {
+                          Log.d(TAG, "Item enqueued but Wi-Fi Only is ON and Wi-Fi not connected. Item remains waiting in queue.")
+                          return false
+                      }
                       startNext(context)
                       return true
                   }
@@ -840,7 +950,22 @@ jobs:
                   if (queueItems.any { it.status == QueueStatus.PAUSED }) return
 
                   val nextItem = queueItems.find { it.status == QueueStatus.QUEUED } ?: return
+
+                  // Wi-Fi Only Check BEFORE starting download process
+                  if (NetworkHelper.isWifiOnlyEnabled(context) && !NetworkHelper.isWifiConnected(context)) {
+                      Log.d(TAG, "QueueManager: Wi-Fi Only is ON and Wi-Fi not connected. Item '${nextItem.title}' remains QUEUED waiting for Wi-Fi.")
+                      notifyListeners()
+                      return
+                  }
+
+                  if (!NetworkHelper.isInternetConnected(context)) {
+                      Log.d(TAG, "QueueManager: No internet connection. Item '${nextItem.title}' remains QUEUED.")
+                      notifyListeners()
+                      return
+                  }
+
                   nextItem.status = QueueStatus.DOWNLOADING
+                  nextItem.pauseReason = PauseReason.NONE
                   nextItem.progress = 0
                   saveQueue(context)
                   notifyListeners()
@@ -865,6 +990,7 @@ jobs:
                   loadQueue(context)
                   val item = queueItems.find { it.id == taskId } ?: return
                   item.status = QueueStatus.DOWNLOADING
+                  item.pauseReason = PauseReason.NONE
                   item.progress = maxOf(item.progress, progress)
                   item.speed = speed
                   item.sizeInfo = sizeInfo
@@ -873,11 +999,12 @@ jobs:
               }
 
               @Synchronized
-              fun markPaused(context: Context, taskId: String, progress: Int, sizeInfo: String) {
+              fun markPaused(context: Context, taskId: String, progress: Int, sizeInfo: String, reason: PauseReason = PauseReason.MANUAL) {
                   loadQueue(context)
                   val item = queueItems.find { it.id == taskId }
                   if (item != null) {
                       item.status = QueueStatus.PAUSED
+                      item.pauseReason = reason
                       item.progress = progress
                       item.sizeInfo = sizeInfo
                       item.speed = "--"
@@ -894,6 +1021,15 @@ jobs:
                   if (item.status != QueueStatus.PAUSED) return false
                   if (DownloadService.isDownloading) return false
 
+                  // Check Wi-Fi Only constraint
+                  if (NetworkHelper.isWifiOnlyEnabled(context) && !NetworkHelper.isWifiConnected(context)) {
+                      Log.w(TAG, "Cannot resume item '${item.title}': Wi-Fi Only is ON and Wi-Fi not connected.")
+                      item.pauseReason = PauseReason.WAITING_WIFI
+                      saveQueue(context)
+                      notifyListeners()
+                      return false
+                  }
+
                   val intent = Intent(context, DownloadService::class.java).apply {
                       action = DownloadService.ACTION_RESUME
                       putExtra(DownloadService.EXTRA_TASK_ID, item.id)
@@ -907,12 +1043,41 @@ jobs:
               }
 
               @Synchronized
-              fun pauseActiveItem(context: Context): Boolean {
+              fun pauseActiveItem(context: Context, reason: PauseReason = PauseReason.MANUAL): Boolean {
                   val intent = Intent(context, DownloadService::class.java).apply {
                       action = DownloadService.ACTION_PAUSE
+                      putExtra(DownloadService.EXTRA_PAUSE_REASON, reason.name)
                   }
                   context.startService(intent)
                   return true
+              }
+
+              @Synchronized
+              fun onNetworkAvailabilityChanged(context: Context) {
+                  loadQueue(context)
+                  val wifiAvailable = NetworkHelper.isWifiConnected(context)
+                  val wifiOnly = NetworkHelper.isWifiOnlyEnabled(context)
+                  val isEligible = if (wifiOnly) wifiAvailable else NetworkHelper.isInternetConnected(context)
+
+                  if (isEligible) {
+                      // 1. If an item was paused specifically waiting for Wi-Fi, automatically resume it!
+                      val waitingWifiItem = getWaitingWifiItem(context)
+                      if (waitingWifiItem != null && !DownloadService.isDownloading) {
+                          Log.d(TAG, "Eligible network restored: Auto-resuming network-paused item: ${waitingWifiItem.title}")
+                          resumeItem(context, waitingWifiItem.id)
+                          return
+                      }
+
+                      // 2. If no item is downloading or paused, start next queued item
+                      if (!DownloadService.isDownloading && !DownloadService.isPaused && !queueItems.any { it.status == QueueStatus.PAUSED }) {
+                          startNext(context)
+                      }
+                  } else if (wifiOnly && !wifiAvailable && DownloadService.isDownloading) {
+                      // Wi-Fi lost while downloading over cellular with Wi-Fi Only ON
+                      Log.d(TAG, "Wi-Fi disconnected during download with Wi-Fi Only ON: safely pausing task")
+                      pauseActiveItem(context, PauseReason.WAITING_WIFI)
+                  }
+                  notifyListeners()
               }
 
               @Synchronized
@@ -930,6 +1095,7 @@ jobs:
                   val item = queueItems.find { it.id == taskId }
                   if (item != null) {
                       item.status = QueueStatus.COMPLETED
+                      item.pauseReason = PauseReason.NONE
                       item.progress = 100
                       item.speed = "--"
                       item.eta = "--"
@@ -945,6 +1111,7 @@ jobs:
                   val item = queueItems.find { it.id == taskId }
                   if (item != null) {
                       item.status = QueueStatus.FAILED
+                      item.pauseReason = PauseReason.NONE
                       item.error = error
                       item.speed = "--"
                       item.eta = "--"
@@ -959,6 +1126,7 @@ jobs:
                   val item = queueItems.find { it.id == taskId }
                   if (item != null) {
                       item.status = QueueStatus.CANCELLED
+                      item.pauseReason = PauseReason.NONE
                       item.speed = "--"
                       item.eta = "--"
                       saveQueue(context)
@@ -1004,6 +1172,7 @@ jobs:
                           quality = oldItem.quality,
                           isAudio = oldItem.isAudio,
                           status = QueueStatus.QUEUED,
+                          pauseReason = PauseReason.NONE,
                           progress = 0,
                           speed = "--",
                           eta = "--",
@@ -1045,6 +1214,10 @@ jobs:
           import android.content.pm.ServiceInfo
           import android.media.MediaMetadataRetriever
           import android.media.MediaScannerConnection
+          import android.net.ConnectivityManager
+          import android.net.Network
+          import android.net.NetworkCapabilities
+          import android.net.NetworkRequest
           import android.os.Build
           import android.os.Environment
           import android.os.IBinder
@@ -1075,6 +1248,7 @@ jobs:
                   const val EXTRA_TITLE = "EXTRA_TITLE"
                   const val EXTRA_IS_AUDIO = "EXTRA_IS_AUDIO"
                   const val EXTRA_QUALITY = "EXTRA_QUALITY"
+                  const val EXTRA_PAUSE_REASON = "EXTRA_PAUSE_REASON"
 
                   @Volatile
                   var isDownloading = false
@@ -1082,6 +1256,10 @@ jobs:
 
                   @Volatile
                   var isPaused = false
+                      private set
+
+                  @Volatile
+                  var currentPauseReason: PauseReason = PauseReason.NONE
                       private set
 
                   @Volatile
@@ -1155,7 +1333,7 @@ jobs:
                       val eta: String,
                       val stats: String
                   ) : DownloadEvent()
-                  data class Paused(val progress: Int, val sizeInfo: String) : DownloadEvent()
+                  data class Paused(val progress: Int, val sizeInfo: String, val reason: PauseReason) : DownloadEvent()
                   object Resumed : DownloadEvent()
                   data class Completed(val file: File, val resolutionInfo: String) : DownloadEvent()
                   data class Error(val message: String) : DownloadEvent()
@@ -1164,6 +1342,7 @@ jobs:
 
               private var activeTaskId: String? = null
               private var notificationManager: NotificationManager? = null
+              private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
               override fun onBind(intent: Intent?): IBinder? = null
 
@@ -1171,6 +1350,7 @@ jobs:
                   super.onCreate()
                   notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                   createNotificationChannel()
+                  registerNetworkMonitoring()
               }
 
               private fun createNotificationChannel() {
@@ -1184,6 +1364,61 @@ jobs:
                           setShowBadge(false)
                       }
                       notificationManager?.createNotificationChannel(channel)
+                  }
+              }
+
+              private fun registerNetworkMonitoring() {
+                  if (networkCallback != null) return
+                  val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+                  try {
+                      val builder = NetworkRequest.Builder()
+                          .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                      networkCallback = object : ConnectivityManager.NetworkCallback() {
+                          override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+                              checkNetworkConditions()
+                          }
+
+                          override fun onLost(network: Network) {
+                              checkNetworkConditions()
+                          }
+                      }
+                      cm.registerNetworkCallback(builder.build(), networkCallback!!)
+                      Log.d(TAG, "NetworkCallback registered in DownloadService")
+                  } catch (e: Exception) {
+                      Log.w(TAG, "Failed to register network callback: ${e.message}")
+                  }
+              }
+
+              private fun unregisterNetworkMonitoring() {
+                  networkCallback?.let {
+                      try {
+                          val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                          cm?.unregisterNetworkCallback(it)
+                          Log.d(TAG, "NetworkCallback unregistered in DownloadService")
+                      } catch (e: Exception) {}
+                      networkCallback = null
+                  }
+              }
+
+              private fun checkNetworkConditions() {
+                  val wifiOnly = NetworkHelper.isWifiOnlyEnabled(applicationContext)
+                  val wifiConnected = NetworkHelper.isWifiConnected(applicationContext)
+                  val internetConnected = NetworkHelper.isInternetConnected(applicationContext)
+
+                  if (isDownloading) {
+                      if (wifiOnly && !wifiConnected) {
+                          Log.d(TAG, "Active download lost Wi-Fi while Wi-Fi Only is ON: Pausing download")
+                          pauseDownloadTask(PauseReason.WAITING_WIFI)
+                      } else if (!internetConnected) {
+                          Log.d(TAG, "Active download lost internet connectivity: Pausing download")
+                          pauseDownloadTask(PauseReason.WAITING_WIFI)
+                      }
+                  } else if (isPaused && currentPauseReason == PauseReason.WAITING_WIFI) {
+                      val isEligible = if (wifiOnly) wifiConnected else internetConnected
+                      if (isEligible) {
+                          Log.d(TAG, "Network restored for network-paused download: Auto-resuming task")
+                          resumeDownloadTask(pausedTaskId)
+                      }
                   }
               }
 
@@ -1201,7 +1436,9 @@ jobs:
                           }
                       }
                       ACTION_PAUSE -> {
-                          pauseDownloadTask()
+                          val reasonStr = intent.getStringExtra(EXTRA_PAUSE_REASON) ?: PauseReason.MANUAL.name
+                          val reason = try { PauseReason.valueOf(reasonStr) } catch (e: Exception) { PauseReason.MANUAL }
+                          pauseDownloadTask(reason)
                       }
                       ACTION_RESUME -> {
                           val specificTaskId = intent.getStringExtra(EXTRA_TASK_ID)
@@ -1215,15 +1452,16 @@ jobs:
                   return START_NOT_STICKY
               }
 
-              private fun pauseDownloadTask() {
+              private fun pauseDownloadTask(reason: PauseReason = PauseReason.MANUAL) {
                   val taskId = activeTaskId
                   if (taskId == null || !isDownloading) {
                       Log.w(TAG, "pauseDownloadTask called but no active task downloading")
                       return
                   }
 
-                  Log.d(TAG, "Real Pause: Stopping yt-dlp task $taskId ($currentTitle), preserving partial files.")
+                  Log.d(TAG, "Real Pause: Stopping yt-dlp task $taskId ($currentTitle), reason: $reason")
                   isPaused = true
+                  currentPauseReason = reason
                   pausedTaskId = taskId
                   isDownloading = false
 
@@ -1232,10 +1470,11 @@ jobs:
                   val savedTitle = currentTitle
                   currentSpeed = "--"
                   currentEta = "--"
-                  currentStatus = "Download paused"
+                  val statusMsg = if (reason == PauseReason.WAITING_WIFI) "Waiting for Wi-Fi" else "Download paused"
+                  currentStatus = statusMsg
 
-                  // Mark PAUSED in QueueManager with preserved progress
-                  QueueManager.markPaused(applicationContext, taskId, savedProgress, savedSizeInfo)
+                  // Mark PAUSED in QueueManager with preserved progress & reason
+                  QueueManager.markPaused(applicationContext, taskId, savedProgress, savedSizeInfo, reason)
 
                   // Terminate the active yt-dlp process asynchronously
                   thread(name = "FlowRipPauseThread") {
@@ -1247,8 +1486,8 @@ jobs:
                   }
 
                   // Update notification with Resume and Cancel actions
-                  updateNotification(savedTitle, savedProgress, "--", savedSizeInfo, "--", "Download paused", isPausedState = true)
-                  postEvent(DownloadEvent.Paused(savedProgress, savedSizeInfo))
+                  updateNotification(savedTitle, savedProgress, "--", savedSizeInfo, "--", statusMsg, isPausedState = true, pauseReason = reason)
+                  postEvent(DownloadEvent.Paused(savedProgress, savedSizeInfo, reason))
               }
 
               private fun resumeDownloadTask(specificTaskId: String? = null) {
@@ -1264,6 +1503,24 @@ jobs:
                       return
                   }
 
+                  // Check Wi-Fi Only constraint before allowing resume
+                  if (NetworkHelper.isWifiOnlyEnabled(applicationContext) && !NetworkHelper.isWifiConnected(applicationContext)) {
+                      Log.w(TAG, "Cannot resume: Wi-Fi Only is enabled and device is not connected to Wi-Fi")
+                      val statusMsg = "Waiting for Wi-Fi"
+                      currentStatus = statusMsg
+                      currentPauseReason = PauseReason.WAITING_WIFI
+                      item.pauseReason = PauseReason.WAITING_WIFI
+                      QueueManager.saveQueue(applicationContext)
+                      updateNotification(item.title, item.progress, "--", item.sizeInfo, "--", statusMsg, isPausedState = true, pauseReason = PauseReason.WAITING_WIFI)
+                      postEvent(DownloadEvent.Paused(item.progress, item.sizeInfo, PauseReason.WAITING_WIFI))
+                      return
+                  }
+
+                  if (!NetworkHelper.isInternetConnected(applicationContext)) {
+                      Log.w(TAG, "Cannot resume: No internet connection")
+                      return
+                  }
+
                   if (isDownloading) {
                       Log.w(TAG, "Cannot resume while another download is running")
                       return
@@ -1271,9 +1528,11 @@ jobs:
 
                   Log.d(TAG, "Real Resume: Resuming yt-dlp task $targetId (${item.title}) at ${item.progress}%")
                   isPaused = false
+                  currentPauseReason = PauseReason.NONE
                   pausedTaskId = null
 
                   item.status = QueueStatus.DOWNLOADING
+                  item.pauseReason = PauseReason.NONE
                   QueueManager.saveQueue(applicationContext)
                   QueueManager.notifyListeners()
 
@@ -1298,8 +1557,36 @@ jobs:
                   initialProgress: Int = 0,
                   initialSizeInfo: String = "--"
               ) {
+                  // Enforce Wi-Fi Only constraint
+                  if (NetworkHelper.isWifiOnlyEnabled(applicationContext) && !NetworkHelper.isWifiConnected(applicationContext)) {
+                      Log.d(TAG, "startDownloadTask postponed: Wi-Fi Only is ON and Wi-Fi not connected")
+                      val statusMsg = "Waiting for Wi-Fi"
+                      isDownloading = false
+                      isPaused = true
+                      currentPauseReason = PauseReason.WAITING_WIFI
+                      pausedTaskId = taskId
+                      currentProgress = initialProgress
+                      currentSpeed = "--"
+                      currentSizeInfo = initialSizeInfo
+                      currentEta = "--"
+                      currentTitle = title
+                      currentFormat = if (isAudio) "MP3 • $quality" else "MP4 • $quality"
+                      currentStatus = statusMsg
+
+                      QueueManager.markPaused(applicationContext, taskId, initialProgress, initialSizeInfo, PauseReason.WAITING_WIFI)
+                      val notif = buildNotification(title, initialProgress, "--", initialSizeInfo, "--", statusMsg, isPausedState = true, pauseReason = PauseReason.WAITING_WIFI)
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                          ServiceCompat.startForeground(this, NOTIFICATION_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+                      } else {
+                          startForeground(NOTIFICATION_ID, notif)
+                      }
+                      postEvent(DownloadEvent.Paused(initialProgress, initialSizeInfo, PauseReason.WAITING_WIFI))
+                      return
+                  }
+
                   isDownloading = true
                   isPaused = false
+                  currentPauseReason = PauseReason.NONE
                   pausedTaskId = null
 
                   currentProgress = initialProgress
@@ -1683,11 +1970,12 @@ jobs:
                           currentEta = "--"
 
                           if (wasPaused) {
-                              Log.d(TAG, "Real Pause: Download thread stopped for task $taskId. Partial files strictly preserved.")
+                              Log.d(TAG, "Real Pause: Download thread stopped for task $taskId, reason: $currentPauseReason. Partial files strictly preserved.")
                               isDownloading = false
-                              // Update foreground notification to show Paused with Resume & Cancel options
-                              updateNotification(currentTitle, currentProgress, "--", currentSizeInfo, "--", "Download paused", isPausedState = true)
-                              postEvent(DownloadEvent.Paused(currentProgress, currentSizeInfo))
+                              val statusMsg = if (currentPauseReason == PauseReason.WAITING_WIFI) "Waiting for Wi-Fi" else "Download paused"
+                              currentStatus = statusMsg
+                              updateNotification(currentTitle, currentProgress, "--", currentSizeInfo, "--", statusMsg, isPausedState = true, pauseReason = currentPauseReason)
+                              postEvent(DownloadEvent.Paused(currentProgress, currentSizeInfo, currentPauseReason))
                               return@thread
                           }
 
@@ -1734,6 +2022,7 @@ jobs:
                   activeTaskId = null
                   pausedTaskId = null
                   isPaused = false
+                  currentPauseReason = PauseReason.NONE
                   isDownloading = false
                   currentProgress = 0
                   currentSpeed = "--"
@@ -1795,7 +2084,8 @@ jobs:
                   sizeInfo: String,
                   eta: String,
                   statusText: String,
-                  isPausedState: Boolean = false
+                  isPausedState: Boolean = false,
+                  pauseReason: PauseReason = PauseReason.NONE
               ): Notification {
                   val openAppIntent = Intent(this, MainActivity::class.java).apply {
                       flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -1837,7 +2127,8 @@ jobs:
                   }
 
                   val contentLine = if (isPausedState) {
-                      if (sizeInfo != "--") "Paused ($percent%) • $sizeInfo" else "Paused ($percent%)"
+                      val prefix = if (pauseReason == PauseReason.WAITING_WIFI) "Waiting for Wi-Fi" else "Paused"
+                      if (sizeInfo != "--") "$prefix ($percent%) • $sizeInfo" else "$prefix ($percent%)"
                   } else {
                       val contentSubText = buildString {
                           if (speed != "--") append(speed)
@@ -1881,9 +2172,10 @@ jobs:
                   sizeInfo: String,
                   eta: String,
                   statusText: String,
-                  isPausedState: Boolean = false
+                  isPausedState: Boolean = false,
+                  pauseReason: PauseReason = PauseReason.NONE
               ) {
-                  val notification = buildNotification(title, percent, speed, sizeInfo, eta, statusText, isPausedState)
+                  val notification = buildNotification(title, percent, speed, sizeInfo, eta, statusText, isPausedState, pauseReason)
                   notificationManager?.notify(NOTIFICATION_ID, notification)
               }
 
@@ -1989,8 +2281,10 @@ jobs:
               }
 
               override fun onDestroy() {
+                  unregisterNetworkMonitoring()
                   isDownloading = false
                   isPaused = false
+                  currentPauseReason = PauseReason.NONE
                   activeTaskId = null
                   pausedTaskId = null
                   currentSpeed = "--"
@@ -3512,6 +3806,49 @@ jobs:
                                               app:cornerRadius="18dp" />
                                       </LinearLayout>
                                   </LinearLayout>
+
+                                  <View
+                                      android:layout_width="match_parent"
+                                      android:layout_height="1dp"
+                                      android:background="#F1F5F9" />
+
+                                  <LinearLayout
+                                      android:id="@+id/settingRowWifiOnly"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:orientation="horizontal"
+                                      android:gravity="center_vertical"
+                                      android:padding="18dp">
+
+                                      <LinearLayout
+                                          android:layout_width="0dp"
+                                          android:layout_height="wrap_content"
+                                          android:layout_weight="1"
+                                          android:orientation="vertical">
+
+                                          <TextView
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="Wi-Fi only"
+                                              android:textColor="#0F172A"
+                                              android:textSize="14sp"
+                                              android:textStyle="bold" />
+
+                                          <TextView
+                                              android:id="@+id/txtWifiOnlySubtitle"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="Download only when connected to Wi-Fi"
+                                              android:textColor="#64748B"
+                                              android:textSize="12sp"
+                                              android:layout_marginTop="2dp" />
+                                      </LinearLayout>
+
+                                      <androidx.appcompat.widget.SwitchCompat
+                                          android:id="@+id/switchWifiOnly"
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content" />
+                                  </LinearLayout>
                               </LinearLayout>
                           </androidx.cardview.widget.CardView>
 
@@ -3895,6 +4232,9 @@ jobs:
               private lateinit var txtDownloadLocation: TextView
               private lateinit var btnChangeLocation: Button
               private lateinit var btnResetLocation: Button
+              private lateinit var switchWifiOnly: androidx.appcompat.widget.SwitchCompat
+              private lateinit var settingRowWifiOnly: View
+              private var activityNetworkCallback: android.net.ConnectivityManager.NetworkCallback? = null
 
               private lateinit var viewQueueSection: LinearLayout
               private lateinit var txtQueueBadge: TextView
@@ -3991,6 +4331,17 @@ jobs:
                   txtDownloadLocation = findViewById(R.id.txtDownloadLocation)
                   btnChangeLocation = findViewById(R.id.btnChangeLocation)
                   btnResetLocation = findViewById(R.id.btnResetLocation)
+                  switchWifiOnly = findViewById(R.id.switchWifiOnly)
+                  settingRowWifiOnly = findViewById(R.id.settingRowWifiOnly)
+
+                  switchWifiOnly.isChecked = NetworkHelper.isWifiOnlyEnabled(this)
+                  switchWifiOnly.setOnCheckedChangeListener { _, isChecked ->
+                      NetworkHelper.setWifiOnlyEnabled(this, isChecked)
+                      handleWifiOnlySettingToggled(isChecked)
+                  }
+                  settingRowWifiOnly.setOnClickListener {
+                      switchWifiOnly.toggle()
+                  }
 
                   val openFolderPicker = {
                       val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
@@ -4232,11 +4583,15 @@ jobs:
 
                   btnPauseResume.setOnClickListener {
                       if (DownloadService.isDownloading) {
-                          QueueManager.pauseActiveItem(this)
+                          QueueManager.pauseActiveItem(this, PauseReason.MANUAL)
                       } else {
                           val paused = QueueManager.getPausedItem(this)
                           if (paused != null) {
-                              QueueManager.resumeItem(this, paused.id)
+                              if (NetworkHelper.isWifiOnlyEnabled(this) && !NetworkHelper.isWifiConnected(this)) {
+                                  Toast.makeText(this, "Cannot resume download: Wi-Fi connection required (Wi-Fi Only is ON).", Toast.LENGTH_LONG).show()
+                              } else {
+                                  QueueManager.resumeItem(this, paused.id)
+                              }
                           }
                       }
                   }
@@ -4585,13 +4940,20 @@ jobs:
                       txtDownloadSpeed.text = "--"
                       txtDownloadEta.text = "--"
                       txtDownloadSize.text = paused.sizeInfo
-                      txtDownloadStats.text = "Download paused"
+                      val pausedMsg = if (paused.pauseReason == PauseReason.WAITING_WIFI) "Waiting for Wi-Fi" else "Download paused"
+                      txtDownloadStats.text = pausedMsg
                   } else if (DownloadService.lastError != null) {
                       showErrorState(DownloadService.lastError ?: "Download failed.")
                   }
               }
 
+              override fun onStart() {
+                  super.onStart()
+                  registerActivityNetworkMonitoring()
+              }
+
               override fun onStop() {
+                  unregisterActivityNetworkMonitoring()
                   super.onStop()
                   DownloadService.setListener(null)
               }
@@ -4645,6 +5007,65 @@ jobs:
                       }
                   }
                   return null
+              }
+
+              private fun handleWifiOnlySettingToggled(wifiOnlyEnabled: Boolean) {
+                  if (wifiOnlyEnabled) {
+                      if (DownloadService.isDownloading && !NetworkHelper.isWifiConnected(this)) {
+                          Toast.makeText(this, "Wi-Fi Only enabled. Pausing download until Wi-Fi is connected.", Toast.LENGTH_LONG).show()
+                          val pauseIntent = Intent(this, DownloadService::class.java).apply {
+                              action = DownloadService.ACTION_PAUSE
+                              putExtra(DownloadService.EXTRA_PAUSE_REASON, PauseReason.WAITING_WIFI.name)
+                          }
+                          startService(pauseIntent)
+                      }
+                  } else {
+                      val waitingWifi = QueueManager.getWaitingWifiItem(this)
+                      if (waitingWifi != null && !DownloadService.isDownloading) {
+                          Toast.makeText(this, "Wi-Fi Only disabled. Resuming download on available connection.", Toast.LENGTH_SHORT).show()
+                          QueueManager.resumeItem(this, waitingWifi.id)
+                      } else if (!DownloadService.isDownloading && !DownloadService.isPaused) {
+                          QueueManager.startNext(this)
+                      }
+                  }
+                  refreshQueueUI()
+              }
+
+              private fun registerActivityNetworkMonitoring() {
+                  if (activityNetworkCallback != null) return
+                  val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return
+                  try {
+                      val builder = android.net.NetworkRequest.Builder()
+                          .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                      activityNetworkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+                          override fun onCapabilitiesChanged(network: android.net.Network, networkCapabilities: android.net.NetworkCapabilities) {
+                              runOnUiThread {
+                                  QueueManager.onNetworkAvailabilityChanged(this@MainActivity)
+                                  refreshQueueUI()
+                              }
+                          }
+
+                          override fun onLost(network: android.net.Network) {
+                              runOnUiThread {
+                                  QueueManager.onNetworkAvailabilityChanged(this@MainActivity)
+                                  refreshQueueUI()
+                              }
+                          }
+                      }
+                      cm.registerNetworkCallback(builder.build(), activityNetworkCallback!!)
+                  } catch (e: Exception) {
+                      Log.w("MainActivity", "Error registering network callback: ${e.message}")
+                  }
+              }
+
+              private fun unregisterActivityNetworkMonitoring() {
+                  activityNetworkCallback?.let {
+                      try {
+                          val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+                          cm?.unregisterNetworkCallback(it)
+                      } catch (e: Exception) {}
+                      activityNetworkCallback = null
+                  }
               }
 
               private fun updatePauseResumeButton(isPaused: Boolean) {
@@ -5163,7 +5584,8 @@ jobs:
                                   txtDownloadSpeed.text = "--"
                                   txtDownloadEta.text = "--"
                                   txtDownloadSize.text = event.sizeInfo
-                                  txtDownloadStats.text = "Download paused"
+                                  val statusMsg = if (event.reason == PauseReason.WAITING_WIFI) "Waiting for Wi-Fi" else "Download paused"
+                                  txtDownloadStats.text = statusMsg
                                   refreshQueueUI()
                               }
                               is DownloadService.DownloadEvent.Resumed -> {
@@ -5300,8 +5722,14 @@ jobs:
                       txtDownloadEta.text = "--"
                       txtDownloadStats.text = "Starting background download service..."
                   } else {
-                      Toast.makeText(this@MainActivity, "Added to download queue: ${item.title}", Toast.LENGTH_SHORT).show()
-                      if (DownloadService.isDownloading) {
+                      val wifiOnly = NetworkHelper.isWifiOnlyEnabled(this@MainActivity)
+                      val wifiConnected = NetworkHelper.isWifiConnected(this@MainActivity)
+                      if (wifiOnly && !wifiConnected) {
+                          Toast.makeText(this@MainActivity, "Added to queue: Waiting for Wi-Fi", Toast.LENGTH_SHORT).show()
+                      } else {
+                          Toast.makeText(this@MainActivity, "Added to download queue: ${item.title}", Toast.LENGTH_SHORT).show()
+                      }
+                      if (DownloadService.isDownloading || DownloadService.isPaused || QueueManager.getPausedItem(this@MainActivity) != null) {
                           showDownloaderState(2)
                       } else {
                           showDownloaderState(0)
@@ -5370,12 +5798,24 @@ jobs:
                                   setTextColor(android.graphics.Color.parseColor("#4F46E5"))
                               }
                               QueueStatus.PAUSED -> {
-                                  text = "⏸ Paused (${item.progress}%)"
-                                  setTextColor(android.graphics.Color.parseColor("#F59E0B"))
+                                  if (item.pauseReason == PauseReason.WAITING_WIFI) {
+                                      text = "📶 Waiting for Wi-Fi (${item.progress}%)"
+                                      setTextColor(android.graphics.Color.parseColor("#D97706"))
+                                  } else {
+                                      text = "⏸ Paused (${item.progress}%)"
+                                      setTextColor(android.graphics.Color.parseColor("#F59E0B"))
+                                  }
                               }
                               QueueStatus.QUEUED -> {
-                                  text = "⏳ Waiting"
-                                  setTextColor(android.graphics.Color.parseColor("#64748B"))
+                                  val wifiOnly = NetworkHelper.isWifiOnlyEnabled(this@MainActivity)
+                                  val wifiConnected = NetworkHelper.isWifiConnected(this@MainActivity)
+                                  if (wifiOnly && !wifiConnected) {
+                                      text = "⏳ Waiting for Wi-Fi"
+                                      setTextColor(android.graphics.Color.parseColor("#D97706"))
+                                  } else {
+                                      text = "⏳ Waiting"
+                                      setTextColor(android.graphics.Color.parseColor("#64748B"))
+                                  }
                               }
                               QueueStatus.COMPLETED -> {
                                   text = "✓ Completed"
@@ -5430,8 +5870,12 @@ jobs:
                                   typeface = android.graphics.Typeface.DEFAULT_BOLD
                                   setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
                                   setOnClickListener {
-                                      QueueManager.resumeItem(this@MainActivity, item.id)
-                                      refreshQueueUI()
+                                      if (NetworkHelper.isWifiOnlyEnabled(this@MainActivity) && !NetworkHelper.isWifiConnected(this@MainActivity)) {
+                                          Toast.makeText(this@MainActivity, "Connect to Wi-Fi to resume download (Wi-Fi Only is ON).", Toast.LENGTH_LONG).show()
+                                      } else {
+                                          QueueManager.resumeItem(this@MainActivity, item.id)
+                                          refreshQueueUI()
+                                      }
                                   }
                               }
                               val cancelBtn = TextView(this).apply {
@@ -5552,6 +5996,7 @@ jobs:
                               cardInner.addView(metricsView)
                           }
                           QueueStatus.PAUSED -> {
+                              val isWaitingWifi = (item.pauseReason == PauseReason.WAITING_WIFI)
                               val miniProgress = ProgressBar(
                                   this,
                                   null,
@@ -5565,12 +6010,14 @@ jobs:
                                   layoutParams = lp
                                   max = 100
                                   progress = item.progress
+                                  val tint = if (isWaitingWifi) "#D97706" else "#F59E0B"
                                   progressTintList = android.content.res.ColorStateList.valueOf(
-                                      android.graphics.Color.parseColor("#F59E0B")
+                                      android.graphics.Color.parseColor(tint)
                                   )
                               }
+                              val label = if (isWaitingWifi) "Waiting for Wi-Fi" else "Paused"
                               val metricsView = TextView(this).apply {
-                                  text = "${item.progress}% • Paused • ${item.sizeInfo}"
+                                  text = "${item.progress}% • $label • ${item.sizeInfo}"
                                   textSize = 11f
                                   setTextColor(android.graphics.Color.parseColor("#64748B"))
                                   val lp = LinearLayout.LayoutParams(
@@ -5600,8 +6047,11 @@ jobs:
                               cardInner.addView(errorView)
                           }
                           QueueStatus.QUEUED -> {
+                              val wifiOnly = NetworkHelper.isWifiOnlyEnabled(this@MainActivity)
+                              val wifiConnected = NetworkHelper.isWifiConnected(this@MainActivity)
+                              val waitMsg = if (wifiOnly && !wifiConnected) "Waiting for Wi-Fi connection..." else "Waiting in queue..."
                               val waitView = TextView(this).apply {
-                                  text = "Waiting in queue..."
+                                  text = waitMsg
                                   textSize = 11f
                                   setTextColor(android.graphics.Color.parseColor("#94A3B8"))
                                   val lp = LinearLayout.LayoutParams(
@@ -5699,6 +6149,7 @@ jobs:
 
 
 
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
@@ -5710,5 +6161,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-Stage6-Real-Pause-Resume-v27-APK
+          name: FlowRip-Stage7-Wifi-Only-Network-Aware-v28-APK
           path: app/build/outputs/apk/**/*.apk
