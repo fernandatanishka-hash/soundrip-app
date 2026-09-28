@@ -324,8 +324,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 26
-                  versionName "5.2.0"
+                  versionCode 27
+                  versionName "6.0.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -653,6 +653,7 @@ jobs:
           enum class QueueStatus {
               QUEUED,
               DOWNLOADING,
+              PAUSED,
               COMPLETED,
               FAILED,
               CANCELLED
@@ -761,10 +762,9 @@ jobs:
                           val array = JSONArray(jsonStr)
                           for (i in 0 until array.length()) {
                               val item = QueueItem.fromJson(array.getJSONObject(i))
-                              // If process was killed while downloading, restore as QUEUED
+                              // If process was killed while downloading, restore safely as PAUSED so user can resume
                               if (item.status == QueueStatus.DOWNLOADING) {
-                                  item.status = QueueStatus.QUEUED
-                                  item.progress = 0
+                                  item.status = QueueStatus.PAUSED
                                   item.speed = "--"
                                   item.eta = "--"
                               }
@@ -804,8 +804,18 @@ jobs:
               }
 
               @Synchronized
+              fun getPausedItem(context: Context): QueueItem? {
+                  loadQueue(context)
+                  return queueItems.find { it.status == QueueStatus.PAUSED }
+              }
+
+              @Synchronized
               fun getNextEligibleItem(context: Context): QueueItem? {
                   loadQueue(context)
+                  // If an item is currently PAUSED or DOWNLOADING, queue must NOT advance
+                  if (queueItems.any { it.status == QueueStatus.PAUSED || it.status == QueueStatus.DOWNLOADING }) {
+                      return null
+                  }
                   return queueItems.find { it.status == QueueStatus.QUEUED }
               }
 
@@ -816,7 +826,7 @@ jobs:
                   saveQueue(context)
                   notifyListeners()
 
-                  if (!DownloadService.isDownloading) {
+                  if (!DownloadService.isDownloading && !DownloadService.isPaused && !queueItems.any { it.status == QueueStatus.PAUSED }) {
                       startNext(context)
                       return true
                   }
@@ -826,7 +836,8 @@ jobs:
               @Synchronized
               fun startNext(context: Context) {
                   loadQueue(context)
-                  if (DownloadService.isDownloading) return
+                  if (DownloadService.isDownloading || DownloadService.isPaused) return
+                  if (queueItems.any { it.status == QueueStatus.PAUSED }) return
 
                   val nextItem = queueItems.find { it.status == QueueStatus.QUEUED } ?: return
                   nextItem.status = QueueStatus.DOWNLOADING
@@ -859,6 +870,58 @@ jobs:
                   item.sizeInfo = sizeInfo
                   item.eta = eta
                   notifyListeners()
+              }
+
+              @Synchronized
+              fun markPaused(context: Context, taskId: String, progress: Int, sizeInfo: String) {
+                  loadQueue(context)
+                  val item = queueItems.find { it.id == taskId }
+                  if (item != null) {
+                      item.status = QueueStatus.PAUSED
+                      item.progress = progress
+                      item.sizeInfo = sizeInfo
+                      item.speed = "--"
+                      item.eta = "--"
+                      saveQueue(context)
+                      notifyListeners()
+                  }
+              }
+
+              @Synchronized
+              fun resumeItem(context: Context, taskId: String): Boolean {
+                  loadQueue(context)
+                  val item = queueItems.find { it.id == taskId } ?: return false
+                  if (item.status != QueueStatus.PAUSED) return false
+                  if (DownloadService.isDownloading) return false
+
+                  val intent = Intent(context, DownloadService::class.java).apply {
+                      action = DownloadService.ACTION_RESUME
+                      putExtra(DownloadService.EXTRA_TASK_ID, item.id)
+                  }
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      context.startForegroundService(intent)
+                  } else {
+                      context.startService(intent)
+                  }
+                  return true
+              }
+
+              @Synchronized
+              fun pauseActiveItem(context: Context): Boolean {
+                  val intent = Intent(context, DownloadService::class.java).apply {
+                      action = DownloadService.ACTION_PAUSE
+                  }
+                  context.startService(intent)
+                  return true
+              }
+
+              @Synchronized
+              fun cancelItem(context: Context, taskId: String) {
+                  val intent = Intent(context, DownloadService::class.java).apply {
+                      action = DownloadService.ACTION_CANCEL
+                      putExtra(DownloadService.EXTRA_TASK_ID, taskId)
+                  }
+                  context.startService(intent)
               }
 
               @Synchronized
@@ -910,13 +973,15 @@ jobs:
                   if (index != -1) {
                       val item = queueItems[index]
                       val wasActive = (item.status == QueueStatus.DOWNLOADING)
+                      val wasPaused = (item.status == QueueStatus.PAUSED)
                       queueItems.removeAt(index)
                       saveQueue(context)
                       notifyListeners()
 
-                      if (wasActive) {
+                      if (wasActive || wasPaused) {
                           val cancelIntent = Intent(context, DownloadService::class.java).apply {
                               action = DownloadService.ACTION_CANCEL
+                              putExtra(DownloadService.EXTRA_TASK_ID, id)
                           }
                           context.startService(cancelIntent)
                       }
@@ -949,7 +1014,7 @@ jobs:
                       saveQueue(context)
                       notifyListeners()
 
-                      if (!DownloadService.isDownloading) {
+                      if (!DownloadService.isDownloading && !DownloadService.isPaused && !queueItems.any { it.status == QueueStatus.PAUSED }) {
                           startNext(context)
                       }
                       return freshItem
@@ -1001,6 +1066,8 @@ jobs:
                   const val NOTIFICATION_ID = 1001
 
                   const val ACTION_START = "com.soundrip.app.action.START_DOWNLOAD"
+                  const val ACTION_PAUSE = "com.soundrip.app.action.PAUSE_DOWNLOAD"
+                  const val ACTION_RESUME = "com.soundrip.app.action.RESUME_DOWNLOAD"
                   const val ACTION_CANCEL = "com.soundrip.app.action.CANCEL_DOWNLOAD"
 
                   const val EXTRA_TASK_ID = "EXTRA_TASK_ID"
@@ -1011,6 +1078,14 @@ jobs:
 
                   @Volatile
                   var isDownloading = false
+                      private set
+
+                  @Volatile
+                  var isPaused = false
+                      private set
+
+                  @Volatile
+                  var pausedTaskId: String? = null
                       private set
 
                   @Volatile
@@ -1080,6 +1155,8 @@ jobs:
                       val eta: String,
                       val stats: String
                   ) : DownloadEvent()
+                  data class Paused(val progress: Int, val sizeInfo: String) : DownloadEvent()
+                  object Resumed : DownloadEvent()
                   data class Completed(val file: File, val resolutionInfo: String) : DownloadEvent()
                   data class Error(val message: String) : DownloadEvent()
                   object Cancelled : DownloadEvent()
@@ -1123,21 +1200,115 @@ jobs:
                               startDownloadTask(taskId, url, title, isAudio, quality)
                           }
                       }
+                      ACTION_PAUSE -> {
+                          pauseDownloadTask()
+                      }
+                      ACTION_RESUME -> {
+                          val specificTaskId = intent.getStringExtra(EXTRA_TASK_ID)
+                          resumeDownloadTask(specificTaskId)
+                      }
                       ACTION_CANCEL -> {
-                          cancelDownloadTask()
+                          val specificTaskId = intent.getStringExtra(EXTRA_TASK_ID)
+                          cancelDownloadTask(specificTaskId)
                       }
                   }
                   return START_NOT_STICKY
               }
 
-              private fun startDownloadTask(taskId: String, url: String, title: String, isAudio: Boolean, quality: String) {
-                  isDownloading = true
-                  currentProgress = 0
+              private fun pauseDownloadTask() {
+                  val taskId = activeTaskId
+                  if (taskId == null || !isDownloading) {
+                      Log.w(TAG, "pauseDownloadTask called but no active task downloading")
+                      return
+                  }
+
+                  Log.d(TAG, "Real Pause: Stopping yt-dlp task $taskId ($currentTitle), preserving partial files.")
+                  isPaused = true
+                  pausedTaskId = taskId
+                  isDownloading = false
+
+                  val savedProgress = currentProgress
+                  val savedSizeInfo = currentSizeInfo
+                  val savedTitle = currentTitle
                   currentSpeed = "--"
-                  currentSizeInfo = "--"
+                  currentEta = "--"
+                  currentStatus = "Download paused"
+
+                  // Mark PAUSED in QueueManager with preserved progress
+                  QueueManager.markPaused(applicationContext, taskId, savedProgress, savedSizeInfo)
+
+                  // Terminate the active yt-dlp process asynchronously
+                  thread(name = "FlowRipPauseThread") {
+                      try {
+                          YoutubeDL.getInstance().destroyProcessById(taskId)
+                      } catch (e: Exception) {
+                          Log.w(TAG, "Error destroying process for pause: ${e.message}")
+                      }
+                  }
+
+                  // Update notification with Resume and Cancel actions
+                  updateNotification(savedTitle, savedProgress, "--", savedSizeInfo, "--", "Download paused", isPausedState = true)
+                  postEvent(DownloadEvent.Paused(savedProgress, savedSizeInfo))
+              }
+
+              private fun resumeDownloadTask(specificTaskId: String? = null) {
+                  val targetId = specificTaskId ?: pausedTaskId ?: QueueManager.getPausedItem(applicationContext)?.id
+                  if (targetId == null) {
+                      Log.w(TAG, "resumeDownloadTask called but no paused task found")
+                      return
+                  }
+
+                  val item = QueueManager.getItem(applicationContext, targetId)
+                  if (item == null || item.status != QueueStatus.PAUSED) {
+                      Log.w(TAG, "resumeDownloadTask: target item is not in PAUSED status")
+                      return
+                  }
+
+                  if (isDownloading) {
+                      Log.w(TAG, "Cannot resume while another download is running")
+                      return
+                  }
+
+                  Log.d(TAG, "Real Resume: Resuming yt-dlp task $targetId (${item.title}) at ${item.progress}%")
+                  isPaused = false
+                  pausedTaskId = null
+
+                  item.status = QueueStatus.DOWNLOADING
+                  QueueManager.saveQueue(applicationContext)
+                  QueueManager.notifyListeners()
+
+                  postEvent(DownloadEvent.Resumed)
+                  startDownloadTask(
+                      taskId = item.id,
+                      url = item.url,
+                      title = item.title,
+                      isAudio = item.isAudio,
+                      quality = item.quality,
+                      initialProgress = item.progress,
+                      initialSizeInfo = item.sizeInfo
+                  )
+              }
+
+              private fun startDownloadTask(
+                  taskId: String,
+                  url: String,
+                  title: String,
+                  isAudio: Boolean,
+                  quality: String,
+                  initialProgress: Int = 0,
+                  initialSizeInfo: String = "--"
+              ) {
+                  isDownloading = true
+                  isPaused = false
+                  pausedTaskId = null
+
+                  currentProgress = initialProgress
+                  currentSpeed = "--"
+                  currentSizeInfo = initialSizeInfo
                   currentEta = "--"
                   currentTitle = title
                   currentFormat = if (isAudio) "MP3 • $quality" else "MP4 • $quality"
+                  currentStatus = if (initialProgress > 0) "Resuming download... ($initialProgress%)" else "Connecting to stream..."
                   lastError = null
 
                   lastFailedUrl = url
@@ -1166,7 +1337,7 @@ jobs:
                       return
                   }
 
-                  val initialNotification = buildNotification(title, 0, "--", "--", "--", "Connecting to stream...")
+                  val initialNotification = buildNotification(title, initialProgress, "--", initialSizeInfo, "--", currentStatus, isPausedState = false)
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                       ServiceCompat.startForeground(
                           this,
@@ -1200,13 +1371,14 @@ jobs:
                           val request = YoutubeDLRequest(url)
                           request.addOption("--no-check-certificates")
                           request.addOption("--no-update")
+                          // Enable continuation: resume partial downloads without restarting from zero
+                          request.addOption("-c")
 
                           if (isAudio) {
                               val bitrate = quality.split(" ")[0].filter { it.isDigit() }.ifEmpty { "320" }
                               request.addOption("-x")
                               request.addOption("--audio-format", "mp3")
                               request.addOption("--audio-quality", bitrate)
-                              // Stage 2: Embed full ID3 metadata, artist, title, and album artwork via FFmpeg
                               request.addOption("--add-metadata")
                               request.addOption("--embed-thumbnail")
                               request.addOption("--convert-thumbnails", "jpg")
@@ -1253,21 +1425,21 @@ jobs:
                           }
                           request.addOption("-o", "${targetDir.absolutePath}/%(title)s.%(ext)s")
 
-                          var lastPercent = 0
+                          var lastPercent = initialProgress
                           var lastSpeed = "--"
-                          var lastSizeInfo = "--"
+                          var lastSizeInfo = initialSizeInfo
                           var lastEta = "--"
 
-                          var streamIndex = 1
+                          var streamIndex = if (!isAudio && initialProgress >= 85) 2 else 1
                           var stream1TotalBytes = 0L
                           var isProcessingPhase = false
 
                           YoutubeDL.getInstance().execute(request, taskId) { progress, etaInSeconds, line ->
                               val rawLine = line
 
-                              // Check for stream transitions (stream 1 video -> stream 2 audio)
-                              if (rawLine.contains("[download] Destination:")) {
-                                  if (lastPercent > 10 || stream1TotalBytes > 0L) {
+                              // Check for stream transitions (stream 1 video -> stream 2 audio) or pre-downloaded video
+                              if (rawLine.contains("[download] Destination:") || rawLine.contains("has already been downloaded")) {
+                                  if (lastPercent > 10 || stream1TotalBytes > 0L || initialProgress >= 85) {
                                       streamIndex = 2
                                   }
                               }
@@ -1293,16 +1465,12 @@ jobs:
                               // Calculate overall download percentage:
                               var calculatedOverall = lastPercent
                               if (isProcessingPhase) {
-                                  // In FFmpeg processing phase, download is 100% finished.
-                                  // Keep highest reached progress (at least 99% or 100%) and never decrease.
                                   calculatedOverall = maxOf(lastPercent, if (isAudio) 100 else 99)
                               } else if (streamRawPct > 0f) {
                                   val rawVal = streamRawPct.coerceIn(0f, 100f)
                                   if (isAudio) {
-                                      // MP3 has only 1 download stream (the audio stream)
                                       calculatedOverall = rawVal.toInt().coerceIn(1, 100)
                                   } else {
-                                      // MP4 with DASH: Stream 1 (video) represents ~85%, Stream 2 (audio) represents ~14%
                                       if (streamIndex <= 1) {
                                           calculatedOverall = (rawVal * 0.85f).toInt().coerceIn(1, 85)
                                       } else {
@@ -1417,10 +1585,10 @@ jobs:
                                   else ->
                                       "Connecting to stream..."
                               }
-                                                  currentStatus = statusText
+                              currentStatus = statusText
 
                               postEvent(DownloadEvent.Progress(monotonicPercent, lastSpeed, lastSizeInfo, lastEta, statusText))
-                              updateNotification(currentTitle, monotonicPercent, lastSpeed, lastSizeInfo, lastEta, statusText)
+                              updateNotification(currentTitle, monotonicPercent, lastSpeed, lastSizeInfo, lastEta, statusText, isPausedState = false)
                           }
 
                           val downloadedFiles = targetDir.listFiles()?.toList() ?: emptyList()
@@ -1506,12 +1674,22 @@ jobs:
                           }
 
                       } catch (e: Exception) {
-                          val wasCancelled = (activeTaskId == null)
-                          val failedTaskId = activeTaskId
+                          val wasPaused = isPaused || (pausedTaskId != null && pausedTaskId == taskId)
+                          val wasCancelled = (activeTaskId == null && !wasPaused)
+                          val failedTaskId = activeTaskId ?: pausedTaskId
                           activeTaskId = null
                           currentSpeed = "--"
                           currentSizeInfo = "--"
                           currentEta = "--"
+
+                          if (wasPaused) {
+                              Log.d(TAG, "Real Pause: Download thread stopped for task $taskId. Partial files strictly preserved.")
+                              isDownloading = false
+                              // Update foreground notification to show Paused with Resume & Cancel options
+                              updateNotification(currentTitle, currentProgress, "--", currentSizeInfo, "--", "Download paused", isPausedState = true)
+                              postEvent(DownloadEvent.Paused(currentProgress, currentSizeInfo))
+                              return@thread
+                          }
 
                           if (wasCancelled) {
                               cleanupPartialFiles(targetDir)
@@ -1532,7 +1710,7 @@ jobs:
                               showFailureNotification(title, userFriendlyMsg)
                           }
 
-                          // Sequential Queue: Move to next item after error or cancellation
+                          // Sequential Queue: Move to next item ONLY after error or cancellation (never after pause)
                           val nextItem = QueueManager.getNextEligibleItem(applicationContext)
                           if (nextItem != null) {
                               Log.d(TAG, "Sequential Queue: Moving to next item after error/cancellation: ${nextItem.title} (${nextItem.id})")
@@ -1548,9 +1726,14 @@ jobs:
                   }
               }
 
-              private fun cancelDownloadTask() {
-                  val taskId = activeTaskId
+              private fun cancelDownloadTask(specificTaskId: String? = null) {
+                  val taskIdToCancel = specificTaskId ?: activeTaskId ?: pausedTaskId ?: QueueManager.getPausedItem(applicationContext)?.id
+                  val wasActive = (activeTaskId != null && activeTaskId == taskIdToCancel)
+
+                  Log.d(TAG, "Real Cancel: Cancelling task $taskIdToCancel, deleting temporary files and advancing queue.")
                   activeTaskId = null
+                  pausedTaskId = null
+                  isPaused = false
                   isDownloading = false
                   currentProgress = 0
                   currentSpeed = "--"
@@ -1559,13 +1742,15 @@ jobs:
                   currentStatus = "Cancelled"
                   lastError = null
 
-                  if (taskId != null) {
-                      QueueManager.markCancelled(applicationContext, taskId)
-                      thread {
-                          try {
-                              YoutubeDL.getInstance().destroyProcessById(taskId)
-                          } catch (e: Exception) {
-                              Log.w(TAG, "Error destroying task $taskId: ${e.message}")
+                  if (taskIdToCancel != null) {
+                      QueueManager.markCancelled(applicationContext, taskIdToCancel)
+                      if (wasActive) {
+                          thread {
+                              try {
+                                  YoutubeDL.getInstance().destroyProcessById(taskIdToCancel)
+                              } catch (e: Exception) {
+                                  Log.w(TAG, "Error destroying task $taskIdToCancel: ${e.message}")
+                              }
                           }
                       }
                   }
@@ -1575,8 +1760,7 @@ jobs:
 
                   notificationManager?.cancel(NOTIFICATION_ID)
                   postEvent(DownloadEvent.Cancelled)
-                  // The background download thread will catch the destroyed process and advance to the next queued item,
-                  // or if no download thread was active, check directly:
+
                   val nextItem = QueueManager.getNextEligibleItem(applicationContext)
                   if (nextItem != null) {
                       Log.d(TAG, "Sequential Queue: Cancelled active, advancing to next: ${nextItem.title}")
@@ -1610,7 +1794,8 @@ jobs:
                   speed: String,
                   sizeInfo: String,
                   eta: String,
-                  statusText: String
+                  statusText: String,
+                  isPausedState: Boolean = false
               ): Notification {
                   val openAppIntent = Intent(this, MainActivity::class.java).apply {
                       flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -1632,36 +1817,61 @@ jobs:
                       PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
                   )
 
-                  val contentSubText = buildString {
-                      if (speed != "--") append(speed)
-                      if (sizeInfo != "--") {
-                          if (isNotEmpty()) append(" • ")
-                          append(sizeInfo)
-                      }
-                      if (eta != "--") {
-                          if (isNotEmpty()) append(" • ")
-                          append(eta)
-                      }
+                  val pauseResumeIntent = Intent(this, DownloadService::class.java).apply {
+                      action = if (isPausedState) ACTION_RESUME else ACTION_PAUSE
                   }
-
-                  val contentLine = if (contentSubText.isNotEmpty()) {
-                      "$percent% • $contentSubText"
+                  val pauseResumePendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && isPausedState) {
+                      PendingIntent.getForegroundService(
+                          this,
+                          2,
+                          pauseResumeIntent,
+                          PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+                      )
                   } else {
-                      statusText
+                      PendingIntent.getService(
+                          this,
+                          2,
+                          pauseResumeIntent,
+                          PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+                      )
                   }
 
-                  val isIndeterminate = percent <= 0
+                  val contentLine = if (isPausedState) {
+                      if (sizeInfo != "--") "Paused ($percent%) • $sizeInfo" else "Paused ($percent%)"
+                  } else {
+                      val contentSubText = buildString {
+                          if (speed != "--") append(speed)
+                          if (sizeInfo != "--") {
+                              if (isNotEmpty()) append(" • ")
+                              append(sizeInfo)
+                          }
+                          if (eta != "--") {
+                              if (isNotEmpty()) append(" • ")
+                              append(eta)
+                          }
+                      }
+                      if (contentSubText.isNotEmpty()) "$percent% • $contentSubText" else statusText
+                  }
 
-                  return NotificationCompat.Builder(this, CHANNEL_ID)
+                  val isIndeterminate = percent <= 0 && !isPausedState
+
+                  val builder = NotificationCompat.Builder(this, CHANNEL_ID)
                       .setContentTitle(title)
                       .setContentText(contentLine)
                       .setSmallIcon(R.drawable.ic_launcher_emblem)
                       .setContentIntent(openAppPendingIntent)
-                      .setOngoing(true)
+                      .setOngoing(!isPausedState)
                       .setOnlyAlertOnce(true)
                       .setProgress(100, percent.coerceIn(0, 100), isIndeterminate)
-                      .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", cancelPendingIntent)
-                      .build()
+
+                  if (isPausedState) {
+                      builder.addAction(android.R.drawable.ic_media_play, "Resume", pauseResumePendingIntent)
+                  } else {
+                      builder.addAction(android.R.drawable.ic_media_pause, "Pause", pauseResumePendingIntent)
+                  }
+                  builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", cancelPendingIntent)
+
+                  return builder.build()
               }
 
               private fun updateNotification(
@@ -1670,9 +1880,10 @@ jobs:
                   speed: String,
                   sizeInfo: String,
                   eta: String,
-                  statusText: String
+                  statusText: String,
+                  isPausedState: Boolean = false
               ) {
-                  val notification = buildNotification(title, percent, speed, sizeInfo, eta, statusText)
+                  val notification = buildNotification(title, percent, speed, sizeInfo, eta, statusText, isPausedState)
                   notificationManager?.notify(NOTIFICATION_ID, notification)
               }
 
@@ -1779,7 +1990,9 @@ jobs:
 
               override fun onDestroy() {
                   isDownloading = false
+                  isPaused = false
                   activeTaskId = null
+                  pausedTaskId = null
                   currentSpeed = "--"
                   currentSizeInfo = "--"
                   currentEta = "--"
@@ -2691,16 +2904,35 @@ jobs:
                                   </LinearLayout>
 
 
-                                  <Button
-                                      android:id="@+id/btnCancel"
+                                  <LinearLayout
                                       android:layout_width="wrap_content"
-                                      android:layout_height="38dp"
-                                      android:layout_marginTop="16dp"
-                                      android:text="✕ Cancel"
-                                      android:textColor="#EF4444"
-                                      android:textSize="12sp"
-                                      android:backgroundTint="#FEE2E2"
-                                      app:cornerRadius="19dp" />
+                                      android:layout_height="wrap_content"
+                                      android:orientation="horizontal"
+                                      android:gravity="center"
+                                      android:layout_marginTop="16dp">
+
+                                      <Button
+                                          android:id="@+id/btnPauseResume"
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="38dp"
+                                          android:text="⏸ Pause"
+                                          android:textColor="#4F46E5"
+                                          android:textSize="12sp"
+                                          android:textStyle="bold"
+                                          android:backgroundTint="#EEF2FF"
+                                          android:layout_marginEnd="12dp"
+                                          app:cornerRadius="19dp" />
+
+                                      <Button
+                                          android:id="@+id/btnCancel"
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="38dp"
+                                          android:text="✕ Cancel"
+                                          android:textColor="#EF4444"
+                                          android:textSize="12sp"
+                                          android:backgroundTint="#FEE2E2"
+                                          app:cornerRadius="19dp" />
+                                  </LinearLayout>
                               </LinearLayout>
                           </androidx.cardview.widget.CardView>
 
@@ -3635,6 +3867,7 @@ jobs:
               private lateinit var txtDownloadSize: TextView
               private lateinit var txtDownloadEta: TextView
               private lateinit var txtDownloadStats: TextView
+              private lateinit var btnPauseResume: Button
               private lateinit var btnCancel: Button
 
               private lateinit var completedFileName: TextView
@@ -3730,6 +3963,7 @@ jobs:
                   txtDownloadSize = findViewById(R.id.txtDownloadSize)
                   txtDownloadEta = findViewById(R.id.txtDownloadEta)
                   txtDownloadStats = findViewById(R.id.txtDownloadStats)
+                  btnPauseResume = findViewById(R.id.btnPauseResume)
                   btnCancel = findViewById(R.id.btnCancel)
 
                   completedFileName = findViewById(R.id.completedFileName)
@@ -3994,6 +4228,17 @@ jobs:
 
                   btnSaveFile.setOnClickListener {
                       lastDownloadedFile?.let { shareFile(it) } ?: Toast.makeText(this, "File is saved in /Downloads/FlowRip", Toast.LENGTH_LONG).show()
+                  }
+
+                  btnPauseResume.setOnClickListener {
+                      if (DownloadService.isDownloading) {
+                          QueueManager.pauseActiveItem(this)
+                      } else {
+                          val paused = QueueManager.getPausedItem(this)
+                          if (paused != null) {
+                              QueueManager.resumeItem(this, paused.id)
+                          }
+                      }
                   }
 
                   btnCancel.setOnClickListener {
@@ -4317,6 +4562,7 @@ jobs:
                   updateLocationUI()
                   if (DownloadService.isDownloading) {
                       showDownloaderState(2)
+                      updatePauseResumeButton(isPaused = false)
                       downloadingTitle.text = DownloadService.currentTitle
                       downloadingFormat.text = DownloadService.currentFormat
                       val p = maxOf(circularProgressBar.progress, DownloadService.currentProgress)
@@ -4327,6 +4573,19 @@ jobs:
                       txtDownloadSize.text = DownloadService.currentSizeInfo
                       txtDownloadEta.text = DownloadService.currentEta
                       txtDownloadStats.text = DownloadService.currentStatus
+                  } else if (QueueManager.getPausedItem(this) != null) {
+                      val paused = QueueManager.getPausedItem(this)!!
+                      showDownloaderState(2)
+                      updatePauseResumeButton(isPaused = true)
+                      downloadingTitle.text = paused.title
+                      downloadingFormat.text = "${paused.format} • ${paused.quality}"
+                      circularProgressBar.progress = paused.progress
+                      txtCircularPercent.text = "${paused.progress}%"
+                      linearProgressBar.progress = paused.progress
+                      txtDownloadSpeed.text = "--"
+                      txtDownloadEta.text = "--"
+                      txtDownloadSize.text = paused.sizeInfo
+                      txtDownloadStats.text = "Download paused"
                   } else if (DownloadService.lastError != null) {
                       showErrorState(DownloadService.lastError ?: "Download failed.")
                   }
@@ -4386,6 +4645,23 @@ jobs:
                       }
                   }
                   return null
+              }
+
+              private fun updatePauseResumeButton(isPaused: Boolean) {
+                  if (!::btnPauseResume.isInitialized) return
+                  if (isPaused) {
+                      btnPauseResume.text = "▶ Resume"
+                      btnPauseResume.setTextColor(android.graphics.Color.parseColor("#16A34A"))
+                      btnPauseResume.backgroundTintList = android.content.res.ColorStateList.valueOf(
+                          android.graphics.Color.parseColor("#DCFCE7")
+                      )
+                  } else {
+                      btnPauseResume.text = "⏸ Pause"
+                      btnPauseResume.setTextColor(android.graphics.Color.parseColor("#4F46E5"))
+                      btnPauseResume.backgroundTintList = android.content.res.ColorStateList.valueOf(
+                          android.graphics.Color.parseColor("#EEF2FF")
+                      )
+                  }
               }
 
               private fun updateVideoSummarySubtitle(qualities: List<String>) {
@@ -4863,6 +5139,7 @@ jobs:
                           when (event) {
                               is DownloadService.DownloadEvent.Progress -> {
                                   showDownloaderState(2)
+                                  updatePauseResumeButton(isPaused = false)
                                   downloadingTitle.text = DownloadService.currentTitle
                                   downloadingFormat.text = DownloadService.currentFormat
                                   val p = maxOf(circularProgressBar.progress, event.progress)
@@ -4875,8 +5152,29 @@ jobs:
                                   txtDownloadStats.text = event.stats
                                   refreshQueueUI()
                               }
+                              is DownloadService.DownloadEvent.Paused -> {
+                                  showDownloaderState(2)
+                                  updatePauseResumeButton(isPaused = true)
+                                  downloadingTitle.text = DownloadService.currentTitle
+                                  downloadingFormat.text = DownloadService.currentFormat
+                                  circularProgressBar.progress = event.progress
+                                  txtCircularPercent.text = "${event.progress}%"
+                                  linearProgressBar.progress = event.progress
+                                  txtDownloadSpeed.text = "--"
+                                  txtDownloadEta.text = "--"
+                                  txtDownloadSize.text = event.sizeInfo
+                                  txtDownloadStats.text = "Download paused"
+                                  refreshQueueUI()
+                              }
+                              is DownloadService.DownloadEvent.Resumed -> {
+                                  showDownloaderState(2)
+                                  updatePauseResumeButton(isPaused = false)
+                                  txtDownloadStats.text = "Resuming download..."
+                                  refreshQueueUI()
+                              }
                               is DownloadService.DownloadEvent.Completed -> {
                                   lastDownloadedFile = event.file
+                                  updatePauseResumeButton(isPaused = false)
                                   completedFileName.text = event.file.name + event.resolutionInfo
                                   refreshHistory()
                                   refreshQueueUI()
@@ -4905,6 +5203,7 @@ jobs:
                                   Toast.makeText(this@MainActivity, "Download Complete!${event.resolutionInfo}", Toast.LENGTH_LONG).show()
                               }
                               is DownloadService.DownloadEvent.Error -> {
+                                  updatePauseResumeButton(isPaused = false)
                                   txtDownloadSpeed.text = "--"
                                   txtDownloadSize.text = "--"
                                   txtDownloadEta.text = "--"
@@ -4924,6 +5223,7 @@ jobs:
                                   }
                               }
                               is DownloadService.DownloadEvent.Cancelled -> {
+                                  updatePauseResumeButton(isPaused = false)
                                   circularProgressBar.progress = 0
                                   linearProgressBar.progress = 0
                                   txtCircularPercent.text = "0%"
@@ -5069,6 +5369,10 @@ jobs:
                                   text = "⚡ Active (${item.progress}%)"
                                   setTextColor(android.graphics.Color.parseColor("#4F46E5"))
                               }
+                              QueueStatus.PAUSED -> {
+                                  text = "⏸ Paused (${item.progress}%)"
+                                  setTextColor(android.graphics.Color.parseColor("#F59E0B"))
+                              }
                               QueueStatus.QUEUED -> {
                                   text = "⏳ Waiting"
                                   setTextColor(android.graphics.Color.parseColor("#64748B"))
@@ -5091,6 +5395,17 @@ jobs:
 
                       when (item.status) {
                           QueueStatus.DOWNLOADING -> {
+                              val pauseBtn = TextView(this).apply {
+                                  text = "Pause"
+                                  setTextColor(android.graphics.Color.parseColor("#4F46E5"))
+                                  textSize = 11f
+                                  typeface = android.graphics.Typeface.DEFAULT_BOLD
+                                  setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
+                                  setOnClickListener {
+                                      QueueManager.pauseActiveItem(this@MainActivity)
+                                      refreshQueueUI()
+                                  }
+                              }
                               val cancelBtn = TextView(this).apply {
                                   text = "Cancel"
                                   setTextColor(android.graphics.Color.parseColor("#EF4444"))
@@ -5104,6 +5419,32 @@ jobs:
                                       startService(cancelIntent)
                                   }
                               }
+                              topRow.addView(pauseBtn)
+                              topRow.addView(cancelBtn)
+                          }
+                          QueueStatus.PAUSED -> {
+                              val resumeBtn = TextView(this).apply {
+                                  text = "Resume"
+                                  setTextColor(android.graphics.Color.parseColor("#16A34A"))
+                                  textSize = 11f
+                                  typeface = android.graphics.Typeface.DEFAULT_BOLD
+                                  setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
+                                  setOnClickListener {
+                                      QueueManager.resumeItem(this@MainActivity, item.id)
+                                      refreshQueueUI()
+                                  }
+                              }
+                              val cancelBtn = TextView(this).apply {
+                                  text = "Cancel"
+                                  setTextColor(android.graphics.Color.parseColor("#EF4444"))
+                                  textSize = 11f
+                                  setPadding(dpToPx(6), dpToPx(4), dpToPx(6), dpToPx(4))
+                                  setOnClickListener {
+                                      QueueManager.cancelItem(this@MainActivity, item.id)
+                                      refreshQueueUI()
+                                  }
+                              }
+                              topRow.addView(resumeBtn)
                               topRow.addView(cancelBtn)
                           }
                           QueueStatus.QUEUED -> {
@@ -5198,6 +5539,38 @@ jobs:
                               }
                               val metricsView = TextView(this).apply {
                                   text = "${item.progress}% • ${item.speed} • ETA ${item.eta} • ${item.sizeInfo}"
+                                  textSize = 11f
+                                  setTextColor(android.graphics.Color.parseColor("#64748B"))
+                                  val lp = LinearLayout.LayoutParams(
+                                      LinearLayout.LayoutParams.MATCH_PARENT,
+                                      LinearLayout.LayoutParams.WRAP_CONTENT
+                                  )
+                                  lp.topMargin = dpToPx(4)
+                                  layoutParams = lp
+                              }
+                              cardInner.addView(miniProgress)
+                              cardInner.addView(metricsView)
+                          }
+                          QueueStatus.PAUSED -> {
+                              val miniProgress = ProgressBar(
+                                  this,
+                                  null,
+                                  android.R.attr.progressBarStyleHorizontal
+                              ).apply {
+                                  val lp = LinearLayout.LayoutParams(
+                                      LinearLayout.LayoutParams.MATCH_PARENT,
+                                      dpToPx(4)
+                                  )
+                                  lp.topMargin = dpToPx(8)
+                                  layoutParams = lp
+                                  max = 100
+                                  progress = item.progress
+                                  progressTintList = android.content.res.ColorStateList.valueOf(
+                                      android.graphics.Color.parseColor("#F59E0B")
+                                  )
+                              }
+                              val metricsView = TextView(this).apply {
+                                  text = "${item.progress}% • Paused • ${item.sizeInfo}"
                                   textSize = 11f
                                   setTextColor(android.graphics.Color.parseColor("#64748B"))
                                   val lp = LinearLayout.LayoutParams(
@@ -5325,6 +5698,7 @@ jobs:
           EOF
 
 
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
@@ -5336,5 +5710,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-Stage5-UI-Compatibility-Fix-v26-APK
+          name: FlowRip-Stage6-Real-Pause-Resume-v27-APK
           path: app/build/outputs/apk/**/*.apk
