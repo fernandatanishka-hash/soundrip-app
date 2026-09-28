@@ -101,7 +101,6 @@ jobs:
           </vector>
           EOF
 
-          # Custom Launcher Icon
           cat << 'EOF' > app/src/main/res/drawable/ic_launcher_background.xml
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -151,7 +150,6 @@ jobs:
           </adaptive-icon>
           EOF
 
-          # 2. Modern Drawables
           cat << 'EOF' > app/src/main/res/drawable/bg_badge.xml
           <?xml version="1.0" encoding="utf-8"?>
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
@@ -187,6 +185,42 @@ jobs:
           </shape>
           EOF
 
+          cat << 'EOF' > app/src/main/res/drawable/bg_spinner_popup.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"
+              android:shape="rectangle">
+              <solid android:color="#FFFFFF" />
+              <corners android:radius="14dp" />
+              <stroke android:width="1dp" android:color="#E2E8F0" />
+          </shape>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/drawable/bg_spinner_item_selector.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <selector xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:state_pressed="true">
+                  <shape android:shape="rectangle">
+                      <solid android:color="#EEF2FF" />
+                  </shape>
+              </item>
+              <item android:state_activated="true">
+                  <shape android:shape="rectangle">
+                      <solid android:color="#EEF2FF" />
+                  </shape>
+              </item>
+              <item android:state_selected="true">
+                  <shape android:shape="rectangle">
+                      <solid android:color="#EEF2FF" />
+                  </shape>
+              </item>
+              <item>
+                  <shape android:shape="rectangle">
+                      <solid android:color="#FFFFFF" />
+                  </shape>
+              </item>
+          </selector>
+          EOF
+
           cat << 'EOF' > app/src/main/res/drawable/circular_progress_drawable.xml
           <?xml version="1.0" encoding="utf-8"?>
           <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
@@ -212,7 +246,6 @@ jobs:
           </paths>
           EOF
 
-          # 3. Colors & Modern Light Theme (Clean Light Status Bar)
           cat << 'EOF' > app/src/main/res/values/colors.xml
           <resources>
               <color name="flowrip_bg">#F8FAFC</color>
@@ -234,17 +267,22 @@ jobs:
                   <item name="android:navigationBarColor">#FFFFFF</item>
                   <item name="android:windowLightNavigationBar">true</item>
               </style>
+
+              <style name="Theme.FlowRip.SpinnerPopup" parent="ThemeOverlay.AppCompat.Light">
+                  <item name="android:colorBackground">#FFFFFF</item>
+                  <item name="colorSurface">#FFFFFF</item>
+                  <item name="android:textColor">#0F172A</item>
+                  <item name="android:textColorPrimary">#0F172A</item>
+              </style>
           </resources>
           EOF
 
-          # 4. gradle.properties
           cat << 'EOF' > gradle.properties
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           android.useAndroidX=true
           android.enableJetifier=true
           EOF
 
-          # 5. settings.gradle
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -265,7 +303,6 @@ jobs:
           include ':app'
           EOF
 
-          # 6. root build.gradle
           cat << 'EOF' > build.gradle
           plugins {
               id 'com.android.application' version '8.4.1' apply false
@@ -273,7 +310,6 @@ jobs:
           }
           EOF
 
-          # 7. app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -288,8 +324,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 25
-                  versionName "5.1.0"
+                  versionCode 26
+                  versionName "5.2.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -330,8 +366,7 @@ jobs:
           }
           EOF
 
-          # 8b. DownloadService.kt (Foreground Download Service with Real Cancellation)
-                              cat << 'EOF' > app/src/main/java/com/soundrip/app/StorageHelper.kt
+          cat << 'EOF' > app/src/main/java/com/soundrip/app/StorageHelper.kt
           package com.soundrip.app
 
           import android.content.Context
@@ -1753,7 +1788,6 @@ jobs:
           }
           EOF
 
-          # 8. FlowRipApp.kt (Early Core Engine & FFmpeg Initialization)
           cat << 'EOF' > app/src/main/java/com/soundrip/app/FlowRipApp.kt
           package com.soundrip.app
 
@@ -1776,14 +1810,12 @@ jobs:
           }
           EOF
 
-          # 8. strings.xml
           cat << 'EOF' > app/src/main/res/values/strings.xml
           <resources>
               <string name="app_name">FlowRip</string>
           </resources>
           EOF
 
-          # 9. AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -1847,13 +1879,16 @@ jobs:
           </manifest>
           EOF
 
-          # 10. Spinner layouts
           cat << 'EOF' > app/src/main/res/layout/item_spinner_selected.xml
           <?xml version="1.0" encoding="utf-8"?>
           <TextView xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
-              android:layout_height="wrap_content"
-              android:padding="8dp"
+              android:layout_height="match_parent"
+              android:gravity="center_vertical"
+              android:paddingStart="14dp"
+              android:paddingEnd="14dp"
+              android:singleLine="true"
+              android:ellipsize="end"
               android:textColor="#0F172A"
               android:textSize="13sp"
               android:textStyle="bold" />
@@ -1863,14 +1898,20 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <TextView xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
-              android:layout_height="wrap_content"
-              android:padding="12dp"
+              android:layout_height="48dp"
+              android:background="@drawable/bg_spinner_item_selector"
+              android:gravity="center_vertical"
+              android:paddingStart="18dp"
+              android:paddingEnd="18dp"
+              android:paddingTop="12dp"
+              android:paddingBottom="12dp"
+              android:singleLine="true"
+              android:ellipsize="end"
               android:textColor="#0F172A"
-              android:textSize="13sp"
+              android:textSize="14sp"
               android:textStyle="bold" />
           EOF
 
-          # 11. Complete activity_main.xml (With Samsung / All-Android Navigation Protection)
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -2339,6 +2380,7 @@ jobs:
                                           <TextView
                                               android:layout_width="wrap_content"
                                               android:layout_height="wrap_content"
+                                              android:id="@+id/txtMp4Subtitle"
                                               android:text="Up to 1080p Full HD"
                                               android:textColor="#64748B"
                                               android:textSize="11sp"
@@ -2388,12 +2430,1071 @@ jobs:
                                           android:textStyle="bold" />
                                   </LinearLayout>
 
-                                  <Spinner
+                                  <androidx.appcompat.widget.AppCompatSpinner
                                       android:id="@+id/qualitySpinner"
                                       android:layout_width="match_parent"
                                       android:layout_height="44dp"
                                       android:layout_marginTop="6dp"
-                                      android:background="@drawable/bg_card_unselected" />
+                                      android:background="@drawable/bg_card_unselected"
+                                      android:spinnerMode="dropdown"
+                                      android:popupBackground="@drawable/bg_spinner_popup"
+                                      app:popupTheme="@style/Theme.FlowRip.SpinnerPopup" />
+
+                                  <!-- Start Download Action Button -->
+                                  <Button
+                                      android:id="@+id/btnStartDownload"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="54dp"
+                                      android:layout_marginTop="18dp"
+                                      android:text="⬇ START DOWNLOAD"
+                                      android:textColor="#FFFFFF"
+                                      android:textSize="14sp"
+                                      android:textStyle="bold"
+                                      android:backgroundTint="#4F46E5"
+                                      app:cornerRadius="27dp" />
+                              </LinearLayout>
+                          </androidx.cardview.widget.CardView>
+
+                          <!-- DOWNLOADING PROGRESS CARD -->
+                          <androidx.cardview.widget.CardView
+                              android:id="@+id/viewDownloadingCard"
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:layout_marginTop="20dp"
+                              android:visibility="gone"
+                              app:cardCornerRadius="20dp"
+                              app:cardElevation="4dp"
+                              app:cardBackgroundColor="#FFFFFF">
+
+                              <LinearLayout
+                                  android:layout_width="match_parent"
+                                  android:layout_height="wrap_content"
+                                  android:orientation="vertical"
+                                  android:gravity="center_horizontal"
+                                  android:padding="24dp">
+
+                                  <!-- Track Info Row -->
+                                  <LinearLayout
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:orientation="horizontal"
+                                      android:gravity="center_vertical">
+
+                                      <androidx.cardview.widget.CardView
+                                          android:layout_width="56dp"
+                                          android:layout_height="56dp"
+                                          app:cardCornerRadius="12dp"
+                                          app:cardElevation="0dp">
+
+                                          <ImageView
+                                              android:id="@+id/downloadingThumb"
+                                              android:layout_width="match_parent"
+                                              android:layout_height="match_parent"
+                                              android:scaleType="centerCrop"
+                                              android:src="@drawable/ic_play_gradient" />
+                                      </androidx.cardview.widget.CardView>
+
+                                      <LinearLayout
+                                          android:layout_width="0dp"
+                                          android:layout_height="wrap_content"
+                                          android:layout_weight="1"
+                                          android:orientation="vertical"
+                                          android:layout_marginStart="14dp">
+
+                                          <TextView
+                                              android:id="@+id/downloadingTitle"
+                                              android:layout_width="match_parent"
+                                              android:layout_height="wrap_content"
+                                              android:text="Downloading media..."
+                                              android:textColor="#0F172A"
+                                              android:textSize="14sp"
+                                              android:textStyle="bold"
+                                              android:maxLines="1"
+                                              android:ellipsize="end" />
+
+                                          <TextView
+                                              android:id="@+id/downloadingFormat"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="MP3 • 320 kbps"
+                                              android:textColor="#4F46E5"
+                                              android:textSize="11sp"
+                                              android:layout_marginTop="3dp" />
+                                      </LinearLayout>
+                                  </LinearLayout>
+
+                                  <!-- Large Circular Percentage Indicator -->
+                                  <RelativeLayout
+                                      android:layout_width="140dp"
+                                      android:layout_height="140dp"
+                                      android:layout_marginTop="26dp">
+
+                                      <ProgressBar
+                                          android:id="@+id/circularProgressBar"
+                                          style="?android:attr/progressBarStyleHorizontal"
+                                          android:layout_width="140dp"
+                                          android:layout_height="140dp"
+                                          android:indeterminate="false"
+                                          android:max="100"
+                                          android:progress="0"
+                                          android:progressDrawable="@drawable/circular_progress_drawable" />
+
+                                      <LinearLayout
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:layout_centerInParent="true"
+                                          android:gravity="center"
+                                          android:orientation="vertical">
+
+                                          <TextView
+                                              android:id="@+id/txtCircularPercent"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="0%"
+                                              android:textColor="#0F172A"
+                                              android:textSize="26sp"
+                                              android:textStyle="bold" />
+
+                                          <TextView
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="DOWNLOADING"
+                                              android:textColor="#94A3B8"
+                                              android:textSize="9sp"
+                                              android:textStyle="bold" />
+                                      </LinearLayout>
+                                  </RelativeLayout>
+
+                                  <!-- Linear Progress Bar -->
+                                  <ProgressBar
+                                      android:id="@+id/linearProgressBar"
+                                      style="@style/Widget.AppCompat.ProgressBar.Horizontal"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="6dp"
+                                      android:layout_marginTop="24dp"
+                                      android:max="100"
+                                      android:progress="0"
+                                      android:progressTint="#6366F1" />
+
+                                  <TextView
+                                      android:id="@+id/txtDownloadStats"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="Connecting to stream..."
+                                      android:textColor="#64748B"
+                                      android:textSize="12sp"
+                                      android:layout_marginTop="8dp" />
+                                  <!-- Live Download Metrics Bar (Speed, Size, ETA) -->
+                                  <LinearLayout
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:orientation="horizontal"
+                                      android:layout_marginTop="14dp"
+                                      android:background="@drawable/bg_badge"
+                                      android:padding="12dp">
+
+                                      <!-- Speed Metric -->
+                                      <LinearLayout
+                                          android:layout_width="0dp"
+                                          android:layout_height="wrap_content"
+                                          android:layout_weight="1"
+                                          android:gravity="center"
+                                          android:orientation="vertical">
+
+                                          <TextView
+                                              android:id="@+id/txtDownloadSpeed"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="--"
+                                              android:textColor="#0F172A"
+                                              android:textSize="13sp"
+                                              android:textStyle="bold"
+                                              android:maxLines="1" />
+
+                                          <TextView
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="SPEED"
+                                              android:textColor="#94A3B8"
+                                              android:textSize="9sp"
+                                              android:textStyle="bold"
+                                              android:layout_marginTop="2dp" />
+                                      </LinearLayout>
+
+                                      <View
+                                          android:layout_width="1dp"
+                                          android:layout_height="24dp"
+                                          android:layout_gravity="center_vertical"
+                                          android:background="#E2E8F0" />
+
+                                      <!-- Size Metric -->
+                                      <LinearLayout
+                                          android:layout_width="0dp"
+                                          android:layout_height="wrap_content"
+                                          android:layout_weight="1.3"
+                                          android:gravity="center"
+                                          android:orientation="vertical">
+
+                                          <TextView
+                                              android:id="@+id/txtDownloadSize"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="--"
+                                              android:textColor="#0F172A"
+                                              android:textSize="13sp"
+                                              android:textStyle="bold"
+                                              android:maxLines="1" />
+
+                                          <TextView
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="DOWNLOADED"
+                                              android:textColor="#94A3B8"
+                                              android:textSize="9sp"
+                                              android:textStyle="bold"
+                                              android:layout_marginTop="2dp" />
+                                      </LinearLayout>
+
+                                      <View
+                                          android:layout_width="1dp"
+                                          android:layout_height="24dp"
+                                          android:layout_gravity="center_vertical"
+                                          android:background="#E2E8F0" />
+
+                                      <!-- ETA Metric -->
+                                      <LinearLayout
+                                          android:layout_width="0dp"
+                                          android:layout_height="wrap_content"
+                                          android:layout_weight="1"
+                                          android:gravity="center"
+                                          android:orientation="vertical">
+
+                                          <TextView
+                                              android:id="@+id/txtDownloadEta"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="--"
+                                              android:textColor="#0F172A"
+                                              android:textSize="13sp"
+                                              android:textStyle="bold"
+                                              android:maxLines="1" />
+
+                                          <TextView
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="REMAINING"
+                                              android:textColor="#94A3B8"
+                                              android:textSize="9sp"
+                                              android:textStyle="bold"
+                                              android:layout_marginTop="2dp" />
+                                      </LinearLayout>
+                                  </LinearLayout>
+
+
+                                  <Button
+                                      android:id="@+id/btnCancel"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="38dp"
+                                      android:layout_marginTop="16dp"
+                                      android:text="✕ Cancel"
+                                      android:textColor="#EF4444"
+                                      android:textSize="12sp"
+                                      android:backgroundTint="#FEE2E2"
+                                      app:cornerRadius="19dp" />
+                              </LinearLayout>
+                          </androidx.cardview.widget.CardView>
+
+                          <!-- DOWNLOAD COMPLETE SECTION -->
+                          <androidx.cardview.widget.CardView
+                              android:id="@+id/viewCompleteSection"
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:layout_marginTop="20dp"
+                              android:visibility="gone"
+                              app:cardCornerRadius="20dp"
+                              app:cardElevation="4dp"
+                              app:cardBackgroundColor="#FFFFFF">
+
+                              <LinearLayout
+                                  android:layout_width="match_parent"
+                                  android:layout_height="wrap_content"
+                                  android:orientation="vertical"
+                                  android:gravity="center_horizontal"
+                                  android:padding="24dp">
+
+                                  <TextView
+                                      android:layout_width="64dp"
+                                      android:layout_height="64dp"
+                                      android:background="@drawable/bg_badge"
+                                      android:text="✓"
+                                      android:textColor="#10B981"
+                                      android:textSize="32sp"
+                                      android:textStyle="bold"
+                                      android:gravity="center" />
+
+                                  <TextView
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="Ready in Downloads!"
+                                      android:textColor="#0F172A"
+                                      android:textSize="18sp"
+                                      android:textStyle="bold"
+                                      android:layout_marginTop="14dp" />
+
+                                  <TextView
+                                      android:id="@+id/completedFileName"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="TrackName.mp3"
+                                      android:textColor="#64748B"
+                                      android:textSize="12sp"
+                                      android:layout_marginTop="4dp"
+                                      android:maxLines="1"
+                                      android:ellipsize="end" />
+
+                                  <!-- Play & Share Buttons -->
+                                  <LinearLayout
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:orientation="horizontal"
+                                      android:layout_marginTop="20dp">
+
+                                      <Button
+                                          android:id="@+id/btnPlayFile"
+                                          android:layout_width="0dp"
+                                          android:layout_height="50dp"
+                                          android:layout_weight="1"
+                                          android:text="▶ Play Media"
+                                          android:textColor="#FFFFFF"
+                                          android:textSize="13sp"
+                                          android:textStyle="bold"
+                                          android:backgroundTint="#4F46E5"
+                                          app:cornerRadius="25dp" />
+
+                                      <View
+                                          android:layout_width="12dp"
+                                          android:layout_height="1dp" />
+
+                                      <Button
+                                          android:id="@+id/btnSaveFile"
+                                          android:layout_width="0dp"
+                                          android:layout_height="50dp"
+                                          android:layout_weight="1"
+                                          android:text="↗ Share / Save"
+                                          android:textColor="#4F46E5"
+                                          android:textSize="13sp"
+                                          android:textStyle="bold"
+                                          android:backgroundTint="#EEF2FF"
+                                          app:cornerRadius="25dp" />
+                                  </LinearLayout>
+
+                                  <TextView
+                                      android:id="@+id/btnDownloadAnother"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="Download Another Link"
+                                      android:textColor="#64748B"
+                                      android:textSize="12sp"
+                                      android:layout_marginTop="16dp"
+                                      android:padding="6dp" />
+                              </LinearLayout>
+                          </androidx.cardview.widget.CardView>
+
+                          <!-- DOWNLOAD ERROR & RETRY SECTION -->
+                          <androidx.cardview.widget.CardView
+                              android:id="@+id/viewErrorSection"
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:layout_marginTop="20dp"
+                              android:visibility="gone"
+                              app:cardCornerRadius="20dp"
+                              app:cardElevation="4dp"
+                              app:cardBackgroundColor="#FFFFFF">
+
+                              <LinearLayout
+                                  android:layout_width="match_parent"
+                                  android:layout_height="wrap_content"
+                                  android:orientation="vertical"
+                                  android:gravity="center_horizontal"
+                                  android:padding="24dp">
+
+                                  <TextView
+                                      android:layout_width="60dp"
+                                      android:layout_height="60dp"
+                                      android:text="⚠️"
+                                      android:textSize="30sp"
+                                      android:gravity="center"
+                                      android:background="@drawable/bg_badge" />
+
+                                  <TextView
+                                      android:id="@+id/txtErrorTitle"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="Download Failed"
+                                      android:textColor="#0F172A"
+                                      android:textSize="18sp"
+                                      android:textStyle="bold"
+                                      android:layout_marginTop="12dp" />
+
+                                  <TextView
+                                      android:id="@+id/txtErrorMessage"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:text="Unable to download this video. Please check your internet connection."
+                                      android:textColor="#64748B"
+                                      android:textSize="13sp"
+                                      android:gravity="center"
+                                      android:layout_marginTop="6dp" />
+
+                                  <Button
+                                      android:id="@+id/btnRetryDownload"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="48dp"
+                                      android:text="↺ RETRY DOWNLOAD"
+                                      android:textColor="#FFFFFF"
+                                      android:textSize="14sp"
+                                      android:textStyle="bold"
+                                      android:backgroundTint="#4F46E5"
+                                      android:layout_marginTop="20dp"
+                                      app:cornerRadius="24dp" />
+
+                                  <TextView
+                                      android:id="@+id/btnDismissError"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="Back to Downloader"
+                                      android:textColor="#64748B"
+                                      android:textSize="13sp"
+                                      android:textStyle="bold"
+                                      android:layout_marginTop="14dp"
+                                      android:padding="8dp" />
+                              </LinearLayout>
+                          </androidx.cardview.widget.CardView>
+
+                          <!-- DOWNLOAD QUEUE SECTION -->
+                          <LinearLayout
+                              android:id="@+id/viewQueueSection"
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:orientation="vertical"
+                              android:layout_marginTop="20dp"
+                              android:visibility="gone">
+
+                              <!-- Section Header -->
+                              <LinearLayout
+                                  android:layout_width="match_parent"
+                                  android:layout_height="wrap_content"
+                                  android:orientation="horizontal"
+                                  android:gravity="center_vertical"
+                                  android:layout_marginBottom="12dp">
+
+                                  <TextView
+                                      android:layout_width="0dp"
+                                      android:layout_height="wrap_content"
+                                      android:layout_weight="1"
+                                      android:text="Download Queue"
+                                      android:textColor="#0F172A"
+                                      android:textSize="18sp"
+                                      android:textStyle="bold" />
+
+                                  <TextView
+                                      android:id="@+id/txtQueueBadge"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:background="@drawable/bg_badge"
+                                      android:paddingHorizontal="10dp"
+                                      android:paddingVertical="4dp"
+                                      android:text="0 items"
+                                      android:textColor="#4F46E5"
+                                      android:textSize="11sp"
+                                      android:textStyle="bold" />
+
+                                  <TextView
+                                      android:id="@+id/btnClearQueue"
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:layout_marginStart="8dp"
+                                      android:text="Clear Finished"
+                                      android:textColor="#64748B"
+                                      android:textSize="12sp"
+                                      android:padding="6dp" />
+                              </LinearLayout>
+
+                              <!-- Queue Items Container -->
+                              <LinearLayout
+                                  android:id="@+id/queueListContainer"
+                                  android:layout_width="match_parent"
+                                  android:layout_height="wrap_content"
+                                  android:orientation="vertical" />
+                          </LinearLayout>
+
+                      </LinearLayout>
+                  </ScrollView>
+
+                  <!-- PAGE 2: HISTORY SCREEN -->
+                  <LinearLayout
+                      android:id="@+id/pageHistory"
+                      android:layout_width="match_parent"
+                      android:layout_height="match_parent"
+                      android:orientation="vertical"
+                      android:visibility="gone"
+                      android:focusable="true"
+                      android:focusableInTouchMode="true"
+                      android:background="#F8FAFC">
+
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:orientation="horizontal"
+                          android:gravity="center_vertical"
+                          android:paddingHorizontal="24dp"
+                          android:paddingTop="36dp"
+                          android:paddingBottom="14dp">
+
+                          <TextView
+                              android:layout_width="0dp"
+                              android:layout_height="wrap_content"
+                              android:layout_weight="1"
+                              android:text="Downloads"
+                              android:textColor="#0F172A"
+                              android:textSize="26sp"
+                              android:textStyle="bold" />
+
+                          <TextView
+                              android:id="@+id/btnMenu"
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="⚙"
+                              android:textColor="#64748B"
+                              android:textSize="20sp" />
+                      </LinearLayout>
+
+                      <!-- Search Input Box -->
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="44dp"
+                          android:layout_marginHorizontal="24dp"
+                          android:layout_marginBottom="12dp"
+                          android:background="@drawable/bg_search_bar"
+                          android:orientation="horizontal"
+                          android:gravity="center_vertical"
+                          android:paddingHorizontal="14dp">
+
+                          <TextView
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="🔍"
+                              android:textSize="14sp" />
+
+                          <EditText
+                              android:id="@+id/historySearchInput"
+                              android:layout_width="0dp"
+                              android:layout_height="match_parent"
+                              android:layout_weight="1"
+                              android:background="@null"
+                              android:hint="Search downloads..."
+                              android:textColorHint="#94A3B8"
+                              android:textColor="#0F172A"
+                              android:textSize="13sp"
+                              android:singleLine="true"
+                              android:imeOptions="actionDone"
+                              android:paddingStart="10dp" />
+
+                          <TextView
+                              android:id="@+id/btnClearHistorySearch"
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="✕"
+                              android:textSize="14sp"
+                              android:textColor="#94A3B8"
+                              android:padding="6dp"
+                              android:visibility="gone" />
+                      </LinearLayout>
+
+                      <!-- Filter Chips Row -->
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:orientation="horizontal"
+                          android:paddingHorizontal="24dp"
+                          android:paddingBottom="14dp">
+
+                          <Button
+                              android:id="@+id/chipAll"
+                              android:layout_width="wrap_content"
+                              android:layout_height="36dp"
+                              android:text="All Files"
+                              android:textSize="12sp"
+                              android:textColor="#FFFFFF"
+                              android:backgroundTint="#4F46E5"
+                              app:cornerRadius="18dp" />
+
+                          <Button
+                              android:id="@+id/chipAudio"
+                              android:layout_width="wrap_content"
+                              android:layout_height="36dp"
+                              android:layout_marginStart="8dp"
+                              android:text="🎵 Audio"
+                              android:textSize="12sp"
+                              android:textColor="#64748B"
+                              android:backgroundTint="#F1F5F9"
+                              app:cornerRadius="18dp" />
+
+                          <Button
+                              android:id="@+id/chipVideo"
+                              android:layout_width="wrap_content"
+                              android:layout_height="36dp"
+                              android:layout_marginStart="8dp"
+                              android:text="🎬 Video"
+                              android:textSize="12sp"
+                              android:textColor="#64748B"
+                              android:backgroundTint="#F1F5F9"
+                              app:cornerRadius="18dp" />
+                      </LinearLayout>
+
+                      <ScrollView
+                          android:layout_width="match_parent"
+                          android:layout_height="match_parent"
+                          android:fillViewport="true"
+                          android:paddingHorizontal="24dp">
+
+                          <LinearLayout
+                              android:id="@+id/historyListContainer"
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:orientation="vertical"
+                              android:paddingBottom="24dp" />
+                      </ScrollView>
+                  </LinearLayout>
+
+                  <!-- PAGE 3: SETTINGS SCREEN -->
+                  <ScrollView
+                      android:id="@+id/pageSettings"
+                      android:layout_width="match_parent"
+                      android:layout_height="match_parent"
+                      android:visibility="gone"
+                      android:fillViewport="true"
+                      android:background="#F8FAFC">
+
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:orientation="vertical"
+                          android:paddingHorizontal="24dp"
+                          android:paddingTop="36dp"
+                          android:paddingBottom="30dp">
+
+                          <TextView
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="Settings"
+                              android:textColor="#0F172A"
+                              android:textSize="26sp"
+                              android:textStyle="bold" />
+
+                          <TextView
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="Preferences &amp; Engine Information"
+                              android:textColor="#64748B"
+                              android:textSize="13sp"
+                              android:layout_marginTop="4dp" />
+
+                          <!-- PREFERENCES SECTION -->
+                          <TextView
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="DOWNLOAD PREFERENCES"
+                              android:textColor="#94A3B8"
+                              android:textSize="11sp"
+                              android:textStyle="bold"
+                              android:layout_marginTop="26dp" />
+
+                          <androidx.cardview.widget.CardView
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:layout_marginTop="10dp"
+                              app:cardCornerRadius="18dp"
+                              app:cardElevation="2dp"
+                              app:cardBackgroundColor="#FFFFFF">
+
+                              <LinearLayout
+                                  android:layout_width="match_parent"
+                                  android:layout_height="wrap_content"
+                                  android:orientation="vertical">
+
+                                  <LinearLayout
+                                      android:id="@+id/settingRowQuality"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:orientation="horizontal"
+                                      android:gravity="center_vertical"
+                                      android:padding="18dp">
+
+                                      <LinearLayout
+                                          android:layout_width="0dp"
+                                          android:layout_height="wrap_content"
+                                          android:layout_weight="1"
+                                          android:orientation="vertical">
+
+                                          <TextView
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="Preferred Quality"
+                                              android:textColor="#0F172A"
+                                              android:textSize="14sp"
+                                              android:textStyle="bold" />
+
+                                          <TextView
+                                              android:id="@+id/txtDefaultQuality"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="Best Available (1080p / 320 kbps)"
+                                              android:textColor="#64748B"
+                                              android:textSize="12sp"
+                                              android:layout_marginTop="2dp" />
+                                      </LinearLayout>
+
+                                      <TextView
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:text="›"
+                                          android:textColor="#94A3B8"
+                                          android:textSize="22sp" />
+                                  </LinearLayout>
+
+                                  <View
+                                      android:layout_width="match_parent"
+                                      android:layout_height="1dp"
+                                      android:background="#F1F5F9" />
+
+                                  <LinearLayout
+                                      android:id="@+id/settingRowFormat"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:orientation="horizontal"
+                                      android:gravity="center_vertical"
+                                      android:padding="18dp">
+
+                                      <LinearLayout
+                                          android:layout_width="0dp"
+                                          android:layout_height="wrap_content"
+                                          android:layout_weight="1"
+                                          android:orientation="vertical">
+
+                                          <TextView
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="Default Format"
+                                              android:textColor="#0F172A"
+                                              android:textSize="14sp"
+                                              android:textStyle="bold" />
+
+                                          <TextView
+                                              android:id="@+id/txtDefaultFormat"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="wrap_content"
+                                              android:text="MP3 (Audio Only)"
+                                              android:textColor="#64748B"
+                                              android:textSize="12sp"
+                                              android:layout_marginTop="2dp" />
+                                      </LinearLayout>
+
+                                      <TextView
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:text="›"
+                                          android:textColor="#94A3B8"
+                                          android:textSize="22sp" />
+                                  </LinearLayout>
+
+                                  <View
+                                      android:layout_width="match_parent"
+                                      android:layout_height="1dp"
+                                      android:background="#F1F5F9" />
+
+                                  <LinearLayout
+                                      android:id="@+id/settingRowLocation"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="wrap_content"
+                                      android:orientation="vertical"
+                                      android:padding="18dp">
+
+                                      <LinearLayout
+                                          android:layout_width="match_parent"
+                                          android:layout_height="wrap_content"
+                                          android:orientation="horizontal"
+                                          android:gravity="center_vertical">
+
+                                          <LinearLayout
+                                              android:layout_width="0dp"
+                                              android:layout_height="wrap_content"
+                                              android:layout_weight="1"
+                                              android:orientation="vertical">
+
+                                              <TextView
+                                                  android:layout_width="wrap_content"
+                                                  android:layout_height="wrap_content"
+                                                  android:text="Download Location"
+                                                  android:textColor="#0F172A"
+                                                  android:textSize="14sp"
+                                                  android:textStyle="bold" />
+
+                                              <TextView
+                                                  android:id="@+id/txtDownloadLocation"
+                                                  android:layout_width="wrap_content"
+                                                  android:layout_height="wrap_content"
+                                                  android:text="FlowRip\nInternal storage / Download / FlowRip"
+                                                  android:textColor="#64748B"
+                                                  android:textSize="12sp"
+                                                  android:layout_marginTop="2dp"
+                                                  android:lineSpacingExtra="2dp" />
+                                          </LinearLayout>
+                                      </LinearLayout>
+
+                                      <LinearLayout
+                                          android:layout_width="match_parent"
+                                          android:layout_height="wrap_content"
+                                          android:orientation="horizontal"
+                                          android:layout_marginTop="12dp">
+
+                                          <Button
+                                              android:id="@+id/btnChangeLocation"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="36dp"
+                                              android:text="Change Folder"
+                                              android:textSize="12sp"
+                                              android:textColor="#FFFFFF"
+                                              android:backgroundTint="#4F46E5"
+                                              app:cornerRadius="18dp" />
+
+                                          <Button
+                                              android:id="@+id/btnResetLocation"
+                                              android:layout_width="wrap_content"
+                                              android:layout_height="36dp"
+                                              android:layout_marginStart="8dp"
+                                              android:text="Reset to Default"
+                                              android:textSize="12sp"
+                                              android:textColor="#64748B"
+                                              android:backgroundTint="#F1F5F9"
+                                              app:cornerRadius="18dp" />
+                                      </LinearLayout>
+                                  </LinearLayout>
+                              </LinearLayout>
+                          </androidx.cardview.widget.CardView>
+
+                          <!-- APP INFO -->
+                          <TextView
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="APP INFORMATION"
+                              android:textColor="#94A3B8"
+                              android:textSize="11sp"
+                              android:textStyle="bold"
+                              android:layout_marginTop="24dp" />
+
+                          <androidx.cardview.widget.CardView
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:layout_marginTop="10dp"
+                              app:cardCornerRadius="18dp"
+                              app:cardElevation="2dp"
+                              app:cardBackgroundColor="#FFFFFF">
+
+                              <LinearLayout
+                                  android:id="@+id/settingRowAbout"
+                                  android:layout_width="match_parent"
+                                  android:layout_height="wrap_content"
+                                  android:orientation="horizontal"
+                                  android:gravity="center_vertical"
+                                  android:padding="18dp">
+
+                                  <LinearLayout
+                                      android:layout_width="0dp"
+                                      android:layout_height="wrap_content"
+                                      android:layout_weight="1"
+                                      android:orientation="vertical">
+
+                                      <TextView
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:text="FlowRip Studio Pro"
+                                          android:textColor="#0F172A"
+                                          android:textSize="14sp"
+                                          android:textStyle="bold" />
+
+                                      <TextView
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:text="Version 1.0.0 • yt-dlp &amp; FFmpeg Engine"
+                                          android:textColor="#64748B"
+                                          android:textSize="12sp"
+                                          android:layout_marginTop="2dp" />
+                                  </LinearLayout>
+
+                                  <TextView
+                                      android:layout_width="wrap_content"
+                                      android:layout_height="wrap_content"
+                                      android:text="›"
+                                      android:textColor="#94A3B8"
+                                      android:textSize="22sp" />
+                              </LinearLayout>
+                          </androidx.cardview.widget.CardView>
+                      </LinearLayout>
+                  </ScrollView>
+              </FrameLayout>
+
+              <!-- BOTTOM NAVIGATION SECTION (DESIGNED FOR SAMSUNG & ALL ANDROID PHONES) -->
+              <LinearLayout
+                  android:id="@+id/bottomNavSection"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:layout_alignParentBottom="true"
+                  android:orientation="vertical"
+                  android:background="#FFFFFF"
+                  android:elevation="16dp">
+
+                  <FrameLayout
+                      android:id="@+id/bannerContainer"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:background="#F8FAFC" />
+
+                  <!-- Tall 64dp Navigation Bar with Large Click Targets -->
+                  <LinearLayout
+                      android:id="@+id/navBarInner"
+                      android:layout_width="match_parent"
+                      android:layout_height="64dp"
+                      android:orientation="horizontal"
+                      android:gravity="center_vertical"
+                      android:background="#FFFFFF">
+
+                      <LinearLayout
+                          android:id="@+id/tabHome"
+                          android:layout_width="0dp"
+                          android:layout_height="match_parent"
+                          android:layout_weight="1"
+                          android:gravity="center"
+                          android:clickable="true"
+                          android:focusable="true"
+                          android:background="?attr/selectableItemBackground"
+                          android:orientation="vertical">
+
+                          <ImageView
+                              android:id="@+id/iconTabHome"
+                              android:layout_width="24dp"
+                              android:layout_height="24dp"
+                              android:src="@drawable/ic_nav_home" />
+
+                          <TextView
+                              android:id="@+id/textTabHome"
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="Home"
+                              android:textColor="#4F46E5"
+                              android:textSize="12sp"
+                              android:textStyle="bold"
+                              android:layout_marginTop="2dp" />
+                      </LinearLayout>
+
+                      <LinearLayout
+                          android:id="@+id/tabHistory"
+                          android:layout_width="0dp"
+                          android:layout_height="match_parent"
+                          android:layout_weight="1"
+                          android:gravity="center"
+                          android:clickable="true"
+                          android:focusable="true"
+                          android:background="?attr/selectableItemBackground"
+                          android:orientation="vertical">
+
+                          <ImageView
+                              android:id="@+id/iconTabHistory"
+                              android:layout_width="24dp"
+                              android:layout_height="24dp"
+                              android:src="@drawable/ic_nav_history" />
+
+                          <TextView
+                              android:id="@+id/textTabHistory"
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="History"
+                              android:textColor="#64748B"
+                              android:textSize="12sp"
+                              android:textStyle="bold"
+                              android:layout_marginTop="2dp" />
+                      </LinearLayout>
+
+                      <LinearLayout
+                          android:id="@+id/tabSettings"
+                          android:layout_width="0dp"
+                          android:layout_height="match_parent"
+                          android:layout_weight="1"
+                          android:gravity="center"
+                          android:clickable="true"
+                          android:focusable="true"
+                          android:background="?attr/selectableItemBackground"
+                          android:orientation="vertical">
+
+                          <ImageView
+                              android:id="@+id/iconTabSettings"
+                              android:layout_width="24dp"
+                              android:layout_height="24dp"
+                              android:src="@drawable/ic_nav_settings" />
+
+                          <TextView
+                              android:id="@+id/textTabSettings"
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="Settings"
+                              android:textColor="#64748B"
+                              android:textSize="12sp"
+                              android:textStyle="bold"
+                              android:layout_marginTop="2dp" />
+                      </LinearLayout>
+                  </LinearLayout>
+              </LinearLayout>
+
+              <!-- COSMIC DARK SPLASH OVERLAY -->
+              <FrameLayout
+                  android:id="@+id/splashOverlay"
+                  android:layout_width="match_parent"
+                  android:layout_height="match_parent"
+                  android:background="#03030C"
+                  android:elevation="30dp">
+
+                  <LinearLayout
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:layout_gravity="center"
+                      android:gravity="center"
+                      android:orientation="vertical">
+
+                      <ImageView
+                          android:layout_width="220dp"
+                          android:layout_height="220dp"
+                          android:src="@drawable/app_logo"
+                          android:scaleType="fitCenter" />
+
+                      <TextView
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:layout_marginTop="12dp"
+                          android:text="Ultimate HD Media Downloader"
+                          android:textColor="#94A3B8"
+                          android:textSize="13sp"
+                          android:letterSpacing="0.04" />
+                  </LinearLayout>
+              </FrameLayout>
+          </RelativeLayout><androidx.appcompat.widget.AppCompatSpinner
+                                      android:id="@+id/qualitySpinner"
+                                      android:layout_width="match_parent"
+                                      android:layout_height="44dp"
+                                      android:layout_marginTop="6dp"
+                                      android:background="@drawable/bg_card_unselected"
+                                      android:spinnerMode="dropdown"
+                                      android:popupBackground="@drawable/bg_spinner_popup"
+                                      app:popupTheme="@style/Theme.FlowRip.SpinnerPopup" />
 
                                   <!-- Start Download Action Button -->
                                   <Button
@@ -3444,7 +4545,6 @@ jobs:
           </RelativeLayout>
           EOF
 
-          # 12. MainActivity.kt (True 1080p/720p FFmpeg Merge + Samsung Insets Protection)
           cat << 'EOF' > app/src/main/java/com/soundrip/app/MainActivity.kt
           package com.soundrip.app
 
@@ -3474,6 +4574,7 @@ jobs:
           import android.widget.*
           import androidx.appcompat.app.AlertDialog
           import androidx.appcompat.app.AppCompatActivity
+          import androidx.appcompat.widget.AppCompatSpinner
           import androidx.core.app.ActivityCompat
           import androidx.core.content.ContextCompat
           import androidx.core.content.FileProvider
@@ -3574,7 +4675,8 @@ jobs:
               private lateinit var radioDotMp3: TextView
               private lateinit var radioDotMp4: TextView
               private lateinit var qualityLabel: TextView
-              private lateinit var qualitySpinner: Spinner
+              private lateinit var qualitySpinner: AppCompatSpinner
+              private lateinit var txtMp4Subtitle: TextView
               private lateinit var layoutQualityLoading: View
               private lateinit var txtQualityLoading: TextView
               private lateinit var progressQualityLoading: ProgressBar
@@ -3669,6 +4771,7 @@ jobs:
                   radioDotMp4 = findViewById(R.id.radioDotMp4)
                   qualityLabel = findViewById(R.id.qualityLabel)
                   qualitySpinner = findViewById(R.id.qualitySpinner)
+                  txtMp4Subtitle = findViewById(R.id.txtMp4Subtitle)
                   layoutQualityLoading = findViewById(R.id.layoutQualityLoading)
                   txtQualityLoading = findViewById(R.id.txtQualityLoading)
                   progressQualityLoading = findViewById(R.id.progressQualityLoading)
@@ -3864,6 +4967,9 @@ jobs:
                               lastFormatErrorUrl = null
                               activeDetectionUrl = null
                               activeDetectionJobId = System.currentTimeMillis()
+                              if (::txtMp4Subtitle.isInitialized) {
+                                  txtMp4Subtitle.text = "Up to 1080p Full HD"
+                              }
                               hideQualityLoading()
                               showDownloaderState(0)
                           }
@@ -4182,7 +5288,24 @@ jobs:
                   btnStartDownload.alpha = 1.0f
                   btnStartDownload.text = "⬇ START DOWNLOAD"
 
-                  val adapter = ArrayAdapter(this, R.layout.item_spinner_selected, options)
+                  val adapter = object : ArrayAdapter<String>(this, R.layout.item_spinner_selected, options) {
+                      override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
+                          val v = super.getDropDownView(position, convertView, parent)
+                          if (v is TextView) {
+                              v.setTextColor(android.graphics.Color.parseColor("#0F172A"))
+                              v.setBackgroundResource(R.drawable.bg_spinner_item_selector)
+                          }
+                          return v
+                      }
+
+                      override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                          val v = super.getView(position, convertView, parent)
+                          if (v is TextView) {
+                              v.setTextColor(android.graphics.Color.parseColor("#0F172A"))
+                          }
+                          return v
+                      }
+                  }
                   adapter.setDropDownViewResource(R.layout.item_spinner_dropdown)
                   qualitySpinner.adapter = adapter
 
@@ -4321,6 +5444,23 @@ jobs:
                   return null
               }
 
+              private fun updateVideoSummarySubtitle(qualities: List<String>) {
+                  if (!::txtMp4Subtitle.isInitialized) return
+                  val top = qualities.firstOrNull { it.contains("p") || it.contains("Best") } ?: ""
+                  txtMp4Subtitle.text = when {
+                      top.contains("2160") || top.contains("4K") -> "Up to 2160p 4K UHD"
+                      top.contains("1440") || top.contains("2K") -> "Up to 1440p 2K QHD"
+                      top.contains("1080") -> "Up to 1080p Full HD"
+                      top.contains("720") -> "Up to 720p HD"
+                      top.contains("480") -> "Up to 480p"
+                      top.contains("360") -> "Up to 360p"
+                      top.contains("240") -> "Up to 240p"
+                      top.contains("144") -> "Up to 144p"
+                      top.contains("Best") -> "Best Available Quality"
+                      else -> "Up to 1080p Full HD"
+                  }
+              }
+
               private fun applyCachedFormats(cleanId: String?, cached: DetectedMediaFormats) {
                   currentVideoId = cleanId
                   activeDetectionUrl = null
@@ -4336,6 +5476,7 @@ jobs:
                   detectedAudioQualities.addAll(cached.audioQualities)
                   hasVideoTrack = cached.hasVideo
                   hasAudioTrack = cached.hasAudio
+                  updateVideoSummarySubtitle(cached.videoQualities)
 
                   if (!hasVideoTrack && hasAudioTrack && !isAudio) {
                       setFormatSelection(true)
@@ -4536,6 +5677,7 @@ jobs:
 
                               hasVideoTrack = detectedData.hasVideo
                               hasAudioTrack = detectedData.hasAudio
+                              updateVideoSummarySubtitle(parsedVideo)
 
                               // Auto-adjust format selection if media is audio-only or video-only
                               if (!hasVideoTrack && hasAudioTrack && !isAudio) {
@@ -5238,6 +6380,7 @@ jobs:
           }
           EOF
 
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
@@ -5249,5 +6392,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-Stage5-Perf-Optimization-v25-APK
+          name: FlowRip-Stage5-UI-Compatibility-Fix-v26-APK
           path: app/build/outputs/apk/**/*.apk
