@@ -324,8 +324,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 33
-                  versionName "8.2.0"
+                  versionCode 34
+                  versionName "8.2.1"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -2527,6 +2527,11 @@ jobs:
           class FlowRipApp : Application() {
               override fun onCreate() {
                   super.onCreate()
+                  val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+                  Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+                      Log.e("FlowRipApp", "FATAL UNCAUGHT EXCEPTION on thread ${thread.name}", throwable)
+                      defaultHandler?.uncaughtException(thread, throwable)
+                  }
                   try {
                       YoutubeDL.getInstance().init(this)
                       FFmpeg.getInstance().init(this)
@@ -4409,24 +4414,26 @@ jobs:
 
           fun View.applyPressScaleEffect(scaleFactor: Float = 0.97f) {
               this.setOnTouchListener { v, event ->
-                  when (event.actionMasked) {
-                      MotionEvent.ACTION_DOWN -> {
-                          v.animate()
-                              .scaleX(scaleFactor)
-                              .scaleY(scaleFactor)
-                              .setDuration(100L)
-                              .setInterpolator(DecelerateInterpolator())
-                              .start()
+                  try {
+                      when (event.actionMasked) {
+                          MotionEvent.ACTION_DOWN -> {
+                              v.animate()
+                                  .scaleX(scaleFactor)
+                                  .scaleY(scaleFactor)
+                                  .setDuration(100L)
+                                  .setInterpolator(DecelerateInterpolator())
+                                  .start()
+                          }
+                          MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                              v.animate()
+                                  .scaleX(1.0f)
+                                  .scaleY(1.0f)
+                                  .setDuration(120L)
+                                  .setInterpolator(DecelerateInterpolator())
+                                  .start()
+                          }
                       }
-                      MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                          v.animate()
-                              .scaleX(1.0f)
-                              .scaleY(1.0f)
-                              .setDuration(120L)
-                              .setInterpolator(DecelerateInterpolator())
-                              .start()
-                      }
-                  }
+                  } catch (e: Exception) {}
                   false
               }
           }
@@ -4452,30 +4459,71 @@ jobs:
               )
 
               private fun updateDownloadProgressAnimated(targetProgress: Int, animate: Boolean = true) {
-                  val target = targetProgress.coerceIn(0, 100)
-                  val current = circularProgressBar.progress
+                  try {
+                      val target = targetProgress.coerceIn(0, 100)
+                      val current = circularProgressBar.progress
 
-                  if (!animate || target == 0 || target == 100 || target < current) {
-                      progressAnimator?.cancel()
-                      circularProgressBar.progress = target
-                      linearProgressBar.progress = target
-                      txtCircularPercent.text = "$target%"
-                      return
-                  }
-
-                  if (target > current) {
-                      progressAnimator?.cancel()
-                      progressAnimator = ValueAnimator.ofInt(current, target).apply {
-                          duration = 200L
-                          interpolator = DecelerateInterpolator()
-                          addUpdateListener { anim ->
-                              val v = anim.animatedValue as Int
-                              circularProgressBar.progress = v
-                              linearProgressBar.progress = v
-                              txtCircularPercent.text = "$v%"
-                          }
-                          start()
+                      if (!animate || target == 0 || target == 100 || target < current) {
+                          progressAnimator?.cancel()
+                          circularProgressBar.progress = target
+                          linearProgressBar.progress = target
+                          txtCircularPercent.text = "$target%"
+                          return
                       }
+
+                      if (target > current) {
+                          progressAnimator?.cancel()
+                          progressAnimator = ValueAnimator.ofInt(current, target).apply {
+                              duration = 200L
+                              interpolator = DecelerateInterpolator()
+                              addUpdateListener { anim ->
+                                  val v = anim.animatedValue as Int
+                                  circularProgressBar.progress = v
+                                  linearProgressBar.progress = v
+                                  txtCircularPercent.text = "$v%"
+                              }
+                              start()
+                          }
+                      }
+                  } catch (e: Exception) {
+                      try {
+                          circularProgressBar.progress = targetProgress.coerceIn(0, 100)
+                          linearProgressBar.progress = targetProgress.coerceIn(0, 100)
+                          txtCircularPercent.text = "${targetProgress.coerceIn(0, 100)}%"
+                      } catch (ignored: Exception) {}
+                  }
+              }
+
+              private fun setupTouchFeedback() {
+                  try {
+                      btnMainAction.applyPressScaleEffect(0.96f)
+                      btnClear.applyPressScaleEffect(0.92f)
+                      cardMp3.applyPressScaleEffect(0.98f)
+                      cardMp4.applyPressScaleEffect(0.98f)
+                      btnStartDownload.applyPressScaleEffect(0.97f)
+                      btnPlayFile.applyPressScaleEffect(0.97f)
+                      btnSaveFile.applyPressScaleEffect(0.97f)
+                      btnDownloadAnother.applyPressScaleEffect(0.97f)
+                      btnPauseResume.applyPressScaleEffect(0.96f)
+                      btnCancel.applyPressScaleEffect(0.96f)
+                      btnRetryDownload.applyPressScaleEffect(0.97f)
+                      btnDismissError.applyPressScaleEffect(0.97f)
+                      tabHome.applyPressScaleEffect(0.95f)
+                      tabHistory.applyPressScaleEffect(0.95f)
+                      tabSettings.applyPressScaleEffect(0.95f)
+                      btnRefreshHistory.applyPressScaleEffect(0.92f)
+                      btnHistorySort.applyPressScaleEffect(0.97f)
+                      chipAll.applyPressScaleEffect(0.95f)
+                      chipAudio.applyPressScaleEffect(0.95f)
+                      chipVideo.applyPressScaleEffect(0.95f)
+                      btnClearHistorySearch.applyPressScaleEffect(0.92f)
+                      findViewById<View>(R.id.settingRowQuality)?.applyPressScaleEffect(0.985f)
+                      findViewById<View>(R.id.settingRowFormat)?.applyPressScaleEffect(0.985f)
+                      findViewById<View>(R.id.settingRowLocation)?.applyPressScaleEffect(0.985f)
+                      findViewById<View>(R.id.settingRowWifiOnly)?.applyPressScaleEffect(0.985f)
+                      findViewById<View>(R.id.settingRowAbout)?.applyPressScaleEffect(0.985f)
+                  } catch (e: Exception) {
+                      Log.e("MainActivity", "Failed to setup touch feedback", e)
                   }
               }
 
@@ -4568,7 +4616,7 @@ jobs:
               private lateinit var chipAll: Button
               private lateinit var chipAudio: Button
               private lateinit var chipVideo: Button
-                  private lateinit var cardUrlInput: androidx.cardview.widget.CardView
+                  private var cardUrlInput: androidx.cardview.widget.CardView? = null
               private var progressAnimator: ValueAnimator? = null
               private var currentTabIndex = 0
               private lateinit var btnRefreshHistory: TextView
@@ -4634,44 +4682,17 @@ jobs:
                   btnMainAction = findViewById(R.id.btnMainAction)
                   btnStartDownload = findViewById(R.id.btnStartDownload)
 
-                  urlInput.setOnFocusChangeListener { _, hasFocus ->
-                      cardUrlInput.animate()
-                          .scaleX(if (hasFocus) 1.01f else 1.0f)
-                          .scaleY(if (hasFocus) 1.01f else 1.0f)
-                          .setDuration(140L)
-                          .setInterpolator(DecelerateInterpolator())
-                          .start()
-                      cardUrlInput.cardElevation = dpToPx(if (hasFocus) 5 else 3).toFloat()
+                  cardUrlInput?.let { card ->
+                      urlInput.setOnFocusChangeListener { _, hasFocus ->
+                          card.animate()
+                              .scaleX(if (hasFocus) 1.01f else 1.0f)
+                              .scaleY(if (hasFocus) 1.01f else 1.0f)
+                              .setDuration(140L)
+                              .setInterpolator(DecelerateInterpolator())
+                              .start()
+                          card.cardElevation = dpToPx(if (hasFocus) 5 else 3).toFloat()
+                      }
                   }
-
-                  // Tactile touch scale feedback
-                  btnMainAction.applyPressScaleEffect(0.96f)
-                  btnClear.applyPressScaleEffect(0.92f)
-                  cardMp3.applyPressScaleEffect(0.98f)
-                  cardMp4.applyPressScaleEffect(0.98f)
-                  btnStartDownload.applyPressScaleEffect(0.97f)
-                  qualitySpinner.applyPressScaleEffect(0.985f)
-                  btnPlayFile.applyPressScaleEffect(0.97f)
-                  btnSaveFile.applyPressScaleEffect(0.97f)
-                  btnDownloadAnother.applyPressScaleEffect(0.97f)
-                  btnPauseResume.applyPressScaleEffect(0.96f)
-                  btnCancel.applyPressScaleEffect(0.96f)
-                  btnRetryDownload.applyPressScaleEffect(0.97f)
-                  btnDismissError.applyPressScaleEffect(0.97f)
-                  tabHome.applyPressScaleEffect(0.95f)
-                  tabHistory.applyPressScaleEffect(0.95f)
-                  tabSettings.applyPressScaleEffect(0.95f)
-                  btnRefreshHistory.applyPressScaleEffect(0.92f)
-                  btnHistorySort.applyPressScaleEffect(0.97f)
-                  chipAll.applyPressScaleEffect(0.95f)
-                  chipAudio.applyPressScaleEffect(0.95f)
-                  chipVideo.applyPressScaleEffect(0.95f)
-                  btnClearHistorySearch.applyPressScaleEffect(0.92f)
-                  findViewById<View>(R.id.settingRowQuality).applyPressScaleEffect(0.985f)
-                  findViewById<View>(R.id.settingRowFormat).applyPressScaleEffect(0.985f)
-                  findViewById<View>(R.id.settingRowLocation).applyPressScaleEffect(0.985f)
-                  findViewById<View>(R.id.settingRowWifiOnly).applyPressScaleEffect(0.985f)
-                  findViewById<View>(R.id.settingRowAbout).applyPressScaleEffect(0.985f)
 
                   previewThumbnail = findViewById(R.id.previewThumbnail)
                   previewTitle = findViewById(R.id.previewTitle)
@@ -5065,6 +5086,7 @@ jobs:
                           .show()
                   }
 
+                  setupTouchFeedback()
                   handleIncomingIntent(intent)
 
                   thread {
@@ -7100,5 +7122,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-Stage9-UI-Modernization-v33-APK
+          name: FlowRip-Stage9-UI-CrashFix-v34-APK
           path: app/build/outputs/apk/**/*.apk
