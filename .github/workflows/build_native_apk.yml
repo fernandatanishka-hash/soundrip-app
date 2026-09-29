@@ -324,8 +324,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 28
-                  versionName "7.0.0"
+                  versionCode 29
+                  versionName "8.0.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -370,6 +370,7 @@ jobs:
           package com.soundrip.app
 
           import android.content.Context
+          import android.media.MediaMetadataRetriever
           import android.net.Uri
           import android.os.Environment
           import android.os.StatFs
@@ -377,20 +378,123 @@ jobs:
           import android.util.Log
           import androidx.documentfile.provider.DocumentFile
           import java.io.File
+          import java.text.SimpleDateFormat
+          import java.util.Date
+          import java.util.Locale
 
           object StorageHelper {
               private const val TAG = "StorageHelper"
               const val PREFS_NAME = "flowrip_prefs"
               const val KEY_DOWNLOAD_TREE_URI = "download_tree_uri"
+              const val KEY_HISTORY_SORT_ORDER = "history_sort_order"
+
+              enum class HistorySortOrder(val id: String, val label: String) {
+                  NEWEST("NEWEST", "Newest first"),
+                  OLDEST("OLDEST", "Oldest first"),
+                  SIZE_DESC("SIZE_DESC", "Largest file"),
+                  SIZE_ASC("SIZE_ASC", "Smallest file"),
+                  NAME_ASC("NAME_ASC", "Name A–Z"),
+                  NAME_DESC("NAME_DESC", "Name Z–A");
+
+                  companion object {
+                      fun fromId(id: String?): HistorySortOrder {
+                          return values().find { it.id == id } ?: NEWEST
+                      }
+                  }
+              }
 
               data class HistoryItem(
+                  val id: String,
                   val name: String,
                   val isAudio: Boolean,
                   val sizeBytes: Long,
                   val lastModified: Long,
                   val file: File? = null,
-                  val uri: Uri? = null
-              )
+                  val uri: Uri? = null,
+                  var resolution: String? = null,
+                  var durationMs: Long = 0L,
+                  var locationName: String = "FlowRip"
+              ) {
+                  val formattedSize: String
+                      get() = formatFileSize(sizeBytes)
+
+                  val formattedDuration: String
+                      get() = formatDuration(durationMs)
+
+                  val formattedDate: String
+                      get() = SimpleDateFormat("MMM dd, yyyy • HH:mm", Locale.getDefault()).format(Date(lastModified))
+              }
+
+              fun getHistorySortOrder(context: Context): HistorySortOrder {
+                  val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                  val id = prefs.getString(KEY_HISTORY_SORT_ORDER, HistorySortOrder.NEWEST.id)
+                  return HistorySortOrder.fromId(id)
+              }
+
+              fun setHistorySortOrder(context: Context, order: HistorySortOrder) {
+                  val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                  prefs.edit().putString(KEY_HISTORY_SORT_ORDER, order.id).apply()
+              }
+
+              fun formatFileSize(bytes: Long): String {
+                  if (bytes <= 0L) return "0 B"
+                  val kb = bytes / 1024.0
+                  if (kb < 1024.0) return String.format(Locale.US, "%.1f KB", kb)
+                  val mb = kb / 1024.0
+                  if (mb < 1024.0) return String.format(Locale.US, "%.1f MB", mb)
+                  val gb = mb / 1024.0
+                  return String.format(Locale.US, "%.2f GB", gb)
+              }
+
+              fun formatDuration(durationMs: Long): String {
+                  if (durationMs <= 0L) return "—"
+                  val totalSecs = durationMs / 1000
+                  val secs = totalSecs % 60
+                  val mins = (totalSecs / 60) % 60
+                  val hours = totalSecs / 3600
+                  return if (hours > 0) {
+                      String.format(Locale.US, "%d:%02d:%02d", hours, mins, secs)
+                  } else {
+                      String.format(Locale.US, "%02d:%02d", mins, secs)
+                  }
+              }
+
+              fun populateMetadata(context: Context, item: HistoryItem) {
+                  try {
+                      val retriever = MediaMetadataRetriever()
+                      if (item.file != null && item.file.exists()) {
+                          retriever.setDataSource(item.file.absolutePath)
+                      } else if (item.uri != null) {
+                          retriever.setDataSource(context, item.uri)
+                      }
+
+                      val durStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                      if (!durStr.isNullOrEmpty()) {
+                          item.durationMs = durStr.toLongOrNull() ?: 0L
+                      }
+
+                      if (!item.isAudio) {
+                          val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                          val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                          if (!height.isNullOrEmpty()) {
+                              val h = height.toIntOrNull() ?: 0
+                              item.resolution = when {
+                                  h >= 2160 -> "2160p 4K"
+                                  h >= 1440 -> "1440p 2K"
+                                  h >= 1080 -> "1080p FHD"
+                                  h >= 720 -> "720p HD"
+                                  h >= 480 -> "480p"
+                                  h >= 360 -> "360p"
+                                  h > 0 -> "${h}p"
+                                  else -> if (!width.isNullOrEmpty()) "${width}x${height}" else null
+                              }
+                          }
+                      }
+                      retriever.release()
+                  } catch (e: Exception) {
+                      Log.d(TAG, "Metadata extraction skipped for ${item.name}: ${e.message}")
+                  }
+              }
 
               fun getCustomTreeUri(context: Context): Uri? {
                   val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -402,7 +506,6 @@ jobs:
                       return null
                   }
 
-                  // Verify that persistable permission is still active
                   val hasPermission = try {
                       val permissions = context.contentResolver.persistedUriPermissions
                       permissions.any { it.uri == uri && it.isWritePermission }
@@ -416,7 +519,6 @@ jobs:
                       return null
                   }
 
-                  // Verify directory is accessible and writable
                   val docFile = try {
                       DocumentFile.fromTreeUri(context, uri)
                   } catch (e: Exception) {
@@ -505,12 +607,6 @@ jobs:
                   return availableBytes >= minRequiredBytes
               }
 
-              /**
-               * SAF-to-yt-dlp bridge:
-               * Copies a completed staged file into the user's selected SAF document tree directory.
-               * Handles filename collisions safely (e.g. "Song (1).mp3"), verifies byte integrity,
-               * and deletes the temporary staging file only after successful transfer.
-               */
               fun copyToDocumentTree(context: Context, sourceFile: File, treeUri: Uri): Uri? {
                   val treeDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return null
                   if (!treeDoc.canWrite()) return null
@@ -560,70 +656,71 @@ jobs:
                   }
               }
 
-              fun getHistoryItems(context: Context, filter: String, query: String): List<HistoryItem> {
+              fun scanAllHistoryItems(context: Context): List<HistoryItem> {
                   val result = mutableListOf<HistoryItem>()
-                  val seenNames = mutableSetOf<String>()
-                  val searchQuery = query.trim().lowercase()
+                  val seenIds = mutableSetOf<String>()
+                  val seenFileNames = mutableSetOf<String>()
 
                   // 1. Scan default Downloads/FlowRip folder
                   val defaultDir = getDefaultDownloadDir()
                   defaultDir.listFiles()?.forEach { file ->
-                      if (!file.name.startsWith(".")) {
-                          val isMp3 = file.name.endsWith(".mp3", ignoreCase = true)
-                          val isMp4 = file.name.endsWith(".mp4", ignoreCase = true)
+                      val name = file.name
+                      if (!name.startsWith(".") && !name.endsWith(".part", ignoreCase = true) &&
+                          !name.endsWith(".ytdl", ignoreCase = true) && !name.endsWith(".temp", ignoreCase = true)) {
+                          val isMp3 = name.endsWith(".mp3", ignoreCase = true)
+                          val isMp4 = name.endsWith(".mp4", ignoreCase = true)
                           if (isMp3 || isMp4) {
-                              val typeMatches = when (filter) {
-                                  "AUDIO" -> isMp3
-                                  "VIDEO" -> isMp4
-                                  else -> true
-                              }
-                              val queryMatches = searchQuery.isEmpty() || file.name.lowercase().contains(searchQuery)
-                              if (typeMatches && queryMatches) {
-                                  seenNames.add(file.name.lowercase())
-                                  result.add(
-                                      HistoryItem(
-                                          name = file.name,
-                                          isAudio = isMp3,
-                                          sizeBytes = file.length(),
-                                          lastModified = file.lastModified(),
-                                          file = file,
-                                          uri = null
-                                      )
+                              val canonical = try { file.canonicalPath } catch (e: Exception) { file.absolutePath }
+                              if (!seenIds.contains(canonical)) {
+                                  seenIds.add(canonical)
+                                  seenFileNames.add(name.lowercase())
+                                  val item = HistoryItem(
+                                      id = canonical,
+                                      name = name,
+                                      isAudio = isMp3,
+                                      sizeBytes = file.length(),
+                                      lastModified = file.lastModified(),
+                                      file = file,
+                                      uri = null,
+                                      locationName = "Downloads/FlowRip"
                                   )
+                                  populateMetadata(context, item)
+                                  result.add(item)
                               }
                           }
                       }
                   }
 
-                  // 2. Scan custom SAF folder if active
+                  // 2. Scan custom SAF folder if configured
                   val customUri = getCustomTreeUri(context)
                   if (customUri != null) {
                       try {
                           val treeDoc = DocumentFile.fromTreeUri(context, customUri)
+                          val customFolderName = treeDoc?.name ?: "Custom Folder"
                           treeDoc?.listFiles()?.forEach { doc ->
                               val name = doc.name ?: ""
-                              if (!name.startsWith(".")) {
+                              if (!name.startsWith(".") && !name.endsWith(".part", ignoreCase = true) &&
+                                  !name.endsWith(".ytdl", ignoreCase = true) && !name.endsWith(".temp", ignoreCase = true)) {
                                   val isMp3 = name.endsWith(".mp3", ignoreCase = true)
                                   val isMp4 = name.endsWith(".mp4", ignoreCase = true)
-                                  if ((isMp3 || isMp4) && !seenNames.contains(name.lowercase())) {
-                                      val typeMatches = when (filter) {
-                                          "AUDIO" -> isMp3
-                                          "VIDEO" -> isMp4
-                                          else -> true
-                                      }
-                                      val queryMatches = searchQuery.isEmpty() || name.lowercase().contains(searchQuery)
-                                      if (typeMatches && queryMatches) {
-                                          seenNames.add(name.lowercase())
-                                          result.add(
-                                              HistoryItem(
-                                                  name = name,
-                                                  isAudio = isMp3,
-                                                  sizeBytes = doc.length(),
-                                                  lastModified = doc.lastModified(),
-                                                  file = null,
-                                                  uri = doc.uri
-                                              )
+                                  if (isMp3 || isMp4) {
+                                      val uriStr = doc.uri.toString()
+                                      val isDuplicateOfDefault = seenFileNames.contains(name.lowercase()) && doc.uri.path?.contains("FlowRip") == true
+                                      if (!seenIds.contains(uriStr) && !isDuplicateOfDefault) {
+                                          seenIds.add(uriStr)
+                                          seenFileNames.add(name.lowercase())
+                                          val item = HistoryItem(
+                                              id = uriStr,
+                                              name = name,
+                                              isAudio = isMp3,
+                                              sizeBytes = doc.length(),
+                                              lastModified = doc.lastModified(),
+                                              file = null,
+                                              uri = doc.uri,
+                                              locationName = "$customFolderName (SAF)"
                                           )
+                                          populateMetadata(context, item)
+                                          result.add(item)
                                       }
                                   }
                               }
@@ -633,7 +730,35 @@ jobs:
                       }
                   }
 
-                  return result.sortedByDescending { it.lastModified }
+                  return result
+              }
+
+              fun filterAndSortHistory(
+                  items: List<HistoryItem>,
+                  filter: String,
+                  query: String,
+                  sortOrder: HistorySortOrder
+              ): List<HistoryItem> {
+                  val cleanQuery = query.trim().lowercase()
+
+                  val filtered = items.filter { item ->
+                      val typeMatches = when (filter) {
+                          "AUDIO" -> item.isAudio
+                          "VIDEO" -> !item.isAudio
+                          else -> true
+                      }
+                      val queryMatches = cleanQuery.isEmpty() || item.name.lowercase().contains(cleanQuery)
+                      typeMatches && queryMatches
+                  }
+
+                  return when (sortOrder) {
+                      HistorySortOrder.NEWEST -> filtered.sortedByDescending { it.lastModified }
+                      HistorySortOrder.OLDEST -> filtered.sortedBy { it.lastModified }
+                      HistorySortOrder.SIZE_DESC -> filtered.sortedByDescending { it.sizeBytes }
+                      HistorySortOrder.SIZE_ASC -> filtered.sortedBy { it.sizeBytes }
+                      HistorySortOrder.NAME_ASC -> filtered.sortedBy { it.name.lowercase() }
+                      HistorySortOrder.NAME_DESC -> filtered.sortedByDescending { it.name.lowercase() }
+                  }
               }
           }
           EOF
@@ -3487,12 +3612,23 @@ jobs:
                               android:textStyle="bold" />
 
                           <TextView
+                              android:id="@+id/btnRefreshHistory"
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="↻"
+                              android:textColor="#4F46E5"
+                              android:textSize="22sp"
+                              android:textStyle="bold"
+                              android:padding="8dp" />
+
+                          <TextView
                               android:id="@+id/btnMenu"
                               android:layout_width="wrap_content"
                               android:layout_height="wrap_content"
                               android:text="⚙"
                               android:textColor="#64748B"
-                              android:textSize="20sp" />
+                              android:textSize="20sp"
+                              android:layout_marginStart="8dp" />
                       </LinearLayout>
 
                       <!-- Search Input Box -->
@@ -3576,6 +3712,52 @@ jobs:
                               android:textColor="#64748B"
                               android:backgroundTint="#F1F5F9"
                               app:cornerRadius="18dp" />
+                      </LinearLayout>
+
+                      <!-- Sort and Count Bar -->
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:orientation="horizontal"
+                          android:gravity="center_vertical"
+                          android:paddingHorizontal="24dp"
+                          android:paddingBottom="12dp">
+
+                          <TextView
+                              android:id="@+id/txtHistoryCount"
+                              android:layout_width="0dp"
+                              android:layout_height="wrap_content"
+                              android:layout_weight="1"
+                              android:text="0 files"
+                              android:textColor="#64748B"
+                              android:textSize="12sp"
+                              android:textStyle="bold" />
+
+                          <LinearLayout
+                              android:id="@+id/btnHistorySort"
+                              android:layout_width="wrap_content"
+                              android:layout_height="32dp"
+                              android:background="@drawable/bg_badge"
+                              android:orientation="horizontal"
+                              android:gravity="center_vertical"
+                              android:paddingHorizontal="10dp">
+
+                              <TextView
+                                  android:layout_width="wrap_content"
+                                  android:layout_height="wrap_content"
+                                  android:text="⇅ "
+                                  android:textColor="#4F46E5"
+                                  android:textSize="12sp" />
+
+                              <TextView
+                                  android:id="@+id/txtCurrentSort"
+                                  android:layout_width="wrap_content"
+                                  android:layout_height="wrap_content"
+                                  android:text="Newest first"
+                                  android:textColor="#4F46E5"
+                                  android:textSize="11sp"
+                                  android:textStyle="bold" />
+                          </LinearLayout>
                       </LinearLayout>
 
                       <ScrollView
@@ -4091,6 +4273,7 @@ jobs:
           import androidx.core.app.ActivityCompat
           import androidx.core.content.ContextCompat
           import androidx.core.content.FileProvider
+          import androidx.documentfile.provider.DocumentFile
           import androidx.core.view.ViewCompat
           import androidx.core.view.WindowInsetsCompat
           import com.startapp.sdk.adsbase.Ad
@@ -4224,6 +4407,13 @@ jobs:
               private lateinit var chipAll: Button
               private lateinit var chipAudio: Button
               private lateinit var chipVideo: Button
+              private lateinit var btnRefreshHistory: TextView
+              private lateinit var btnHistorySort: View
+              private lateinit var txtCurrentSort: TextView
+              private lateinit var txtHistoryCount: TextView
+              private var cachedHistoryItems: List<StorageHelper.HistoryItem> = emptyList()
+              private var isScanningHistory = false
+              private val thumbnailCache = object : android.util.LruCache<String, Bitmap>(60) {}
 
               private lateinit var txtDefaultFormat: TextView
               private lateinit var txtDefaultQuality: TextView
@@ -4323,6 +4513,18 @@ jobs:
                   chipAll = findViewById(R.id.chipAll)
                   chipAudio = findViewById(R.id.chipAudio)
                   chipVideo = findViewById(R.id.chipVideo)
+                  btnRefreshHistory = findViewById(R.id.btnRefreshHistory)
+                  btnHistorySort = findViewById(R.id.btnHistorySort)
+                  txtCurrentSort = findViewById(R.id.txtCurrentSort)
+                  txtHistoryCount = findViewById(R.id.txtHistoryCount)
+
+                  btnRefreshHistory.setOnClickListener {
+                      refreshHistory(forceRescan = true)
+                  }
+
+                  btnHistorySort.setOnClickListener {
+                      showSortSelectionDialog()
+                  }
 
                   txtDefaultFormat = findViewById(R.id.txtDefaultFormat)
                   txtDefaultQuality = findViewById(R.id.txtDefaultQuality)
@@ -4424,7 +4626,7 @@ jobs:
                       override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                           val q = s?.toString()?.trim() ?: ""
                           btnClearHistorySearch.visibility = if (q.isNotEmpty()) View.VISIBLE else View.GONE
-                          refreshHistory()
+                          renderHistoryUI()
                       }
                       override fun afterTextChanged(s: Editable?) {}
                   })
@@ -4441,35 +4643,20 @@ jobs:
 
                   chipAll.setOnClickListener {
                       historyFilter = "ALL"
-                      chipAll.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#4F46E5"))
-                      chipAll.setTextColor(android.graphics.Color.WHITE)
-                      chipAudio.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#F1F5F9"))
-                      chipAudio.setTextColor(android.graphics.Color.parseColor("#64748B"))
-                      chipVideo.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#F1F5F9"))
-                      chipVideo.setTextColor(android.graphics.Color.parseColor("#64748B"))
-                      refreshHistory()
+                      updateFilterChipStyles()
+                      renderHistoryUI()
                   }
 
                   chipAudio.setOnClickListener {
                       historyFilter = "AUDIO"
-                      chipAudio.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#4F46E5"))
-                      chipAudio.setTextColor(android.graphics.Color.WHITE)
-                      chipAll.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#F1F5F9"))
-                      chipAll.setTextColor(android.graphics.Color.parseColor("#64748B"))
-                      chipVideo.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#F1F5F9"))
-                      chipVideo.setTextColor(android.graphics.Color.parseColor("#64748B"))
-                      refreshHistory()
+                      updateFilterChipStyles()
+                      renderHistoryUI()
                   }
 
                   chipVideo.setOnClickListener {
                       historyFilter = "VIDEO"
-                      chipVideo.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#4F46E5"))
-                      chipVideo.setTextColor(android.graphics.Color.WHITE)
-                      chipAll.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#F1F5F9"))
-                      chipAll.setTextColor(android.graphics.Color.parseColor("#64748B"))
-                      chipAudio.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#F1F5F9"))
-                      chipAudio.setTextColor(android.graphics.Color.parseColor("#64748B"))
-                      refreshHistory()
+                      updateFilterChipStyles()
+                      renderHistoryUI()
                   }
 
                   cardMp3.setOnClickListener {
@@ -4975,7 +5162,7 @@ jobs:
                   iconTabHistory.setColorFilter(android.graphics.Color.parseColor(if (index == 1) "#4F46E5" else "#64748B"))
                   iconTabSettings.setColorFilter(android.graphics.Color.parseColor(if (index == 2) "#4F46E5" else "#64748B"))
 
-                  if (index == 1) refreshHistory()
+                  if (index == 1) refreshHistory(forceRescan = true)
               }
 
               fun showDownloaderState(state: Int) {
@@ -5342,43 +5529,173 @@ jobs:
                   }
               }
 
-              private fun refreshHistory() {
-                  historyListContainer.removeAllViews()
-                  val searchQuery = historySearchInput.text.toString().trim()
-                  val items = StorageHelper.getHistoryItems(this, historyFilter, searchQuery)
+              private fun updateFilterChipStyles() {
+                  val activeBg = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#4F46E5"))
+                  val inactiveBg = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#F1F5F9"))
+                  val activeText = android.graphics.Color.WHITE
+                  val inactiveText = android.graphics.Color.parseColor("#64748B")
 
-                  if (items.isEmpty()) {
-                      val emptyText = TextView(this).apply {
-                          text = if (searchQuery.isNotEmpty()) "No results found for \"$searchQuery\"" else "No downloads yet.\nPaste a link to get started!"
-                          textSize = 14f
+                  chipAll.backgroundTintList = if (historyFilter == "ALL") activeBg else inactiveBg
+                  chipAll.setTextColor(if (historyFilter == "ALL") activeText else inactiveText)
+
+                  chipAudio.backgroundTintList = if (historyFilter == "AUDIO") activeBg else inactiveBg
+                  chipAudio.setTextColor(if (historyFilter == "AUDIO") activeText else inactiveText)
+
+                  chipVideo.backgroundTintList = if (historyFilter == "VIDEO") activeBg else inactiveBg
+                  chipVideo.setTextColor(if (historyFilter == "VIDEO") activeText else inactiveText)
+              }
+
+              private fun showSortSelectionDialog() {
+                  val options = StorageHelper.HistorySortOrder.values()
+                  val labels = options.map { it.label }.toTypedArray()
+                  val currentSort = StorageHelper.getHistorySortOrder(this)
+                  val checkedIndex = options.indexOf(currentSort)
+
+                  AlertDialog.Builder(this)
+                      .setTitle("Sort Downloads")
+                      .setSingleChoiceItems(labels, checkedIndex) { dialog, which ->
+                          val selectedOrder = options[which]
+                          StorageHelper.setHistorySortOrder(this, selectedOrder)
+                          txtCurrentSort.text = selectedOrder.label
+                          dialog.dismiss()
+                          renderHistoryUI()
+                      }
+                      .setNegativeButton("Cancel", null)
+                      .show()
+              }
+
+              private fun refreshHistory(forceRescan: Boolean = false) {
+                  if (::txtCurrentSort.isInitialized) {
+                      txtCurrentSort.text = StorageHelper.getHistorySortOrder(this).label
+                  }
+
+                  if (forceRescan || cachedHistoryItems.isEmpty()) {
+                      if (isScanningHistory) return
+                      isScanningHistory = true
+                      thread(name = "FlowRipHistoryScanThread") {
+                          val scanned = StorageHelper.scanAllHistoryItems(applicationContext)
+                          cachedHistoryItems = scanned
+                          isScanningHistory = false
+                          runOnUiThread {
+                              renderHistoryUI()
+                          }
+                      }
+                  } else {
+                      renderHistoryUI()
+                  }
+              }
+
+              private fun renderHistoryUI() {
+                  if (!::historyListContainer.isInitialized) return
+                  historyListContainer.removeAllViews()
+
+                  val sortOrder = StorageHelper.getHistorySortOrder(this)
+                  val searchQuery = historySearchInput.text.toString().trim()
+                  val filtered = StorageHelper.filterAndSortHistory(cachedHistoryItems, historyFilter, searchQuery, sortOrder)
+
+                  if (::txtHistoryCount.isInitialized) {
+                      txtHistoryCount.text = "${filtered.size} ${if (filtered.size == 1) "file" else "files"}"
+                  }
+
+                  if (cachedHistoryItems.isEmpty()) {
+                      val emptyContainer = LinearLayout(this).apply {
+                          orientation = LinearLayout.VERTICAL
+                          gravity = android.view.Gravity.CENTER
+                          setPadding(dpToPx(24), dpToPx(60), dpToPx(24), dpToPx(40))
+                      }
+                      val icon = TextView(this).apply {
+                          text = "📥"
+                          textSize = 38f
+                          gravity = android.view.Gravity.CENTER
+                      }
+                      val title = TextView(this).apply {
+                          text = "No downloads yet"
+                          textSize = 16f
+                          setTypeface(null, android.graphics.Typeface.BOLD)
+                          setTextColor(android.graphics.Color.parseColor("#0F172A"))
+                          gravity = android.view.Gravity.CENTER
+                          val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                          lp.topMargin = dpToPx(12)
+                          layoutParams = lp
+                      }
+                      val subtitle = TextView(this).apply {
+                          text = "Your completed downloads will appear here.\nPaste a link on the Home screen to get started!"
+                          textSize = 13f
                           setTextColor(android.graphics.Color.parseColor("#64748B"))
                           gravity = android.view.Gravity.CENTER
-                          setPadding(0, 100, 0, 0)
+                          val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                          lp.topMargin = dpToPx(6)
+                          layoutParams = lp
                       }
-                      historyListContainer.addView(emptyText)
+                      emptyContainer.addView(icon)
+                      emptyContainer.addView(title)
+                      emptyContainer.addView(subtitle)
+                      historyListContainer.addView(emptyContainer)
                       return
                   }
 
-                  for (item in items) {
+                  if (filtered.isEmpty()) {
+                      val emptyContainer = LinearLayout(this).apply {
+                          orientation = LinearLayout.VERTICAL
+                          gravity = android.view.Gravity.CENTER
+                          setPadding(dpToPx(24), dpToPx(60), dpToPx(24), dpToPx(40))
+                      }
+                      val icon = TextView(this).apply {
+                          text = "🔍"
+                          textSize = 34f
+                          gravity = android.view.Gravity.CENTER
+                      }
+                      val title = TextView(this).apply {
+                          text = "No matching downloads"
+                          textSize = 16f
+                          setTypeface(null, android.graphics.Typeface.BOLD)
+                          setTextColor(android.graphics.Color.parseColor("#0F172A"))
+                          gravity = android.view.Gravity.CENTER
+                          val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                          lp.topMargin = dpToPx(12)
+                          layoutParams = lp
+                      }
+                      val subtitle = TextView(this).apply {
+                          text = "No files match your current search or filter.\nTry clearing the search or selecting 'All Files'."
+                          textSize = 13f
+                          setTextColor(android.graphics.Color.parseColor("#64748B"))
+                          gravity = android.view.Gravity.CENTER
+                          val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                          lp.topMargin = dpToPx(6)
+                          layoutParams = lp
+                      }
+                      emptyContainer.addView(icon)
+                      emptyContainer.addView(title)
+                      emptyContainer.addView(subtitle)
+                      historyListContainer.addView(emptyContainer)
+                      return
+                  }
+
+                  for (item in filtered) {
                       val itemCard = androidx.cardview.widget.CardView(this).apply {
-                          radius = 28f
+                          radius = 20f
                           cardElevation = 2f
                           setCardBackgroundColor(android.graphics.Color.WHITE)
                           val lp = LinearLayout.LayoutParams(
                               LinearLayout.LayoutParams.MATCH_PARENT,
                               LinearLayout.LayoutParams.WRAP_CONTENT
-                          ).apply { setMargins(0, 0, 0, 24) }
+                          ).apply { setMargins(0, 0, 0, dpToPx(12)) }
                           this.layoutParams = lp
+                          isClickable = true
+                          isFocusable = true
+                          setOnClickListener {
+                              showFileDetailsDialog(item)
+                          }
                       }
 
                       val row = LinearLayout(this).apply {
                           orientation = LinearLayout.HORIZONTAL
                           gravity = android.view.Gravity.CENTER_VERTICAL
-                          setPadding(24, 20, 24, 20)
+                          setPadding(dpToPx(14), dpToPx(12), dpToPx(14), dpToPx(12))
                       }
 
                       val thumbCard = androidx.cardview.widget.CardView(this).apply {
-                          radius = 16f
+                          radius = 14f
                           cardElevation = 0f
                           setCardBackgroundColor(android.graphics.Color.parseColor("#EEF2FF"))
                           val lp = LinearLayout.LayoutParams(dpToPx(56), dpToPx(56)).apply {
@@ -5407,35 +5724,7 @@ jobs:
                       thumbFrame.addView(thumbImg)
                       thumbCard.addView(thumbFrame)
 
-                      // Extract thumbnail / embedded ID3 picture asynchronously
-                      thread {
-                          var bmp: Bitmap? = null
-                          try {
-                              val retriever = MediaMetadataRetriever()
-                              if (item.file != null) {
-                                  retriever.setDataSource(item.file.absolutePath)
-                              } else if (item.uri != null) {
-                                  retriever.setDataSource(this@MainActivity, item.uri)
-                              }
-                              if (!item.isAudio) {
-                                  bmp = retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                                      ?: retriever.frameAtTime
-                              } else {
-                                  val art = retriever.embeddedPicture
-                                  if (art != null) {
-                                      bmp = BitmapFactory.decodeByteArray(art, 0, art.size)
-                                  }
-                              }
-                              retriever.release()
-                          } catch (e: Exception) {}
-
-                          if (bmp != null) {
-                              runOnUiThread {
-                                  thumbImg.setImageBitmap(bmp)
-                                  placeholderText.visibility = View.GONE
-                              }
-                          }
-                      }
+                      loadThumbnail(item, thumbImg, placeholderText)
 
                       val infoCol = LinearLayout(this).apply {
                           orientation = LinearLayout.VERTICAL
@@ -5447,42 +5736,65 @@ jobs:
                           textSize = 13f
                           setTextColor(android.graphics.Color.parseColor("#0F172A"))
                           setTypeface(null, android.graphics.Typeface.BOLD)
-                          maxLines = 1
+                          maxLines = 2
                           ellipsize = android.text.TextUtils.TruncateAt.END
                       }
 
-                      val sub = TextView(this).apply {
-                          val sizeMb = "%.1f MB".format(item.sizeBytes / (1024.0 * 1024.0))
-                          val dateStr = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(item.lastModified))
-                          text = "$sizeMb • $dateStr"
+                      val typePart = if (item.isAudio) "MP3" else (item.resolution ?: "MP4")
+                      val durPart = if (item.durationMs > 0) " • ${item.formattedDuration}" else ""
+                      val sub1 = TextView(this).apply {
+                          text = "$typePart$durPart • ${item.formattedSize}"
                           textSize = 11f
                           setTextColor(android.graphics.Color.parseColor("#64748B"))
+                          val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                          lp.topMargin = dpToPx(3)
+                          layoutParams = lp
+                      }
+
+                      val sub2 = TextView(this).apply {
+                          text = "${item.formattedDate} • ${item.locationName}"
+                          textSize = 10f
+                          setTextColor(android.graphics.Color.parseColor("#94A3B8"))
+                          val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                          lp.topMargin = dpToPx(2)
+                          layoutParams = lp
                       }
 
                       infoCol.addView(title)
-                      infoCol.addView(sub)
+                      infoCol.addView(sub1)
+                      infoCol.addView(sub2)
 
                       val actionsRow = LinearLayout(this).apply {
                           orientation = LinearLayout.HORIZONTAL
                           gravity = android.view.Gravity.CENTER_VERTICAL
+                          layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
                       }
 
                       val playBtn = Button(this).apply {
-                          text = "▶ Play"
-                          textSize = 11f
-                          setTextColor(android.graphics.Color.WHITE)
-                          backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#4F46E5"))
-                          layoutParams = LinearLayout.LayoutParams(
-                              LinearLayout.LayoutParams.WRAP_CONTENT,
-                              dpToPx(36)
-                          )
-                          setPadding(dpToPx(12), 0, dpToPx(12), 0)
+                          text = "▶"
+                          textSize = 13f
+                          setTextColor(android.graphics.Color.parseColor("#4F46E5"))
+                          backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#EEF2FF"))
+                          val lp = LinearLayout.LayoutParams(dpToPx(36), dpToPx(36))
+                          layoutParams = lp
+                          setPadding(0, 0, 0, 0)
                           setOnClickListener {
-                              if (item.file != null) {
-                                  playFile(item.file)
-                              } else if (item.uri != null) {
-                                  playUri(item.uri, item.isAudio)
-                              }
+                              playItem(item)
+                          }
+                      }
+
+                      val shareBtn = Button(this).apply {
+                          text = "↗"
+                          textSize = 13f
+                          setTextColor(android.graphics.Color.parseColor("#4F46E5"))
+                          backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#F8FAFC"))
+                          val lp = LinearLayout.LayoutParams(dpToPx(36), dpToPx(36)).apply {
+                              marginStart = dpToPx(4)
+                          }
+                          layoutParams = lp
+                          setPadding(0, 0, 0, 0)
+                          setOnClickListener {
+                              shareItem(item)
                           }
                       }
 
@@ -5491,47 +5803,18 @@ jobs:
                           textSize = 13f
                           setTextColor(android.graphics.Color.parseColor("#EF4444"))
                           backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#FEE2E2"))
-                          val lp = LinearLayout.LayoutParams(dpToPx(42), dpToPx(36)).apply {
-                              marginStart = dpToPx(6)
+                          val lp = LinearLayout.LayoutParams(dpToPx(36), dpToPx(36)).apply {
+                              marginStart = dpToPx(4)
                           }
                           layoutParams = lp
                           setPadding(0, 0, 0, 0)
                           setOnClickListener {
-                              AlertDialog.Builder(this@MainActivity)
-                                  .setTitle("Delete File?")
-                                  .setMessage("Are you sure you want to delete:\n\"${item.name}\"?")
-                                  .setPositiveButton("Delete") { _, _ ->
-                                      try {
-                                          var deleted = false
-                                          if (item.file != null) {
-                                              deleted = item.file.delete()
-                                              if (deleted) {
-                                                  MediaScannerConnection.scanFile(
-                                                      applicationContext,
-                                                      arrayOf(item.file.absolutePath),
-                                                      null,
-                                                      null
-                                                  )
-                                              }
-                                          } else if (item.uri != null) {
-                                              deleted = DocumentsContract.deleteDocument(contentResolver, item.uri)
-                                          }
-                                          if (deleted) {
-                                              Toast.makeText(this@MainActivity, "File deleted", Toast.LENGTH_SHORT).show()
-                                              refreshHistory()
-                                          } else {
-                                              Toast.makeText(this@MainActivity, "Could not delete file", Toast.LENGTH_SHORT).show()
-                                          }
-                                      } catch (e: Exception) {
-                                          Toast.makeText(this@MainActivity, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                                      }
-                                  }
-                                  .setNegativeButton("Cancel", null)
-                                  .show()
+                              confirmAndDeleteItem(item)
                           }
                       }
 
                       actionsRow.addView(playBtn)
+                      actionsRow.addView(shareBtn)
                       actionsRow.addView(deleteBtn)
 
                       row.addView(thumbCard)
@@ -5542,16 +5825,172 @@ jobs:
                   }
               }
 
-              private fun playUri(uri: Uri, isAudio: Boolean) {
+              private fun loadThumbnail(item: StorageHelper.HistoryItem, thumbImg: ImageView, placeholderText: TextView) {
+                  val cached = thumbnailCache.get(item.id)
+                  if (cached != null) {
+                      thumbImg.setImageBitmap(cached)
+                      placeholderText.visibility = View.GONE
+                      return
+                  }
+
+                  placeholderText.visibility = View.VISIBLE
+                  thumbImg.setImageBitmap(null)
+
+                  thread(name = "FlowRipThumb_${item.id.hashCode()}") {
+                      var bmp: Bitmap? = null
+                      try {
+                          val retriever = MediaMetadataRetriever()
+                          if (item.file != null && item.file.exists()) {
+                              retriever.setDataSource(item.file.absolutePath)
+                          } else if (item.uri != null) {
+                              retriever.setDataSource(this@MainActivity, item.uri)
+                          }
+
+                          if (!item.isAudio) {
+                              bmp = retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                                  ?: retriever.frameAtTime
+                          } else {
+                              val art = retriever.embeddedPicture
+                              if (art != null) {
+                                  val opts = BitmapFactory.Options().apply {
+                                      inSampleSize = 2
+                                  }
+                                  bmp = BitmapFactory.decodeByteArray(art, 0, art.size, opts)
+                              }
+                          }
+                          retriever.release()
+                      } catch (e: Exception) {}
+
+                      if (bmp != null) {
+                          val scaled = if (bmp.width > 160 || bmp.height > 160) {
+                              val maxDim = maxOf(bmp.width, bmp.height)
+                              val scale = 160f / maxDim
+                              val w = (bmp.width * scale).toInt().coerceAtLeast(1)
+                              val h = (bmp.height * scale).toInt().coerceAtLeast(1)
+                              Bitmap.createScaledBitmap(bmp, w, h, true)
+                          } else {
+                              bmp
+                          }
+                          thumbnailCache.put(item.id, scaled)
+                          runOnUiThread {
+                              thumbImg.setImageBitmap(scaled)
+                              placeholderText.visibility = View.GONE
+                          }
+                      }
+                  }
+              }
+
+              private fun showFileDetailsDialog(item: StorageHelper.HistoryItem) {
+                  val typeStr = if (item.isAudio) "MP3 Audio" else "MP4 Video"
+                  val resStr = item.resolution ?: if (item.isAudio) "320 kbps (Audio)" else "Standard"
+                  val durStr = item.formattedDuration
+
+                  val detailsMsg = buildString {
+                      append("• File: ").append(item.name).append("\n\n")
+                      append("• Format: ").append(typeStr).append("\n")
+                      append("• Resolution: ").append(resStr).append("\n")
+                      append("• Duration: ").append(durStr).append("\n")
+                      append("• Size: ").append(item.formattedSize).append("\n")
+                      append("• Location: ").append(item.locationName).append("\n")
+                      append("• Downloaded: ").append(item.formattedDate)
+                  }
+
+                  AlertDialog.Builder(this)
+                      .setTitle("Media Details")
+                      .setMessage(detailsMsg)
+                      .setPositiveButton("▶ Play") { _, _ ->
+                          playItem(item)
+                      }
+                      .setNeutralButton("↗ Share") { _, _ ->
+                          shareItem(item)
+                      }
+                      .setNegativeButton("🗑 Delete") { _, _ ->
+                          confirmAndDeleteItem(item)
+                      }
+                      .show()
+              }
+
+              private fun playItem(item: StorageHelper.HistoryItem) {
                   try {
+                      val uri = if (item.file != null) {
+                          FileProvider.getUriForFile(this, "$packageName.provider", item.file)
+                      } else {
+                          item.uri ?: return
+                      }
+                      val mimeType = if (item.isAudio) "audio/*" else "video/*"
                       val intent = Intent(Intent.ACTION_VIEW).apply {
-                          setDataAndType(uri, if (isAudio) "audio/*" else "video/*")
+                          setDataAndType(uri, mimeType)
                           addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                       }
                       startActivity(Intent.createChooser(intent, "Play media with"))
                   } catch (e: Exception) {
-                      Toast.makeText(this, "Could not open media player", Toast.LENGTH_SHORT).show()
+                      Toast.makeText(this, "No compatible app found to open this file.", Toast.LENGTH_SHORT).show()
                   }
+              }
+
+              private fun shareItem(item: StorageHelper.HistoryItem) {
+                  try {
+                      val uri = if (item.file != null) {
+                          FileProvider.getUriForFile(this, "$packageName.provider", item.file)
+                      } else {
+                          item.uri ?: return
+                      }
+                      val mimeType = if (item.isAudio) "audio/*" else "video/*"
+                      val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                          type = mimeType
+                          putExtra(Intent.EXTRA_STREAM, uri)
+                          addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                      }
+                      startActivity(Intent.createChooser(shareIntent, "Share media via"))
+                  } catch (e: Exception) {
+                      Toast.makeText(this, "Could not share file: ${e.message}", Toast.LENGTH_SHORT).show()
+                  }
+              }
+
+              private fun confirmAndDeleteItem(item: StorageHelper.HistoryItem) {
+                  AlertDialog.Builder(this)
+                      .setTitle("Delete this file?")
+                      .setMessage("\"${item.name}\"\n\nThis will permanently delete this file from your device.")
+                      .setPositiveButton("Delete") { _, _ ->
+                          thread(name = "FlowRipDeleteThread") {
+                              var deleted = false
+                              try {
+                                  if (item.file != null) {
+                                      deleted = item.file.delete()
+                                      if (deleted) {
+                                          MediaScannerConnection.scanFile(
+                                              applicationContext,
+                                              arrayOf(item.file.absolutePath),
+                                              null,
+                                              null
+                                          )
+                                      }
+                                  } else if (item.uri != null) {
+                                      deleted = try {
+                                          DocumentsContract.deleteDocument(contentResolver, item.uri)
+                                      } catch (e: Exception) {
+                                          DocumentFile.fromSingleUri(this@MainActivity, item.uri)?.delete() ?: false
+                                      }
+                                  }
+                              } catch (e: Exception) {
+                                  Log.w("MainActivity", "Error deleting file: ${e.message}")
+                                  deleted = false
+                              }
+
+                              runOnUiThread {
+                                  if (deleted) {
+                                      thumbnailCache.remove(item.id)
+                                      cachedHistoryItems = cachedHistoryItems.filter { it.id != item.id }
+                                      renderHistoryUI()
+                                      Toast.makeText(this@MainActivity, "File deleted", Toast.LENGTH_SHORT).show()
+                                  } else {
+                                      Toast.makeText(this@MainActivity, "Could not delete file", Toast.LENGTH_SHORT).show()
+                                  }
+                              }
+                          }
+                      }
+                      .setNegativeButton("Cancel", null)
+                      .show()
               }
 
               private fun attachDownloadListener() {
@@ -6161,5 +6600,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-Stage7-Wifi-Only-Network-Aware-v28-APK
+          name: FlowRip-Stage8-History-Manager-v29-APK
           path: app/build/outputs/apk/**/*.apk
