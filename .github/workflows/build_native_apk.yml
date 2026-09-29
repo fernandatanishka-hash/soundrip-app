@@ -324,8 +324,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 31
-                  versionName "8.1.0"
+                  versionCode 32
+                  versionName "8.1.1"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -533,6 +533,34 @@ jobs:
                   }
               }
 
+              fun isCustomTreeDefaultDir(context: Context): Boolean {
+                  val treeUri = getCustomTreeUri(context) ?: return false
+                  return try {
+                      val docId = DocumentsContract.getTreeDocumentId(treeUri)
+                      docId.equals("primary:Download/FlowRip", ignoreCase = true) ||
+                      docId.equals("primary:Download/FlowRip/", ignoreCase = true)
+                  } catch (e: Exception) {
+                      false
+                  }
+              }
+
+              fun getUniqueDestinationFile(targetDir: File, originalName: String): File {
+                  if (!targetDir.exists()) targetDir.mkdirs()
+                  var targetFile = File(targetDir, originalName)
+                  if (!targetFile.exists()) return targetFile
+
+                  val baseName = originalName.substringBeforeLast(".")
+                  val extension = originalName.substringAfterLast(".", "")
+                  var counter = 1
+
+                  while (targetFile.exists()) {
+                      val newName = if (extension.isNotEmpty()) "$baseName ($counter).$extension" else "$baseName ($counter)"
+                      targetFile = File(targetDir, newName)
+                      counter++
+                  }
+                  return targetFile
+              }
+
               fun getCustomTreeUri(context: Context): Uri? {
                   val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                   val uriStr = prefs.getString(KEY_DOWNLOAD_TREE_URI, null) ?: return null
@@ -695,8 +723,10 @@ jobs:
 
               fun scanAllHistoryItems(context: Context): List<HistoryItem> {
                   val result = mutableListOf<HistoryItem>()
-                  val seenIds = mutableSetOf<String>()
-                  val seenFileNames = mutableSetOf<String>()
+                  val seenIdentities = mutableSetOf<String>()
+
+                  val isCustomFolderSameAsDefault = isCustomTreeDefaultDir(context)
+                  val defaultFileNames = mutableSetOf<String>()
 
                   // 1. Scan default Downloads/FlowRip folder
                   val defaultDir = getDefaultDownloadDir()
@@ -704,13 +734,14 @@ jobs:
                       val name = file.name
                       if (!name.startsWith(".") && !name.endsWith(".part", ignoreCase = true) &&
                           !name.endsWith(".ytdl", ignoreCase = true) && !name.endsWith(".temp", ignoreCase = true)) {
-                          val isMp3 = name.endsWith(".mp3", ignoreCase = true)
-                          val isMp4 = name.endsWith(".mp4", ignoreCase = true)
-                          if (isMp3 || isMp4) {
+                          val isMp3 = name.endsWith(".mp3", ignoreCase = true) || name.endsWith(".m4a", ignoreCase = true)
+                          val isVideo = name.endsWith(".mp4", ignoreCase = true) || name.endsWith(".mkv", ignoreCase = true) || name.endsWith(".webm", ignoreCase = true)
+                          if (isMp3 || isVideo) {
                               val canonical = try { file.canonicalPath } catch (e: Exception) { file.absolutePath }
-                              if (!seenIds.contains(canonical)) {
-                                  seenIds.add(canonical)
-                                  seenFileNames.add(name.lowercase())
+                              Log.d(TAG, "HISTORY_SCAN_FILE: name='$name', path='$canonical', size=${file.length()}")
+                              Log.d(TAG, "HISTORY_DUPLICATE_CHECK: id='$canonical'")
+                              if (seenIdentities.add(canonical)) {
+                                  defaultFileNames.add(name.lowercase())
                                   val item = HistoryItem(
                                       id = canonical,
                                       name = name,
@@ -723,6 +754,9 @@ jobs:
                                   )
                                   populateMetadata(context, item)
                                   result.add(item)
+                                  Log.d(TAG, "HISTORY_ITEM_ADDED: name='$name', id='$canonical', res='${item.resolution}', size=${item.sizeBytes}")
+                              } else {
+                                  Log.d(TAG, "HISTORY_DUPLICATE_REJECTED: id='$canonical', name='$name'")
                               }
                           }
                       }
@@ -738,14 +772,15 @@ jobs:
                               val name = doc.name ?: ""
                               if (!name.startsWith(".") && !name.endsWith(".part", ignoreCase = true) &&
                                   !name.endsWith(".ytdl", ignoreCase = true) && !name.endsWith(".temp", ignoreCase = true)) {
-                                  val isMp3 = name.endsWith(".mp3", ignoreCase = true)
-                                  val isMp4 = name.endsWith(".mp4", ignoreCase = true)
-                                  if (isMp3 || isMp4) {
+                                  val isMp3 = name.endsWith(".mp3", ignoreCase = true) || name.endsWith(".m4a", ignoreCase = true)
+                                  val isVideo = name.endsWith(".mp4", ignoreCase = true) || name.endsWith(".mkv", ignoreCase = true) || name.endsWith(".webm", ignoreCase = true)
+                                  if (isMp3 || isVideo) {
                                       val uriStr = doc.uri.toString()
-                                      val isDuplicateOfDefault = seenFileNames.contains(name.lowercase()) && doc.uri.path?.contains("FlowRip") == true
-                                      if (!seenIds.contains(uriStr) && !isDuplicateOfDefault) {
-                                          seenIds.add(uriStr)
-                                          seenFileNames.add(name.lowercase())
+                                      val isSamePhysicalAsDefault = isCustomFolderSameAsDefault && defaultFileNames.contains(name.lowercase())
+                                      Log.d(TAG, "HISTORY_SCAN_FILE: (SAF) name='$name', uri='$uriStr', size=${doc.length()}")
+                                      Log.d(TAG, "HISTORY_DUPLICATE_CHECK: (SAF) uri='$uriStr', isSamePhysical=$isSamePhysicalAsDefault")
+                                      if (!seenIdentities.contains(uriStr) && !isSamePhysicalAsDefault) {
+                                          seenIdentities.add(uriStr)
                                           val item = HistoryItem(
                                               id = uriStr,
                                               name = name,
@@ -758,6 +793,9 @@ jobs:
                                           )
                                           populateMetadata(context, item)
                                           result.add(item)
+                                          Log.d(TAG, "HISTORY_ITEM_ADDED: (SAF) name='$name', uri='$uriStr', res='${item.resolution}', size=${item.sizeBytes}")
+                                      } else {
+                                          Log.d(TAG, "HISTORY_DUPLICATE_REJECTED: (SAF) uri='$uriStr', name='$name', reason=${if (seenIdentities.contains(uriStr)) "already_seen_uri" else "same_physical_as_default"}")
                                       }
                                   }
                               }
@@ -769,7 +807,6 @@ jobs:
 
                   return result
               }
-
               fun filterAndSortHistory(
                   items: List<HistoryItem>,
                   filter: String,
@@ -1822,12 +1859,10 @@ jobs:
 
                           val customTreeUri = StorageHelper.getCustomTreeUri(applicationContext)
                           val isCustomLocation = (customTreeUri != null)
-                          targetDir = if (isCustomLocation) {
-                              StorageHelper.getStagingDir(applicationContext)
-                          } else {
-                              StorageHelper.getDefaultDownloadDir()
-                          }
+                          val stagingDir = StorageHelper.getStagingDir(applicationContext)
+                          targetDir = stagingDir
                           if (!targetDir.exists()) targetDir.mkdirs()
+                          cleanupPartialFiles(targetDir)
 
                           latestFilesBefore = targetDir.listFiles()?.toList() ?: emptyList()
 
@@ -2044,19 +2079,45 @@ jobs:
                               } catch (e: Exception) {}
                           }
 
-                          var finalFile = finishedFile
-                          if (finishedFile != null && isCustomLocation && customTreeUri != null) {
-                              currentStatus = "Saving to custom folder..."
-                              postEvent(DownloadEvent.Progress(99, "--", "--", "--", currentStatus))
-                              val destinationUri = StorageHelper.copyToDocumentTree(applicationContext, finishedFile, customTreeUri)
-                              if (destinationUri != null) {
-                                  Log.d(TAG, "File successfully transferred to custom SAF folder: $destinationUri")
+                          var finalFile: File? = null
+                          if (finishedFile != null) {
+                              if (isCustomLocation && customTreeUri != null) {
+                                  currentStatus = "Saving to custom folder..."
+                                  postEvent(DownloadEvent.Progress(99, "--", "--", "--", currentStatus))
+                                  val destinationUri = StorageHelper.copyToDocumentTree(applicationContext, finishedFile, customTreeUri)
+                                  if (destinationUri != null) {
+                                      Log.d(TAG, "File successfully transferred to custom SAF folder: $destinationUri")
+                                      finalFile = finishedFile
+                                  } else {
+                                      Log.w(TAG, "SAF transfer failed; keeping file in default directory as safe fallback")
+                                      val fallbackFile = StorageHelper.getUniqueDestinationFile(StorageHelper.getDefaultDownloadDir(), finishedFile.name)
+                                      if (finishedFile.exists()) {
+                                          if (finishedFile.renameTo(fallbackFile)) {
+                                              finalFile = fallbackFile
+                                          } else {
+                                              finishedFile.copyTo(fallbackFile, overwrite = true)
+                                              finishedFile.delete()
+                                              finalFile = fallbackFile
+                                          }
+                                      }
+                                  }
                               } else {
-                                  Log.w(TAG, "SAF transfer failed; keeping file in default directory as safe fallback")
-                                  val fallbackFile = File(StorageHelper.getDefaultDownloadDir(), finishedFile.name)
+                                  val defaultDir = StorageHelper.getDefaultDownloadDir()
+                                  val destinationFile = StorageHelper.getUniqueDestinationFile(defaultDir, finishedFile.name)
                                   if (finishedFile.exists()) {
-                                      finishedFile.renameTo(fallbackFile)
-                                      finalFile = fallbackFile
+                                      if (finishedFile.renameTo(destinationFile)) {
+                                          finalFile = destinationFile
+                                          Log.d(TAG, "Moved download to default folder: ${destinationFile.absolutePath}")
+                                      } else {
+                                          try {
+                                              finishedFile.copyTo(destinationFile, overwrite = true)
+                                              finishedFile.delete()
+                                              finalFile = destinationFile
+                                          } catch (e: Exception) {
+                                              Log.w(TAG, "Copy to destination failed: ${e.message}")
+                                              finalFile = finishedFile
+                                          }
+                                      }
                                   }
                               }
                           }
@@ -6869,5 +6930,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-Stage8.1-TargetedFixes-v31-APK
+          name: FlowRip-Stage8.1.1-MultiResolutionHistory-v32-APK
           path: app/build/outputs/apk/**/*.apk
