@@ -324,8 +324,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 29
-                  versionName "8.0.0"
+                  versionCode 30
+                  versionName "8.0.1"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -378,6 +378,7 @@ jobs:
           import android.util.Log
           import androidx.documentfile.provider.DocumentFile
           import java.io.File
+          import java.io.FileInputStream
           import java.text.SimpleDateFormat
           import java.util.Date
           import java.util.Locale
@@ -460,13 +461,46 @@ jobs:
               }
 
               fun populateMetadata(context: Context, item: HistoryItem) {
+                  val retriever = MediaMetadataRetriever()
                   try {
-                      val retriever = MediaMetadataRetriever()
+                      var dataSourceSet = false
                       if (item.file != null && item.file.exists()) {
-                          retriever.setDataSource(item.file.absolutePath)
+                          try {
+                              FileInputStream(item.file).use { fis ->
+                                  retriever.setDataSource(fis.fd)
+                                  dataSourceSet = true
+                              }
+                          } catch (e: Exception) {
+                              Log.d(TAG, "FileInputStream fd failed in populateMetadata, trying path: ${e.message}")
+                          }
+                          if (!dataSourceSet) {
+                              try {
+                                  retriever.setDataSource(item.file.absolutePath)
+                                  dataSourceSet = true
+                              } catch (e: Exception) {
+                                  Log.w(TAG, "setDataSource(path) failed in populateMetadata: ${e.message}")
+                              }
+                          }
                       } else if (item.uri != null) {
-                          retriever.setDataSource(context, item.uri)
+                          try {
+                              context.contentResolver.openFileDescriptor(item.uri, "r")?.use { pfd ->
+                                  retriever.setDataSource(pfd.fileDescriptor)
+                                  dataSourceSet = true
+                              }
+                          } catch (e: Exception) {
+                              Log.d(TAG, "openFileDescriptor failed in populateMetadata: ${e.message}")
+                          }
+                          if (!dataSourceSet) {
+                              try {
+                                  retriever.setDataSource(context, item.uri)
+                                  dataSourceSet = true
+                              } catch (e: Exception) {
+                                  Log.w(TAG, "setDataSource(uri) failed in populateMetadata: ${e.message}")
+                              }
+                          }
                       }
+
+                      if (!dataSourceSet) return
 
                       val durStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
                       if (!durStr.isNullOrEmpty()) {
@@ -490,9 +524,12 @@ jobs:
                               }
                           }
                       }
-                      retriever.release()
                   } catch (e: Exception) {
                       Log.d(TAG, "Metadata extraction skipped for ${item.name}: ${e.message}")
+                  } finally {
+                      try {
+                          retriever.release()
+                      } catch (e: Exception) {}
                   }
               }
 
@@ -4254,6 +4291,10 @@ jobs:
           import android.graphics.Bitmap
           import android.graphics.BitmapFactory
           import android.media.MediaMetadataRetriever
+          import android.media.ThumbnailUtils
+          import android.provider.MediaStore
+          import android.util.Size
+          import java.io.FileInputStream
           import android.media.MediaScannerConnection
           import android.net.Uri
           import android.os.Build
@@ -5825,56 +5866,255 @@ jobs:
                   }
               }
 
+              private fun getThumbnailCacheKey(item: StorageHelper.HistoryItem): String {
+                  return "${item.id}_${item.lastModified}_${item.sizeBytes}"
+              }
+
+              private fun scaleDownIfNeeded(bmp: Bitmap, maxDimension: Int): Bitmap {
+                  if (bmp.width <= maxDimension && bmp.height <= maxDimension) {
+                      return bmp
+                  }
+                  val maxDim = maxOf(bmp.width, bmp.height)
+                  val scale = maxDimension.toFloat() / maxDim
+                  val w = (bmp.width * scale).toInt().coerceAtLeast(1)
+                  val h = (bmp.height * scale).toInt().coerceAtLeast(1)
+                  return Bitmap.createScaledBitmap(bmp, w, h, true)
+              }
+
+              private fun extractMediaThumbnail(context: Context, item: StorageHelper.HistoryItem): Bitmap? {
+                  if (item.isAudio) {
+                      val retriever = MediaMetadataRetriever()
+                      try {
+                          var dsSet = false
+                          if (item.file != null && item.file.exists()) {
+                              try {
+                                  FileInputStream(item.file).use { fis ->
+                                      retriever.setDataSource(fis.fd)
+                                      dsSet = true
+                                  }
+                              } catch (e: Exception) {}
+                              if (!dsSet) {
+                                  try {
+                                      retriever.setDataSource(item.file.absolutePath)
+                                      dsSet = true
+                                  } catch (e: Exception) {}
+                              }
+                          } else if (item.uri != null) {
+                              try {
+                                  context.contentResolver.openFileDescriptor(item.uri, "r")?.use { pfd ->
+                                      retriever.setDataSource(pfd.fileDescriptor)
+                                      dsSet = true
+                                  }
+                              } catch (e: Exception) {}
+                              if (!dsSet) {
+                                  try {
+                                      retriever.setDataSource(context, item.uri)
+                                      dsSet = true
+                                  } catch (e: Exception) {}
+                              }
+                          }
+
+                          if (!dsSet) return null
+
+                          val art = retriever.embeddedPicture
+                          if (art != null) {
+                              val opts = BitmapFactory.Options().apply {
+                                  inSampleSize = 2
+                              }
+                              val decoded = BitmapFactory.decodeByteArray(art, 0, art.size, opts)
+                              if (decoded != null) {
+                                  return scaleDownIfNeeded(decoded, 160)
+                              }
+                          }
+                      } catch (e: Exception) {
+                          Log.d("MainActivity", "Audio art extraction failed for ${item.name}: ${e.message}")
+                      } finally {
+                          try { retriever.release() } catch (e: Exception) {}
+                      }
+                      return null
+                  }
+
+                  // --- Video Thumbnail Extraction Pipeline ---
+
+                  // Strategy 1: ContentResolver.loadThumbnail for SAF URIs (API 29+)
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && item.uri != null) {
+                      try {
+                          val bmp = context.contentResolver.loadThumbnail(item.uri, Size(160, 160), null)
+                          if (bmp != null) {
+                              return scaleDownIfNeeded(bmp, 160)
+                          }
+                      } catch (e: Exception) {
+                          Log.d("MainActivity", "ContentResolver.loadThumbnail skipped: ${e.message}")
+                      }
+                  }
+
+                  // Strategy 2: Native ThumbnailUtils for normal filesystem videos
+                  if (item.file != null && item.file.exists()) {
+                      try {
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                              val bmp = ThumbnailUtils.createVideoThumbnail(item.file, Size(160, 160), null)
+                              if (bmp != null) {
+                                  return scaleDownIfNeeded(bmp, 160)
+                              }
+                          } else {
+                              @Suppress("DEPRECATION")
+                              val bmp = ThumbnailUtils.createVideoThumbnail(
+                                  item.file.absolutePath,
+                                  MediaStore.Video.Thumbnails.MINI_KIND
+                              )
+                              if (bmp != null) {
+                                  return scaleDownIfNeeded(bmp, 160)
+                              }
+                          }
+                      } catch (e: Exception) {
+                          Log.d("MainActivity", "ThumbnailUtils.createVideoThumbnail error: ${e.message}")
+                      }
+                  }
+
+                  // Strategy 3: MediaMetadataRetriever (Filesystem & SAF fallback)
+                  val retriever = MediaMetadataRetriever()
+                  try {
+                      var dataSourceSet = false
+                      if (item.file != null && item.file.exists()) {
+                          try {
+                              FileInputStream(item.file).use { fis ->
+                                  retriever.setDataSource(fis.fd)
+                                  dataSourceSet = true
+                              }
+                          } catch (e: Exception) {
+                              Log.d("MainActivity", "FileInputStream fd failed, fallback to path: ${e.message}")
+                          }
+                          if (!dataSourceSet) {
+                              try {
+                                  retriever.setDataSource(item.file.absolutePath)
+                                  dataSourceSet = true
+                              } catch (e: Exception) {
+                                  Log.w("MainActivity", "retriever.setDataSource(path) failed: ${e.message}")
+                              }
+                          }
+                      } else if (item.uri != null) {
+                          try {
+                              context.contentResolver.openFileDescriptor(item.uri, "r")?.use { pfd ->
+                                  retriever.setDataSource(pfd.fileDescriptor)
+                                  dataSourceSet = true
+                              }
+                          } catch (e: Exception) {
+                              Log.d("MainActivity", "openFileDescriptor failed for URI: ${e.message}")
+                          }
+                          if (!dataSourceSet) {
+                              try {
+                                  retriever.setDataSource(context, item.uri)
+                                  dataSourceSet = true
+                              } catch (e: Exception) {
+                                  Log.w("MainActivity", "retriever.setDataSource(uri) failed: ${e.message}")
+                              }
+                          }
+                      }
+
+                      if (!dataSourceSet) return null
+
+                      var frame: Bitmap? = null
+
+                      // Hardware-scaled frame retrieval on API 27+
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                          frame = try {
+                              retriever.getScaledFrameAtTime(1000000L, MediaMetadataRetriever.OPTION_CLOSEST, 160, 160)
+                          } catch (e: Exception) { null }
+
+                          if (frame == null) {
+                              frame = try {
+                                  retriever.getScaledFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST, 160, 160)
+                              } catch (e: Exception) { null }
+                          }
+
+                          if (frame == null) {
+                              frame = try {
+                                  retriever.getScaledFrameAtTime(-1L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 160, 160)
+                              } catch (e: Exception) { null }
+                          }
+                      }
+
+                      // Standard frame retrieval fallbacks with diverse seek options
+                      if (frame == null) {
+                          frame = try {
+                              retriever.getFrameAtTime(1000000L, MediaMetadataRetriever.OPTION_CLOSEST)
+                          } catch (e: Exception) { null }
+                      }
+                      if (frame == null) {
+                          frame = try {
+                              retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST)
+                          } catch (e: Exception) { null }
+                      }
+                      if (frame == null) {
+                          frame = try {
+                              retriever.getFrameAtTime(1000000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                          } catch (e: Exception) { null }
+                      }
+                      if (frame == null) {
+                          frame = try {
+                              retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                          } catch (e: Exception) { null }
+                      }
+                      if (frame == null) {
+                          frame = try {
+                              retriever.getFrameAtTime(-1L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                          } catch (e: Exception) { null }
+                      }
+                      if (frame == null) {
+                          frame = try {
+                              retriever.frameAtTime
+                          } catch (e: Exception) { null }
+                      }
+
+                      if (frame != null) {
+                          return scaleDownIfNeeded(frame, 160)
+                      }
+                  } catch (e: Exception) {
+                      Log.w("MainActivity", "MediaMetadataRetriever failed for ${item.name}: ${e.message}")
+                  } finally {
+                      try {
+                          retriever.release()
+                      } catch (e: Exception) {}
+                  }
+
+                  return null
+              }
+
               private fun loadThumbnail(item: StorageHelper.HistoryItem, thumbImg: ImageView, placeholderText: TextView) {
-                  val cached = thumbnailCache.get(item.id)
-                  if (cached != null) {
+                  val cacheKey = getThumbnailCacheKey(item)
+
+                  // Set tag to ensure asynchronous safety when views are recycled or re-bound
+                  thumbImg.tag = cacheKey
+
+                  val cached = thumbnailCache.get(cacheKey)
+                  if (cached != null && !cached.isRecycled) {
                       thumbImg.setImageBitmap(cached)
+                      thumbImg.visibility = View.VISIBLE
                       placeholderText.visibility = View.GONE
                       return
                   }
 
-                  placeholderText.visibility = View.VISIBLE
+                  // Set fallback/placeholder and clear old bitmap
                   thumbImg.setImageBitmap(null)
+                  thumbImg.visibility = View.GONE
+                  placeholderText.visibility = View.VISIBLE
 
                   thread(name = "FlowRipThumb_${item.id.hashCode()}") {
-                      var bmp: Bitmap? = null
-                      try {
-                          val retriever = MediaMetadataRetriever()
-                          if (item.file != null && item.file.exists()) {
-                              retriever.setDataSource(item.file.absolutePath)
-                          } else if (item.uri != null) {
-                              retriever.setDataSource(this@MainActivity, item.uri)
-                          }
+                      val bmp = extractMediaThumbnail(this@MainActivity, item)
 
-                          if (!item.isAudio) {
-                              bmp = retriever.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                                  ?: retriever.frameAtTime
-                          } else {
-                              val art = retriever.embeddedPicture
-                              if (art != null) {
-                                  val opts = BitmapFactory.Options().apply {
-                                      inSampleSize = 2
-                                  }
-                                  bmp = BitmapFactory.decodeByteArray(art, 0, art.size, opts)
+                      runOnUiThread {
+                          // Confirm the target view still corresponds to this item
+                          if (thumbImg.tag == cacheKey) {
+                              if (bmp != null && !bmp.isRecycled) {
+                                  thumbnailCache.put(cacheKey, bmp)
+                                  thumbImg.setImageBitmap(bmp)
+                                  thumbImg.visibility = View.VISIBLE
+                                  placeholderText.visibility = View.GONE
+                              } else {
+                                  thumbImg.setImageBitmap(null)
+                                  thumbImg.visibility = View.GONE
+                                  placeholderText.visibility = View.VISIBLE
                               }
-                          }
-                          retriever.release()
-                      } catch (e: Exception) {}
-
-                      if (bmp != null) {
-                          val scaled = if (bmp.width > 160 || bmp.height > 160) {
-                              val maxDim = maxOf(bmp.width, bmp.height)
-                              val scale = 160f / maxDim
-                              val w = (bmp.width * scale).toInt().coerceAtLeast(1)
-                              val h = (bmp.height * scale).toInt().coerceAtLeast(1)
-                              Bitmap.createScaledBitmap(bmp, w, h, true)
-                          } else {
-                              bmp
-                          }
-                          thumbnailCache.put(item.id, scaled)
-                          runOnUiThread {
-                              thumbImg.setImageBitmap(scaled)
-                              placeholderText.visibility = View.GONE
                           }
                       }
                   }
@@ -5980,6 +6220,7 @@ jobs:
                               runOnUiThread {
                                   if (deleted) {
                                       thumbnailCache.remove(item.id)
+                                      thumbnailCache.remove(getThumbnailCacheKey(item))
                                       cachedHistoryItems = cachedHistoryItems.filter { it.id != item.id }
                                       renderHistoryUI()
                                       Toast.makeText(this@MainActivity, "File deleted", Toast.LENGTH_SHORT).show()
@@ -6600,5 +6841,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-Stage8-History-Manager-v29-APK
+          name: FlowRip-Stage8-History-Manager-v30-APK
           path: app/build/outputs/apk/**/*.apk
