@@ -5872,7 +5872,7 @@ jobs:
               private fun getDiskThumbnailFile(context: Context, cacheKey: String): File {
                   val dir = File(context.cacheDir, "thumbnails")
                   if (!dir.exists()) dir.mkdirs()
-                  val safeName = "thumb_${cacheKey.hashCode().toUInt().toString(16)}.jpg"
+                  val safeName = "thumb_" + java.lang.Integer.toHexString(cacheKey.hashCode()) + ".jpg"
                   return File(dir, safeName)
               }
 
@@ -6080,26 +6080,6 @@ jobs:
                           Log.d("MainActivity", "THUMBNAIL_RETRIEVER_FAILED (${e.message}) for ${item.name}")
                       } finally {
                           try { retriever.release() } catch (e: Exception) {}
-                      }
-                  }
-
-                  // Strategy 4: FFmpeg Frame Extraction (Universal Fallback for Any Device / Codec including Redmi 10 / MediaTek / AV1 / VP9)
-                  if (extractedBmp == null && item.file != null && item.file.exists()) {
-                      val tempThumb = File(context.cacheDir, "ffmpeg_thumb_${System.currentTimeMillis()}.jpg")
-                      try {
-                          val cmd = arrayOf("-y", "-ss", "00:00:01", "-i", item.file.absolutePath, "-vframes", "1", "-vf", "scale='min(160,iw)':-2", tempThumb.absolutePath)
-                          FFmpeg.getInstance().execute(cmd) { }
-                          if (tempThumb.exists() && tempThumb.length() > 0L) {
-                              val bmp = BitmapFactory.decodeFile(tempThumb.absolutePath)
-                              if (bmp != null) {
-                                  Log.d("MainActivity", "THUMBNAIL_FFMPEG_SUCCESS for ${item.name}")
-                                  extractedBmp = bmp
-                              }
-                          }
-                      } catch (e: Exception) {
-                          Log.d("MainActivity", "THUMBNAIL_FFMPEG_FAILED (${e.message}) for ${item.name}")
-                      } finally {
-                          try { tempThumb.delete() } catch (e: Exception) {}
                       }
                   }
 
