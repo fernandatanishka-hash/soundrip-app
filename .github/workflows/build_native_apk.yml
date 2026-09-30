@@ -4705,7 +4705,7 @@ jobs:
               private lateinit var txtMp4Subtitle: TextView
               private lateinit var layoutQualityLoading: View
               private lateinit var txtQualityLoading: TextView
-              private lateinit var progressQualityLoading: ProgressBar
+              private lateinit var imgQualityLoadingBrand: ImageView
 
               private lateinit var downloadingThumb: ImageView
               private lateinit var downloadingTitle: TextView
@@ -4827,7 +4827,7 @@ jobs:
                   txtMp4Subtitle = findViewById(R.id.txtMp4Subtitle)
                   layoutQualityLoading = findViewById(R.id.layoutQualityLoading)
                   txtQualityLoading = findViewById(R.id.txtQualityLoading)
-                  progressQualityLoading = findViewById(R.id.progressQualityLoading)
+                  imgQualityLoadingBrand = findViewById(R.id.imgQualityLoadingBrand)
 
                   downloadingThumb = findViewById(R.id.downloadingThumb)
                   downloadingTitle = findViewById(R.id.downloadingTitle)
@@ -5319,18 +5319,17 @@ jobs:
                   btnStartDownload.text = "⏳ DETECTING QUALITIES..."
                   btnStartDownload.alpha = 0.6f
 
-                  val brandImg = findViewById<ImageView>(R.id.imgQualityLoadingBrand)
-                  brandImg?.let { img ->
-                      img.scaleX = 0.94f
-                      img.scaleY = 0.94f
-                      img.animate()
+                  if (::imgQualityLoadingBrand.isInitialized) {
+                      imgQualityLoadingBrand.scaleX = 0.94f
+                      imgQualityLoadingBrand.scaleY = 0.94f
+                      imgQualityLoadingBrand.animate()
                           .scaleX(1.06f)
                           .scaleY(1.06f)
                           .alpha(0.7f)
                           .setDuration(450L)
                           .withEndAction {
-                              if (isLoadingFormats) {
-                                  img.animate().scaleX(1.0f).scaleY(1.0f).alpha(1.0f).setDuration(450L).start()
+                              if (isLoadingFormats && ::imgQualityLoadingBrand.isInitialized) {
+                                  imgQualityLoadingBrand.animate().scaleX(1.0f).scaleY(1.0f).alpha(1.0f).setDuration(450L).start()
                               }
                           }
                           .start()
