@@ -4984,7 +4984,7 @@ jobs:
                               splashOverlay.visibility = View.GONE
                               checkAndPromptStoragePermission()
                           }
-                  }, 500L), 1400)
+                  }, 500L)
 
                   historySearchInput.addTextChangedListener(object : TextWatcher {
                       override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
