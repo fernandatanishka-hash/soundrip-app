@@ -4272,13 +4272,6 @@ jobs:
                                       android:scaleType="fitCenter"
                                       android:layout_marginEnd="16dp" />
 
-                                  <ImageView
-                                      android:layout_width="40dp"
-                                      android:layout_height="40dp"
-                                      android:src="@drawable/ic_flowrip_brand"
-                                      android:scaleType="fitCenter"
-                                      android:layout_marginEnd="16dp" />
-
                                   <LinearLayout
                                       android:layout_width="0dp"
                                       android:layout_height="wrap_content"
@@ -5607,6 +5600,11 @@ jobs:
                   iconTabHistory.setColorFilter(android.graphics.Color.parseColor(if (index == 1) "#2563EB" else "#64748B"))
                   iconTabSettings.setColorFilter(android.graphics.Color.parseColor(if (index == 2) "#2563EB" else "#64748B"))
 
+                  val activeIcon = when (index) {
+                      0 -> iconTabHome
+                      1 -> iconTabHistory
+                      else -> iconTabSettings
+                  }
                   activeIcon.animate().scaleX(1.15f).scaleY(1.15f).setDuration(120L).withEndAction {
                       activeIcon.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100L).start()
                   }.start()
