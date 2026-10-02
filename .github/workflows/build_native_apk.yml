@@ -426,8 +426,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 45
-                  versionName "9.1.0"
+                  versionCode 46
+                  versionName "9.2.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -2791,7 +2791,7 @@ jobs:
                               android:layout_width="match_parent"
                               android:layout_height="wrap_content"
                               android:paddingHorizontal="24dp"
-                              android:paddingTop="52dp"
+                              android:paddingTop="68dp"
                               android:paddingBottom="12dp">
 
                               <TextView
@@ -4317,7 +4317,7 @@ jobs:
                           android:orientation="horizontal"
                           android:gravity="center_vertical"
                           android:paddingHorizontal="24dp"
-                          android:paddingTop="36dp"
+                          android:paddingTop="68dp"
                           android:paddingBottom="14dp">
 
                           <TextView
@@ -4342,6 +4342,7 @@ jobs:
 
                       <!-- Segmented Toggle: Videos vs MP3 -->
                       <LinearLayout
+                          android:id="@+id/playlistToggleContainer"
                           android:layout_width="match_parent"
                           android:layout_height="44dp"
                           android:layout_marginHorizontal="24dp"
@@ -4590,7 +4591,7 @@ jobs:
                           android:layout_height="wrap_content"
                           android:orientation="vertical"
                           android:paddingHorizontal="24dp"
-                          android:paddingTop="52dp"
+                          android:paddingTop="68dp"
                           android:paddingBottom="30dp">
 
                           <TextView
@@ -5116,7 +5117,7 @@ jobs:
                           android:orientation="horizontal"
                           android:gravity="center_vertical"
                           android:paddingHorizontal="24dp"
-                          android:paddingTop="36dp"
+                          android:paddingTop="68dp"
                           android:paddingBottom="16dp">
 
                           <TextView
@@ -7227,9 +7228,11 @@ jobs:
 
               private fun updateFilterChipStyles() {
                   val activeBg = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2563EB"))
-                  val inactiveBg = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#161F38"))
+                  val inactiveBg = android.content.res.ColorStateList.valueOf(
+                      if (isDarkMode) android.graphics.Color.parseColor("#161F38") else android.graphics.Color.parseColor("#E2E8F0")
+                  )
                   val activeText = android.graphics.Color.WHITE
-                  val inactiveText = android.graphics.Color.parseColor("#94A3B8")
+                  val inactiveText = if (isDarkMode) android.graphics.Color.parseColor("#94A3B8") else android.graphics.Color.parseColor("#475569")
 
                   chipAll.backgroundTintList = if (historyFilter == "ALL") activeBg else inactiveBg
                   chipAll.setTextColor(if (historyFilter == "ALL") activeText else inactiveText)
@@ -7964,29 +7967,80 @@ jobs:
                   }
               }
 
+              private fun applyThemeToViewHierarchy(view: View, isDark: Boolean) {
+                  val textPrimary = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0F172A")
+                  val textSecondary = if (isDark) android.graphics.Color.parseColor("#94A3B8") else android.graphics.Color.parseColor("#475569")
+                  val bgCard = if (isDark) android.graphics.Color.parseColor("#13192B") else android.graphics.Color.parseColor("#FFFFFF")
+
+                  when (view) {
+                      is TextView -> {
+                          val tag = view.tag as? String
+                          val id = view.id
+                          if (tag != "keep_color" && id != R.id.btnProCrown && id != R.id.btnMainAction &&
+                              id != R.id.chipAll && id != R.id.chipVideo && id != R.id.chipAudio && id != R.id.chipFavorites) {
+                              val current = view.currentTextColor
+                              if (current == android.graphics.Color.WHITE || current == android.graphics.Color.parseColor("#0F172A") || current == android.graphics.Color.parseColor("#F8FAFC")) {
+                                  view.setTextColor(textPrimary)
+                              } else if (current == android.graphics.Color.parseColor("#94A3B8") || current == android.graphics.Color.parseColor("#64748B") || current == android.graphics.Color.parseColor("#475569")) {
+                                  view.setTextColor(textSecondary)
+                              }
+                          }
+                      }
+                      is EditText -> {
+                          view.setTextColor(textPrimary)
+                          view.setHintTextColor(if (isDark) android.graphics.Color.parseColor("#64748B") else android.graphics.Color.parseColor("#94A3B8"))
+                      }
+                      is androidx.cardview.widget.CardView -> {
+                          val tag = view.tag as? String
+                          if (tag != "keep_color") {
+                              view.setCardBackgroundColor(bgCard)
+                          }
+                      }
+                  }
+
+                  if (view is ViewGroup) {
+                      for (i in 0 until view.childCount) {
+                          applyThemeToViewHierarchy(view.getChildAt(i), isDark)
+                      }
+                  }
+              }
+
               private fun applyThemeMode(isDark: Boolean) {
                   isDarkMode = isDark
                   val bgMain = if (isDark) android.graphics.Color.parseColor("#090D1A") else android.graphics.Color.parseColor("#F8FAFC")
                   val bgCard = if (isDark) android.graphics.Color.parseColor("#13192B") else android.graphics.Color.parseColor("#FFFFFF")
                   val textPrimary = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0F172A")
-                  val textSecondary = if (isDark) android.graphics.Color.parseColor("#94A3B8") else android.graphics.Color.parseColor("#64748B")
+                  val textSecondary = if (isDark) android.graphics.Color.parseColor("#94A3B8") else android.graphics.Color.parseColor("#475569")
                   val navBg = if (isDark) android.graphics.Color.parseColor("#0D111E") else android.graphics.Color.parseColor("#FFFFFF")
+                  val toggleBg = if (isDark) android.graphics.Color.parseColor("#161F38") else android.graphics.Color.parseColor("#E2E8F0")
 
                   try {
                       findViewById<View>(R.id.rootContainer)?.setBackgroundColor(bgMain)
-                      if (::pageHome.isInitialized) pageHome.setBackgroundColor(bgMain)
-                      if (::pageHistory.isInitialized) pageHistory.setBackgroundColor(bgMain)
-                      if (::pagePlaylist.isInitialized) pagePlaylist.setBackgroundColor(bgMain)
-                      if (::pageSettings.isInitialized) pageSettings.setBackgroundColor(bgMain)
+
+                      if (::pageHome.isInitialized) {
+                          pageHome.setBackgroundColor(bgMain)
+                          applyThemeToViewHierarchy(pageHome, isDark)
+                      }
+                      if (::pageHistory.isInitialized) {
+                          pageHistory.setBackgroundColor(bgMain)
+                          applyThemeToViewHierarchy(pageHistory, isDark)
+                      }
+                      if (::pagePlaylist.isInitialized) {
+                          pagePlaylist.setBackgroundColor(bgMain)
+                          applyThemeToViewHierarchy(pagePlaylist, isDark)
+                      }
+                      if (::pageSettings.isInitialized) {
+                          pageSettings.setBackgroundColor(bgMain)
+                          applyThemeToViewHierarchy(pageSettings, isDark)
+                      }
 
                       cardUrlInput?.setCardBackgroundColor(bgCard)
-                      findViewById<androidx.cardview.widget.CardView>(R.id.cardActionVideo)?.setCardBackgroundColor(bgCard)
-                      findViewById<androidx.cardview.widget.CardView>(R.id.cardActionMp3)?.setCardBackgroundColor(bgCard)
-                      findViewById<androidx.cardview.widget.CardView>(R.id.viewPreviewCard)?.setCardBackgroundColor(bgCard)
-                      findViewById<androidx.cardview.widget.CardView>(R.id.viewDownloadingCard)?.setCardBackgroundColor(bgCard)
-
+                      findViewById<View>(R.id.playlistToggleContainer)?.setBackgroundColor(toggleBg)
                       findViewById<View>(R.id.bottomNavSection)?.setBackgroundColor(navBg)
+
+                      findViewById<TextView>(R.id.iconHeaderMenu)?.setTextColor(textPrimary)
                       findViewById<TextView>(R.id.txtAppTitleHeader)?.setTextColor(textPrimary)
+                      findViewById<TextView>(R.id.txtAppSubtitleHeader)?.setTextColor(textSecondary)
                       findViewById<TextView>(R.id.txtSettingsTitle)?.setTextColor(textPrimary)
 
                       if (::urlInput.isInitialized) {
@@ -7999,15 +8053,8 @@ jobs:
                           historySearchInput.setHintTextColor(if (isDark) android.graphics.Color.parseColor("#64748B") else android.graphics.Color.parseColor("#94A3B8"))
                       }
 
-                      // Update settings and playlist cards
-                      findViewById<androidx.cardview.widget.CardView>(R.id.cardDownloadSettings)?.setCardBackgroundColor(bgCard)
-                      findViewById<androidx.cardview.widget.CardView>(R.id.cardAppSettings)?.setCardBackgroundColor(bgCard)
-                      findViewById<androidx.cardview.widget.CardView>(R.id.cardAboutSettings)?.setCardBackgroundColor(bgCard)
-                      findViewById<androidx.cardview.widget.CardView>(R.id.cardFolderFavorites)?.setCardBackgroundColor(bgCard)
-                      findViewById<androidx.cardview.widget.CardView>(R.id.cardFolderDownloaded)?.setCardBackgroundColor(bgCard)
-                      findViewById<androidx.cardview.widget.CardView>(R.id.cardFolderCustom)?.setCardBackgroundColor(bgCard)
-
                       updateNavBar(currentTabIndex)
+                      updateFilterChipStyles()
                       if (::historyListContainer.isInitialized) renderHistoryUI()
                   } catch (e: Exception) {
                       Log.w("MainActivity", "Error applying theme mode: ${e.message}")
@@ -8900,5 +8947,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-v45-RefinedUI-APK
+          name: FlowRip-v46-FixedTheme-APK
           path: app/build/outputs/apk/**/*.apk
