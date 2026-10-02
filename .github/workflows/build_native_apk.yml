@@ -98,7 +98,7 @@ jobs:
               android:viewportWidth="24"
               android:viewportHeight="24">
               <path
-                  android:fillColor="#4F46E5"
+                  android:fillColor="#38BDF8"
                   android:pathData="M10,20v-6h4v6h5v-8h3L12,3 2,12h3v8z"/>
           </vector>
           EOF
@@ -356,6 +356,7 @@ jobs:
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           android.useAndroidX=true
           android.enableJetifier=true
+          android.suppressUnsupportedCompileSdk=35
           EOF
 
           cat << 'EOF' > settings.gradle
@@ -399,8 +400,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 38
-                  versionName "8.6.0"
+                  versionCode 39
+                  versionName "8.7.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -2697,7 +2698,7 @@ jobs:
               android:paddingEnd="14dp"
               android:singleLine="true"
               android:ellipsize="end"
-              android:textColor="#0F172A"
+              android:textColor="#FFFFFF"
               android:textSize="13sp"
               android:textStyle="bold" />
           EOF
@@ -2715,7 +2716,7 @@ jobs:
               android:paddingBottom="12dp"
               android:singleLine="true"
               android:ellipsize="end"
-              android:textColor="#0F172A"
+              android:textColor="#FFFFFF"
               android:textSize="14sp"
               android:textStyle="bold" />
           EOF
@@ -5222,31 +5223,31 @@ jobs:
                   applyPersistentSettings()
 
                   // Wire Quick Action Cards & Quick Access Buttons (Showcase)
-                  findViewById<View?>(R.id.cardActionVideo)?.setOnClickListener {
+                  findViewById<View>(R.id.cardActionVideo)?.setOnClickListener {
                       isMp3Selected = false
                       updateFormatSelection()
                       urlInput.requestFocus()
                   }
-                  findViewById<View?>(R.id.cardActionMp3)?.setOnClickListener {
+                  findViewById<View>(R.id.cardActionMp3)?.setOnClickListener {
                       isMp3Selected = true
                       updateFormatSelection()
                       urlInput.requestFocus()
                   }
-                  findViewById<View?>(R.id.btnQuickYoutube)?.setOnClickListener {
+                  findViewById<View>(R.id.btnQuickYoutube)?.setOnClickListener {
                       try {
                           val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com"))
                           startActivity(intent)
-                      } catch (_: Exception) {
+                      } catch (e: Exception) {
                           Toast.makeText(this, "Opening YouTube...", Toast.LENGTH_SHORT).show()
                       }
                   }
-                  findViewById<View?>(R.id.btnQuickHistory)?.setOnClickListener {
+                  findViewById<View>(R.id.btnQuickHistory)?.setOnClickListener {
                       tabHistory.performClick()
                   }
-                  findViewById<View?>(R.id.btnQuickStorage)?.setOnClickListener {
+                  findViewById<View>(R.id.btnQuickStorage)?.setOnClickListener {
                       tabSettings.performClick()
                   }
-                  findViewById<View?>(R.id.btnQuickSettings)?.setOnClickListener {
+                  findViewById<View>(R.id.btnQuickSettings)?.setOnClickListener {
                       tabSettings.performClick()
                   }
 
@@ -7647,5 +7648,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-Stage10-DarkShowcaseUI-v38-APK
+          name: FlowRip-Stage10-DarkShowcaseUI-v39-APK
           path: app/build/outputs/apk/**/*.apk
