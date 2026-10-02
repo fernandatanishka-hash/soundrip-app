@@ -426,8 +426,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 42
-                  versionName "9.0.0"
+                  versionCode 45
+                  versionName "9.1.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -518,6 +518,9 @@ jobs:
                   var durationMs: Long = 0L,
                   var locationName: String = "FlowRip"
               ) {
+                  val filePath: String
+                      get() = file?.absolutePath ?: uri?.toString() ?: id
+
                   val formattedSize: String
                       get() = formatFileSize(sizeBytes)
 
@@ -7300,7 +7303,7 @@ jobs:
                   val favSet = prefs.getStringSet("flowrip_favorites_set", emptySet()) ?: emptySet()
                   val filtered = if (historyFilter == "FAVORITES") {
                       val favItems = cachedHistoryItems.filter { item ->
-                          val key = item.filePath.ifEmpty { item.name }
+                          val key = item.id.ifEmpty { item.name }
                           favSet.contains(key)
                       }
                       StorageHelper.filterAndSortHistory(favItems, "ALL", searchQuery, sortOrder)
@@ -7512,7 +7515,7 @@ jobs:
                           }
                       }
 
-                      val itemKey = item.filePath.ifEmpty { item.name }
+                      val itemKey = item.id.ifEmpty { item.name }
                       val isItemFav = favSet.contains(itemKey)
                       val favoriteBtn = Button(this).apply {
                           text = if (isItemFav) "❤️" else "🤍"
@@ -7986,8 +7989,10 @@ jobs:
                       findViewById<TextView>(R.id.txtAppTitleHeader)?.setTextColor(textPrimary)
                       findViewById<TextView>(R.id.txtSettingsTitle)?.setTextColor(textPrimary)
 
-                      urlInput.setTextColor(textPrimary)
-                      urlInput.setHintTextColor(if (isDark) android.graphics.Color.parseColor("#64748B") else android.graphics.Color.parseColor("#94A3B8"))
+                      if (::urlInput.isInitialized) {
+                          urlInput.setTextColor(textPrimary)
+                          urlInput.setHintTextColor(if (isDark) android.graphics.Color.parseColor("#64748B") else android.graphics.Color.parseColor("#94A3B8"))
+                      }
 
                       if (::historySearchInput.isInitialized) {
                           historySearchInput.setTextColor(textPrimary)
@@ -8017,8 +8022,8 @@ jobs:
                       val videoItems = cachedHistoryItems.filter { !it.isAudio }
                       val audioItems = cachedHistoryItems.filter { it.isAudio }
 
-                      val videoFavCount = videoItems.count { item -> favSet.contains(item.filePath.ifEmpty { item.name }) }
-                      val audioFavCount = audioItems.count { item -> favSet.contains(item.filePath.ifEmpty { item.name }) }
+                      val videoFavCount = videoItems.count { item -> favSet.contains(item.id.ifEmpty { item.name }) }
+                      val audioFavCount = audioItems.count { item -> favSet.contains(item.id.ifEmpty { item.name }) }
 
                       val activeDownloadedCount = if (playlistMediaType == "AUDIO") audioItems.size else videoItems.size
                       val activeFavCount = if (playlistMediaType == "AUDIO") audioFavCount else videoFavCount
@@ -8895,5 +8900,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-v42-RefinedUI-APK
+          name: FlowRip-v45-RefinedUI-APK
           path: app/build/outputs/apk/**/*.apk
