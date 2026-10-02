@@ -191,6 +191,19 @@ jobs:
           </adaptive-icon>
           EOF
 
+                    cat << 'EOF' > app/src/main/res/drawable/bg_button_gradient.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"
+              android:shape="rectangle">
+              <gradient
+                  android:angle="135"
+                  android:startColor="#2563EB"
+                  android:endColor="#7C3AED"
+                  android:type="linear" />
+              <corners android:radius="20dp" />
+          </shape>
+          EOF
+
           cat << 'EOF' > app/src/main/res/drawable/bg_badge.xml
           <?xml version="1.0" encoding="utf-8"?>
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
@@ -413,8 +426,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 42
-                  versionName "8.9.1"
+                  versionCode 43
+                  versionName "8.9.2"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -8040,14 +8053,14 @@ jobs:
 
               private fun showFlowRipProDialog() {
                   MaterialAlertDialogBuilder(this)
-                      .setTitle("👑 FlowRip Pro Active")
-                      .setMessage("FlowRip Pro unlocks the full studio experience:\n\n✓ 4K UHD 60fps & 1080p Full HD\n✓ 320kbps Studio Master MP3\n✓ Multi-threaded Turbo Engine\n✓ Background Auto-Queue\n✓ Pure Obsidian Dark Interface")
+                      .setTitle("FlowRip Pro Active")
+                      .setMessage("FlowRip Pro unlocks the full studio experience:\n\n- 4K UHD 60fps & 1080p Full HD\n- 320kbps Studio Master MP3\n- Multi-threaded Turbo Engine\n- Background Auto-Queue\n- Pure Obsidian Dark Interface")
                       .setPositiveButton("Awesome", null)
                       .show()
               }
 
               private fun showHeaderNavigationMenu() {
-                  val options = arrayOf("🏠 Home", "📥 Downloads", "📑 Playlists", "⚙️ Settings", "⚡ Check for Updates")
+                  val options = arrayOf("Home", "Downloads", "Playlists", "Settings", "Check for Updates")
                   MaterialAlertDialogBuilder(this)
                       .setTitle("FlowRip Navigation")
                       .setItems(options) { _, which ->
@@ -8056,7 +8069,7 @@ jobs:
                               1 -> switchTab(1)
                               2 -> switchTab(2)
                               3 -> switchTab(3)
-                              4 -> Toast.makeText(this, "FlowRip is up to date (v8.8.0)", Toast.LENGTH_SHORT).show()
+                              4 -> Toast.makeText(this@MainActivity, "FlowRip is up to date (v8.9.1)", Toast.LENGTH_SHORT).show()
                           }
                       }
                       .show()
@@ -8067,16 +8080,16 @@ jobs:
                   val btnMp3 = findViewById<Button>(R.id.btnPlaylistToggleAudio)
 
                   btnVideos?.setOnClickListener {
-                      btnVideos.setBackgroundResource(R.drawable.bg_button_gradient)
+                      btnVideos.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2563EB"))
                       btnVideos.setTextColor(android.graphics.Color.WHITE)
-                      btnMp3?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                      btnMp3?.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
                       btnMp3?.setTextColor(android.graphics.Color.parseColor("#94A3B8"))
                   }
 
                   btnMp3?.setOnClickListener {
-                      btnMp3.setBackgroundResource(R.drawable.bg_button_gradient)
+                      btnMp3.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2563EB"))
                       btnMp3.setTextColor(android.graphics.Color.WHITE)
-                      btnVideos?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                      btnVideos?.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
                       btnVideos?.setTextColor(android.graphics.Color.parseColor("#94A3B8"))
                   }
 
@@ -8112,7 +8125,7 @@ jobs:
                       .setPositiveButton("Create") { _, _ ->
                           val name = input.text.toString().trim()
                           if (name.isNotEmpty()) {
-                              Toast.makeText(this, "Created playlist: " + name, Toast.LENGTH_SHORT).show()
+                              Toast.makeText(this@MainActivity, "Created playlist: " + name, Toast.LENGTH_SHORT).show()
                           }
                       }
                       .setNegativeButton("Cancel", null)
@@ -8151,24 +8164,24 @@ jobs:
                   }
 
                   btnDownload?.setOnClickListener {
-                      Toast.makeText(this, "Audio file is safely saved on storage", Toast.LENGTH_SHORT).show()
+                      Toast.makeText(this@MainActivity, "Audio file is safely saved on storage", Toast.LENGTH_SHORT).show()
                   }
 
                   btnAdd?.setOnClickListener {
-                      Toast.makeText(this, "Added track to Favorites playlist", Toast.LENGTH_SHORT).show()
+                      Toast.makeText(this@MainActivity, "Added track to Favorites playlist", Toast.LENGTH_SHORT).show()
                   }
 
                   findViewById<View>(R.id.btnPlayerPrev)?.setOnClickListener {
-                      Toast.makeText(this, "Previous track", Toast.LENGTH_SHORT).show()
+                      Toast.makeText(this@MainActivity, "Previous track", Toast.LENGTH_SHORT).show()
                   }
                   findViewById<View>(R.id.btnPlayerNext)?.setOnClickListener {
-                      Toast.makeText(this, "Next track", Toast.LENGTH_SHORT).show()
+                      Toast.makeText(this@MainActivity, "Next track", Toast.LENGTH_SHORT).show()
                   }
                   findViewById<View>(R.id.btnPlayerShuffle)?.setOnClickListener {
-                      Toast.makeText(this, "Shuffle enabled", Toast.LENGTH_SHORT).show()
+                      Toast.makeText(this@MainActivity, "Shuffle enabled", Toast.LENGTH_SHORT).show()
                   }
                   findViewById<View>(R.id.btnPlayerRepeat)?.setOnClickListener {
-                      Toast.makeText(this, "Repeat track", Toast.LENGTH_SHORT).show()
+                      Toast.makeText(this@MainActivity, "Repeat track", Toast.LENGTH_SHORT).show()
                   }
               }
 
@@ -8907,5 +8920,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-DarkShowcase-CompleteUI-v42-APK
+          name: FlowRip-DarkShowcase-CompleteUI-v43-APK
           path: app/build/outputs/apk/**/*.apk
