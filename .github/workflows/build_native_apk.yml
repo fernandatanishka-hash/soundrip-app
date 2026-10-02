@@ -426,8 +426,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 44
-                  versionName "8.9.3"
+                  versionCode 42
+                  versionName "9.0.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -2783,12 +2783,12 @@ jobs:
                           android:orientation="vertical"
                           android:paddingBottom="24dp">
 
-                          <!-- Top Header Bar (☰ FlowRip Video & MP3  👑) -->
+                          <!-- Top Header Bar (☰ FlowRip Brand Logo + Title  👑) -->
                           <RelativeLayout
                               android:layout_width="match_parent"
                               android:layout_height="wrap_content"
                               android:paddingHorizontal="24dp"
-                              android:paddingTop="36dp"
+                              android:paddingTop="52dp"
                               android:paddingBottom="12dp">
 
                               <TextView
@@ -2806,24 +2806,39 @@ jobs:
                                   android:layout_width="wrap_content"
                                   android:layout_height="wrap_content"
                                   android:layout_centerInParent="true"
-                                  android:orientation="vertical"
-                                  android:gravity="center">
+                                  android:orientation="horizontal"
+                                  android:gravity="center_vertical">
 
-                                  <TextView
-                                      android:id="@+id/txtAppTitleHeader"
+                                  <ImageView
+                                      android:id="@+id/imgHeaderLogo"
+                                      android:layout_width="30dp"
+                                      android:layout_height="30dp"
+                                      android:src="@drawable/ic_flowrip_brand"
+                                      android:layout_marginEnd="10dp" />
+
+                                  <LinearLayout
                                       android:layout_width="wrap_content"
                                       android:layout_height="wrap_content"
-                                      android:text="FlowRip"
-                                      android:textColor="#FFFFFF"
-                                      android:textSize="19sp"
-                                      android:textStyle="bold" />
+                                      android:orientation="vertical">
 
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="Video &amp; MP3"
-                                      android:textColor="#94A3B8"
-                                      android:textSize="11sp" />
+                                      <TextView
+                                          android:id="@+id/txtAppTitleHeader"
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:text="FlowRip"
+                                          android:textColor="#FFFFFF"
+                                          android:textSize="20sp"
+                                          android:textStyle="bold"
+                                          android:letterSpacing="0.02" />
+
+                                      <TextView
+                                          android:id="@+id/txtAppSubtitleHeader"
+                                          android:layout_width="wrap_content"
+                                          android:layout_height="wrap_content"
+                                          android:text="Video &amp; MP3 Studio"
+                                          android:textColor="#94A3B8"
+                                          android:textSize="10sp" />
+                                  </LinearLayout>
                               </LinearLayout>
 
                               <TextView
@@ -4164,46 +4179,63 @@ jobs:
                               android:visibility="gone" />
                       </LinearLayout>
 
-                      <!-- Filter Chips Row -->
-                      <LinearLayout
+                      <!-- Filter Chips Row (Scrollable with Favorites) -->
+                      <HorizontalScrollView
                           android:layout_width="match_parent"
                           android:layout_height="wrap_content"
-                          android:orientation="horizontal"
+                          android:scrollbars="none"
                           android:paddingHorizontal="24dp"
                           android:paddingBottom="14dp">
 
-                          <Button
-                              android:id="@+id/chipAll"
+                          <LinearLayout
                               android:layout_width="wrap_content"
-                              android:layout_height="36dp"
-                              android:text="All Files"
-                              android:textSize="12sp"
-                              android:textColor="#FFFFFF"
-                              android:backgroundTint="#2563EB"
-                              app:cornerRadius="18dp" />
+                              android:layout_height="wrap_content"
+                              android:orientation="horizontal">
 
-                          <Button
-                              android:id="@+id/chipVideo"
-                              android:layout_width="wrap_content"
-                              android:layout_height="36dp"
-                              android:layout_marginStart="8dp"
-                              android:text="🎬 Video"
-                              android:textSize="12sp"
-                              android:textColor="#94A3B8"
-                              android:backgroundTint="#161F38"
-                              app:cornerRadius="18dp" />
+                              <Button
+                                  android:id="@+id/chipAll"
+                                  android:layout_width="wrap_content"
+                                  android:layout_height="36dp"
+                                  android:text="All Files"
+                                  android:textSize="12sp"
+                                  android:textColor="#FFFFFF"
+                                  android:backgroundTint="#2563EB"
+                                  app:cornerRadius="18dp" />
 
-                          <Button
-                              android:id="@+id/chipAudio"
-                              android:layout_width="wrap_content"
-                              android:layout_height="36dp"
-                              android:layout_marginStart="8dp"
-                              android:text="🎵 Audio"
-                              android:textSize="12sp"
-                              android:textColor="#94A3B8"
-                              android:backgroundTint="#161F38"
-                              app:cornerRadius="18dp" />
-                      </LinearLayout>
+                              <Button
+                                  android:id="@+id/chipVideo"
+                                  android:layout_width="wrap_content"
+                                  android:layout_height="36dp"
+                                  android:layout_marginStart="8dp"
+                                  android:text="🎬 Video"
+                                  android:textSize="12sp"
+                                  android:textColor="#94A3B8"
+                                  android:backgroundTint="#161F38"
+                                  app:cornerRadius="18dp" />
+
+                              <Button
+                                  android:id="@+id/chipAudio"
+                                  android:layout_width="wrap_content"
+                                  android:layout_height="36dp"
+                                  android:layout_marginStart="8dp"
+                                  android:text="🎵 Audio"
+                                  android:textSize="12sp"
+                                  android:textColor="#94A3B8"
+                                  android:backgroundTint="#161F38"
+                                  app:cornerRadius="18dp" />
+
+                              <Button
+                                  android:id="@+id/chipFavorites"
+                                  android:layout_width="wrap_content"
+                                  android:layout_height="36dp"
+                                  android:layout_marginStart="8dp"
+                                  android:text="❤️ Favorites"
+                                  android:textSize="12sp"
+                                  android:textColor="#94A3B8"
+                                  android:backgroundTint="#161F38"
+                                  app:cornerRadius="18dp" />
+                          </LinearLayout>
+                      </HorizontalScrollView>
 
                       <!-- Sort and Count Bar -->
                       <LinearLayout
@@ -4412,67 +4444,7 @@ jobs:
                                   </LinearLayout>
                               </androidx.cardview.widget.CardView>
 
-                              <!-- Folder 2: Watch Later -->
-                              <androidx.cardview.widget.CardView
-                                  android:id="@+id/cardFolderWatchLater"
-                                  android:layout_width="match_parent"
-                                  android:layout_height="72dp"
-                                  android:layout_marginBottom="12dp"
-                                  app:cardCornerRadius="18dp"
-                                  app:cardElevation="0dp"
-                                  app:cardBackgroundColor="#13192B"
-                                  android:clickable="true"
-                                  android:focusable="true">
 
-                                  <LinearLayout
-                                      android:layout_width="match_parent"
-                                      android:layout_height="match_parent"
-                                      android:orientation="horizontal"
-                                      android:gravity="center_vertical"
-                                      android:paddingHorizontal="16dp">
-
-                                      <TextView
-                                          android:layout_width="44dp"
-                                          android:layout_height="44dp"
-                                          android:text="🕒"
-                                          android:textColor="#FFFFFF"
-                                          android:textSize="18sp"
-                                          android:gravity="center"
-                                          android:background="@drawable/bg_badge"
-                                          android:backgroundTint="#0284C7" />
-
-                                      <LinearLayout
-                                          android:layout_width="0dp"
-                                          android:layout_height="wrap_content"
-                                          android:layout_weight="1"
-                                          android:orientation="vertical"
-                                          android:layout_marginStart="14dp">
-
-                                          <TextView
-                                              android:layout_width="wrap_content"
-                                              android:layout_height="wrap_content"
-                                              android:text="Watch Later"
-                                              android:textColor="#FFFFFF"
-                                              android:textSize="14sp"
-                                              android:textStyle="bold" />
-
-                                          <TextView
-                                              android:id="@+id/txtWatchLaterCount"
-                                              android:layout_width="wrap_content"
-                                              android:layout_height="wrap_content"
-                                              android:text="8 items"
-                                              android:textColor="#94A3B8"
-                                              android:textSize="11sp" />
-                                      </LinearLayout>
-
-                                      <TextView
-                                          android:layout_width="wrap_content"
-                                          android:layout_height="wrap_content"
-                                          android:text="›"
-                                          android:textColor="#64748B"
-                                          android:textSize="22sp" />
-                                  </LinearLayout>
-                              </androidx.cardview.widget.CardView>
 
                               <!-- Folder 3: Downloaded -->
                               <androidx.cardview.widget.CardView
@@ -4615,10 +4587,11 @@ jobs:
                           android:layout_height="wrap_content"
                           android:orientation="vertical"
                           android:paddingHorizontal="24dp"
-                          android:paddingTop="36dp"
+                          android:paddingTop="52dp"
                           android:paddingBottom="30dp">
 
                           <TextView
+                              android:id="@+id/txtSettingsTitle"
                               android:layout_width="wrap_content"
                               android:layout_height="wrap_content"
                               android:text="Settings"
@@ -4628,6 +4601,7 @@ jobs:
 
                           <!-- DOWNLOAD SETTINGS SECTION (Showcase Screen 7) -->
                           <TextView
+                              android:id="@+id/txtSectionDownloadSettings"
                               android:layout_width="wrap_content"
                               android:layout_height="wrap_content"
                               android:text="Download Settings"
@@ -4637,6 +4611,7 @@ jobs:
                               android:layout_marginTop="20dp" />
 
                           <androidx.cardview.widget.CardView
+                              android:id="@+id/cardDownloadSettings"
                               android:layout_width="match_parent"
                               android:layout_height="wrap_content"
                               android:layout_marginTop="10dp"
@@ -4881,6 +4856,7 @@ jobs:
 
                           <!-- APP SETTINGS SECTION (Showcase Screen 7) -->
                           <TextView
+                              android:id="@+id/txtSectionAppSettings"
                               android:layout_width="wrap_content"
                               android:layout_height="wrap_content"
                               android:text="App Settings"
@@ -4890,6 +4866,7 @@ jobs:
                               android:layout_marginTop="20dp" />
 
                           <androidx.cardview.widget.CardView
+                              android:id="@+id/cardAppSettings"
                               android:layout_width="match_parent"
                               android:layout_height="wrap_content"
                               android:layout_marginTop="10dp"
@@ -5013,6 +4990,7 @@ jobs:
 
                           <!-- ABOUT SECTION (Showcase Screen 7) -->
                           <TextView
+                              android:id="@+id/txtSectionAbout"
                               android:layout_width="wrap_content"
                               android:layout_height="wrap_content"
                               android:text="About"
@@ -5022,6 +5000,7 @@ jobs:
                               android:layout_marginTop="20dp" />
 
                           <androidx.cardview.widget.CardView
+                              android:id="@+id/cardAboutSettings"
                               android:layout_width="match_parent"
                               android:layout_height="wrap_content"
                               android:layout_marginTop="10dp"
@@ -5907,6 +5886,9 @@ jobs:
               private lateinit var chipAll: Button
               private lateinit var chipAudio: Button
               private lateinit var chipVideo: Button
+              private lateinit var chipFavorites: Button
+              private var currentDownloaderState = -1
+              private var playlistMediaType = "VIDEO" 
                   private var cardUrlInput: androidx.cardview.widget.CardView? = null
               private var progressAnimator: ValueAnimator? = null
               private var currentTabIndex = 0
@@ -6033,6 +6015,7 @@ jobs:
                   chipAll = findViewById(R.id.chipAll)
                   chipAudio = findViewById(R.id.chipAudio)
                   chipVideo = findViewById(R.id.chipVideo)
+                  chipFavorites = findViewById(R.id.chipFavorites)
                   btnRefreshHistory = findViewById(R.id.btnRefreshHistory)
                   btnHistorySort = findViewById(R.id.btnHistorySort)
                   txtCurrentSort = findViewById(R.id.txtCurrentSort)
@@ -6225,6 +6208,12 @@ jobs:
 
                   chipVideo.setOnClickListener {
                       historyFilter = "VIDEO"
+                      updateFilterChipStyles()
+                      renderHistoryUI()
+                  }
+
+                  chipFavorites.setOnClickListener {
+                      historyFilter = "FAVORITES"
                       updateFilterChipStyles()
                       renderHistoryUI()
                   }
@@ -6847,6 +6836,10 @@ jobs:
               }
 
               fun showDownloaderState(state: Int) {
+                  if (currentDownloaderState == state) {
+                      return
+                  }
+                  currentDownloaderState = state
                   if (::pageHome.isInitialized) {
                       TransitionManager.beginDelayedTransition(
                           pageHome as ViewGroup,
@@ -7244,9 +7237,13 @@ jobs:
                   chipVideo.backgroundTintList = if (historyFilter == "VIDEO") activeBg else inactiveBg
                   chipVideo.setTextColor(if (historyFilter == "VIDEO") activeText else inactiveText)
 
+                  chipFavorites.backgroundTintList = if (historyFilter == "FAVORITES") activeBg else inactiveBg
+                  chipFavorites.setTextColor(if (historyFilter == "FAVORITES") activeText else inactiveText)
+
                   val activeChip = when (historyFilter) {
                       "AUDIO" -> chipAudio
                       "VIDEO" -> chipVideo
+                      "FAVORITES" -> chipFavorites
                       else -> chipAll
                   }
                   activeChip.animate().scaleX(1.05f).scaleY(1.05f).setDuration(100L).withEndAction {
@@ -7300,7 +7297,16 @@ jobs:
 
                   val sortOrder = StorageHelper.getHistorySortOrder(this)
                   val searchQuery = historySearchInput.text.toString().trim()
-                  val filtered = StorageHelper.filterAndSortHistory(cachedHistoryItems, historyFilter, searchQuery, sortOrder)
+                  val favSet = prefs.getStringSet("flowrip_favorites_set", emptySet()) ?: emptySet()
+                  val filtered = if (historyFilter == "FAVORITES") {
+                      val favItems = cachedHistoryItems.filter { item ->
+                          val key = item.filePath.ifEmpty { item.name }
+                          favSet.contains(key)
+                      }
+                      StorageHelper.filterAndSortHistory(favItems, "ALL", searchQuery, sortOrder)
+                  } else {
+                      StorageHelper.filterAndSortHistory(cachedHistoryItems, historyFilter, searchQuery, sortOrder)
+                  }
 
                   if (::txtHistoryCount.isInitialized) {
                       txtHistoryCount.text = "${filtered.size} ${if (filtered.size == 1) "file" else "files"}"
@@ -7506,6 +7512,37 @@ jobs:
                           }
                       }
 
+                      val itemKey = item.filePath.ifEmpty { item.name }
+                      val isItemFav = favSet.contains(itemKey)
+                      val favoriteBtn = Button(this).apply {
+                          text = if (isItemFav) "❤️" else "🤍"
+                          textSize = 12f
+                          backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#161F38"))
+                          val lp = LinearLayout.LayoutParams(dpToPx(36), dpToPx(36)).apply {
+                              marginStart = dpToPx(4)
+                          }
+                          layoutParams = lp
+                          setPadding(0, 0, 0, 0)
+                          applyPressScaleEffect(0.93f)
+                          setOnClickListener {
+                              val currentFavs = prefs.getStringSet("flowrip_favorites_set", emptySet())?.toMutableSet() ?: mutableSetOf()
+                              val nowFav = if (currentFavs.contains(itemKey)) {
+                                  currentFavs.remove(itemKey)
+                                  false
+                              } else {
+                                  currentFavs.add(itemKey)
+                                  true
+                              }
+                              prefs.edit().putStringSet("flowrip_favorites_set", currentFavs).apply()
+                              text = if (nowFav) "❤️" else "🤍"
+                              refreshPlaylistCounts()
+                              Toast.makeText(this@MainActivity, if (nowFav) "Added to Favorites ❤️" else "Removed from Favorites", Toast.LENGTH_SHORT).show()
+                              if (historyFilter == "FAVORITES") {
+                                  renderHistoryUI()
+                              }
+                          }
+                      }
+
                       val shareBtn = Button(this).apply {
                           text = "↗"
                           textSize = 13f
@@ -7539,6 +7576,7 @@ jobs:
                       }
 
                       actionsRow.addView(playBtn)
+                      actionsRow.addView(favoriteBtn)
                       actionsRow.addView(shareBtn)
                       actionsRow.addView(deleteBtn)
 
@@ -7925,7 +7963,7 @@ jobs:
 
               private fun applyThemeMode(isDark: Boolean) {
                   isDarkMode = isDark
-                  val bgMain = if (isDark) android.graphics.Color.parseColor("#090D1A") else android.graphics.Color.parseColor("#F1F5F9")
+                  val bgMain = if (isDark) android.graphics.Color.parseColor("#090D1A") else android.graphics.Color.parseColor("#F8FAFC")
                   val bgCard = if (isDark) android.graphics.Color.parseColor("#13192B") else android.graphics.Color.parseColor("#FFFFFF")
                   val textPrimary = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0F172A")
                   val textSecondary = if (isDark) android.graphics.Color.parseColor("#94A3B8") else android.graphics.Color.parseColor("#64748B")
@@ -7939,12 +7977,28 @@ jobs:
                       if (::pageSettings.isInitialized) pageSettings.setBackgroundColor(bgMain)
 
                       cardUrlInput?.setCardBackgroundColor(bgCard)
+                      findViewById<androidx.cardview.widget.CardView>(R.id.cardActionVideo)?.setCardBackgroundColor(bgCard)
+                      findViewById<androidx.cardview.widget.CardView>(R.id.cardActionMp3)?.setCardBackgroundColor(bgCard)
+                      findViewById<androidx.cardview.widget.CardView>(R.id.viewPreviewCard)?.setCardBackgroundColor(bgCard)
+                      findViewById<androidx.cardview.widget.CardView>(R.id.viewDownloadingCard)?.setCardBackgroundColor(bgCard)
+
                       findViewById<View>(R.id.bottomNavSection)?.setBackgroundColor(navBg)
                       findViewById<TextView>(R.id.txtAppTitleHeader)?.setTextColor(textPrimary)
+                      findViewById<TextView>(R.id.txtSettingsTitle)?.setTextColor(textPrimary)
 
-                      // Update settings cards
+                      urlInput.setTextColor(textPrimary)
+                      urlInput.setHintTextColor(if (isDark) android.graphics.Color.parseColor("#64748B") else android.graphics.Color.parseColor("#94A3B8"))
+
+                      if (::historySearchInput.isInitialized) {
+                          historySearchInput.setTextColor(textPrimary)
+                          historySearchInput.setHintTextColor(if (isDark) android.graphics.Color.parseColor("#64748B") else android.graphics.Color.parseColor("#94A3B8"))
+                      }
+
+                      // Update settings and playlist cards
+                      findViewById<androidx.cardview.widget.CardView>(R.id.cardDownloadSettings)?.setCardBackgroundColor(bgCard)
+                      findViewById<androidx.cardview.widget.CardView>(R.id.cardAppSettings)?.setCardBackgroundColor(bgCard)
+                      findViewById<androidx.cardview.widget.CardView>(R.id.cardAboutSettings)?.setCardBackgroundColor(bgCard)
                       findViewById<androidx.cardview.widget.CardView>(R.id.cardFolderFavorites)?.setCardBackgroundColor(bgCard)
-                      findViewById<androidx.cardview.widget.CardView>(R.id.cardFolderWatchLater)?.setCardBackgroundColor(bgCard)
                       findViewById<androidx.cardview.widget.CardView>(R.id.cardFolderDownloaded)?.setCardBackgroundColor(bgCard)
                       findViewById<androidx.cardview.widget.CardView>(R.id.cardFolderCustom)?.setCardBackgroundColor(bgCard)
 
@@ -7957,15 +8011,23 @@ jobs:
 
               private fun refreshPlaylistCounts() {
                   try {
-                      val downloadedCount = cachedHistoryItems.size
-                      val favCount = prefs.getStringSet("flowrip_favorites_set", emptySet())?.size ?: 0
-                      val laterCount = prefs.getStringSet("flowrip_watch_later_set", emptySet())?.size ?: 0
+                      val favSet = prefs.getStringSet("flowrip_favorites_set", emptySet()) ?: emptySet()
                       val customCount = prefs.getStringSet("flowrip_custom_playlists_set", emptySet())?.size ?: 0
 
-                      findViewById<TextView>(R.id.txtDownloadedCount)?.text = "$downloadedCount items"
-                      findViewById<TextView>(R.id.txtFavoritesCount)?.text = "$favCount items"
-                      findViewById<TextView>(R.id.txtWatchLaterCount)?.text = "$laterCount items"
-                      findViewById<TextView>(R.id.txtCustomCount)?.text = "$customCount items"
+                      val videoItems = cachedHistoryItems.filter { !it.isAudio }
+                      val audioItems = cachedHistoryItems.filter { it.isAudio }
+
+                      val videoFavCount = videoItems.count { item -> favSet.contains(item.filePath.ifEmpty { item.name }) }
+                      val audioFavCount = audioItems.count { item -> favSet.contains(item.filePath.ifEmpty { item.name }) }
+
+                      val activeDownloadedCount = if (playlistMediaType == "AUDIO") audioItems.size else videoItems.size
+                      val activeFavCount = if (playlistMediaType == "AUDIO") audioFavCount else videoFavCount
+                      val totalFavCount = favSet.size
+                      val displayFavCount = if (activeFavCount > 0 || totalFavCount == 0) activeFavCount else totalFavCount
+
+                      findViewById<TextView>(R.id.txtDownloadedCount)?.text = "$activeDownloadedCount ${if (activeDownloadedCount == 1) "item" else "items"}"
+                      findViewById<TextView>(R.id.txtFavoritesCount)?.text = "$displayFavCount ${if (displayFavCount == 1) "item" else "items"}"
+                      findViewById<TextView>(R.id.txtCustomCount)?.text = "$customCount ${if (customCount == 1) "playlist" else "playlists"}"
                   } catch (e: Exception) {
                       Log.w("MainActivity", "Error updating playlist counts: ${e.message}")
                   }
@@ -7975,30 +8037,47 @@ jobs:
                   val btnVideos = findViewById<Button>(R.id.btnPlaylistToggleVideos)
                   val btnMp3 = findViewById<Button>(R.id.btnPlaylistToggleAudio)
 
+                  fun updateToggleUi() {
+                      val activeBg = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2563EB"))
+                      val inactiveBg = android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
+                      val activeText = android.graphics.Color.WHITE
+                      val inactiveText = android.graphics.Color.parseColor("#94A3B8")
+
+                      if (playlistMediaType == "VIDEO") {
+                          btnVideos?.backgroundTintList = activeBg
+                          btnVideos?.setTextColor(activeText)
+                          btnMp3?.backgroundTintList = inactiveBg
+                          btnMp3?.setTextColor(inactiveText)
+                      } else {
+                          btnMp3?.backgroundTintList = activeBg
+                          btnMp3?.setTextColor(activeText)
+                          btnVideos?.backgroundTintList = inactiveBg
+                          btnVideos?.setTextColor(inactiveText)
+                      }
+                      refreshPlaylistCounts()
+                  }
+
                   btnVideos?.setOnClickListener {
-                      btnVideos.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2563EB"))
-                      btnVideos.setTextColor(android.graphics.Color.WHITE)
-                      btnMp3?.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
-                      btnMp3?.setTextColor(android.graphics.Color.parseColor("#94A3B8"))
+                      playlistMediaType = "VIDEO"
+                      updateToggleUi()
                   }
 
                   btnMp3?.setOnClickListener {
-                      btnMp3.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2563EB"))
-                      btnMp3.setTextColor(android.graphics.Color.WHITE)
-                      btnVideos?.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
-                      btnVideos?.setTextColor(android.graphics.Color.parseColor("#94A3B8"))
+                      playlistMediaType = "AUDIO"
+                      updateToggleUi()
                   }
 
                   findViewById<View>(R.id.cardFolderFavorites)?.setOnClickListener {
-                      historyFilter = "ALL"
+                      historyFilter = "FAVORITES"
                       updateFilterChipStyles()
                       switchTab(1)
-                  }
-                  findViewById<View>(R.id.cardFolderWatchLater)?.setOnClickListener {
-                      switchTab(1)
+                      renderHistoryUI()
                   }
                   findViewById<View>(R.id.cardFolderDownloaded)?.setOnClickListener {
+                      historyFilter = if (playlistMediaType == "AUDIO") "AUDIO" else "VIDEO"
+                      updateFilterChipStyles()
                       switchTab(1)
+                      renderHistoryUI()
                   }
                   findViewById<View>(R.id.cardFolderCustom)?.setOnClickListener {
                       showCreatePlaylistDialog()
@@ -8816,5 +8895,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-DarkShowcase-CompleteUI-v44-APK
+          name: FlowRip-v42-RefinedUI-APK
           path: app/build/outputs/apk/**/*.apk
