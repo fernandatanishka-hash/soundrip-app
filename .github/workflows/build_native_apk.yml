@@ -400,8 +400,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 39
-                  versionName "8.7.0"
+                  versionCode 40
+                  versionName "8.8.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -2850,9 +2850,7 @@ jobs:
                               android:layout_marginTop="24dp"
                               app:cardCornerRadius="29dp"
                               app:cardElevation="0dp"
-                              app:cardBackgroundColor="#13192B"
-                              app:strokeColor="#222F4C"
-                              app:strokeWidth="1.5dp">
+                              app:cardBackgroundColor="#13192B">
 
                               <RelativeLayout
                                   android:layout_width="match_parent"
@@ -2934,8 +2932,6 @@ jobs:
                                       app:cardCornerRadius="18dp"
                                       app:cardElevation="0dp"
                                       app:cardBackgroundColor="#1E1624"
-                                      app:strokeColor="#3D2032"
-                                      app:strokeWidth="1.2dp"
                                       android:clickable="true"
                                       android:focusable="true">
 
@@ -2997,8 +2993,6 @@ jobs:
                                       app:cardCornerRadius="18dp"
                                       app:cardElevation="0dp"
                                       app:cardBackgroundColor="#171932"
-                                      app:strokeColor="#2A2754"
-                                      app:strokeWidth="1.2dp"
                                       android:clickable="true"
                                       android:focusable="true">
 
@@ -5224,13 +5218,11 @@ jobs:
 
                   // Wire Quick Action Cards & Quick Access Buttons (Showcase)
                   findViewById<View>(R.id.cardActionVideo)?.setOnClickListener {
-                      isMp3Selected = false
-                      updateFormatSelection()
+                      setFormatSelection(false)
                       urlInput.requestFocus()
                   }
                   findViewById<View>(R.id.cardActionMp3)?.setOnClickListener {
-                      isMp3Selected = true
-                      updateFormatSelection()
+                      setFormatSelection(true)
                       urlInput.requestFocus()
                   }
                   findViewById<View>(R.id.btnQuickYoutube)?.setOnClickListener {
@@ -7648,5 +7640,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-Stage10-DarkShowcaseUI-v39-APK
+          name: FlowRip-Stage10-DarkShowcaseUI-v40-APK
           path: app/build/outputs/apk/**/*.apk
