@@ -426,8 +426,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 46
-                  versionName "9.2.0"
+                  versionCode 48
+                  versionName "9.3.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -2762,7 +2762,6 @@ jobs:
               android:id="@+id/rootContainer"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
-              android:fitsSystemWindows="true"
               android:background="#090D1A">
 
               <!-- App Pages Container -->
@@ -2791,7 +2790,7 @@ jobs:
                               android:layout_width="match_parent"
                               android:layout_height="wrap_content"
                               android:paddingHorizontal="24dp"
-                              android:paddingTop="68dp"
+                              android:paddingTop="32dp"
                               android:paddingBottom="12dp">
 
                               <TextView
@@ -4317,7 +4316,7 @@ jobs:
                           android:orientation="horizontal"
                           android:gravity="center_vertical"
                           android:paddingHorizontal="24dp"
-                          android:paddingTop="68dp"
+                          android:paddingTop="32dp"
                           android:paddingBottom="14dp">
 
                           <TextView
@@ -4591,7 +4590,7 @@ jobs:
                           android:layout_height="wrap_content"
                           android:orientation="vertical"
                           android:paddingHorizontal="24dp"
-                          android:paddingTop="68dp"
+                          android:paddingTop="32dp"
                           android:paddingBottom="30dp">
 
                           <TextView
@@ -4947,6 +4946,7 @@ jobs:
                                           android:textStyle="bold" />
 
                                       <TextView
+                                          android:id="@+id/txtCurrentLanguage"
                                           android:layout_width="wrap_content"
                                           android:layout_height="wrap_content"
                                           android:text="English ›"
@@ -5049,7 +5049,7 @@ jobs:
                                           <TextView
                                               android:layout_width="wrap_content"
                                               android:layout_height="wrap_content"
-                                              android:text="Version 8.8.0 • yt-dlp &amp; FFmpeg"
+                                              android:text="Version 9.3.0 • yt-dlp &amp; FFmpeg"
                                               android:textColor="#94A3B8"
                                               android:textSize="11sp"
                                               android:layout_marginTop="2dp" />
@@ -5117,7 +5117,7 @@ jobs:
                           android:orientation="horizontal"
                           android:gravity="center_vertical"
                           android:paddingHorizontal="24dp"
-                          android:paddingTop="68dp"
+                          android:paddingTop="32dp"
                           android:paddingBottom="16dp">
 
                           <TextView
@@ -5786,6 +5786,7 @@ jobs:
                       findViewById<View>(R.id.settingRowFormat)?.applyPressScaleEffect(0.985f)
                       findViewById<View>(R.id.settingRowLocation)?.applyPressScaleEffect(0.985f)
                       findViewById<View>(R.id.settingRowWifiOnly)?.applyPressScaleEffect(0.985f)
+                      findViewById<View>(R.id.settingRowLanguage)?.applyPressScaleEffect(0.985f)
                       findViewById<View>(R.id.settingRowAbout)?.applyPressScaleEffect(0.985f)
                   } catch (e: Exception) {
                       Log.e("MainActivity", "Failed to setup touch feedback", e)
@@ -6090,11 +6091,19 @@ jobs:
                   refreshQueueUI()
                   updateLocationUI()
 
-                  // Samsung navigation bar protection
+                  // Notch and Navigation bar protection: apply status bar & cutout insets to containerPages
                   ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootContainer)) { _, insets ->
+                      val statusBarTop = maxOf(
+                          insets.getInsets(WindowInsetsCompat.Type.statusBars()).top,
+                          insets.getInsets(WindowInsetsCompat.Type.displayCutout()).top
+                      )
                       val navInsets = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+
+                      val containerPages = findViewById<View>(R.id.containerPages)
+                      containerPages?.setPadding(0, statusBarTop, 0, 0)
+
                       val bottomNavSection = findViewById<View>(R.id.bottomNavSection)
-                      bottomNavSection.setPadding(0, 0, 0, navInsets.bottom)
+                      bottomNavSection?.setPadding(0, 0, 0, navInsets.bottom)
                       insets
                   }
 
@@ -6416,6 +6425,10 @@ jobs:
                           }.show()
                   }
 
+                  findViewById<View>(R.id.settingRowLanguage)?.setOnClickListener {
+                      showLanguageSelectionDialog()
+                  }
+
                   findViewById<View>(R.id.settingRowAbout).setOnClickListener {
                       val dialogView = LinearLayout(this).apply {
                           orientation = LinearLayout.VERTICAL
@@ -6480,11 +6493,45 @@ jobs:
                   }
               }
 
+              private val availableLanguages = arrayOf(
+                  "English",
+                  "Español (Spanish)",
+                  "Français (French)",
+                  "Deutsch (German)",
+                  "Português (Portuguese)",
+                  "हिन्दी (Hindi)",
+                  "বাংলা (Bengali)",
+                  "日本語 (Japanese)",
+                  "中文 (Chinese)",
+                  "العربية (Arabic)",
+                  "Русский (Russian)"
+              )
+
+              private fun showLanguageSelectionDialog() {
+                  val currentLang = prefs.getString("flowrip_app_language", "English") ?: "English"
+                  val currentIndex = availableLanguages.indexOfFirst { it.startsWith(currentLang) }.let { if (it >= 0) it else 0 }
+
+                  MaterialAlertDialogBuilder(this)
+                      .setTitle("Select Language")
+                      .setSingleChoiceItems(availableLanguages, currentIndex) { dialog, which ->
+                          val selected = availableLanguages[which]
+                          val simpleName = selected.split(" ")[0]
+                          prefs.edit().putString("flowrip_app_language", simpleName).apply()
+                          findViewById<TextView>(R.id.txtCurrentLanguage)?.text = simpleName + " ›"
+                          Toast.makeText(this@MainActivity, "Language set to " + selected, Toast.LENGTH_SHORT).show()
+                          dialog.dismiss()
+                      }
+                      .setNegativeButton("Cancel", null)
+                      .show()
+              }
+
               private fun applyPersistentSettings() {
                   val savedFormat = prefs.getString(KEY_DEFAULT_FORMAT, "MP3") ?: "MP3"
                   val savedQuality = prefs.getString(KEY_PREFERRED_QUALITY, "Best Available") ?: "Best Available"
 
                   txtDefaultFormat.text = if (savedFormat == "MP3") "MP3 (Audio Only)" else "MP4 (Video)"
+                  val savedLang = prefs.getString("flowrip_app_language", "English") ?: "English"
+                  findViewById<TextView>(R.id.txtCurrentLanguage)?.text = "${savedLang} ›"
                   txtDefaultQuality.text = savedQuality
 
                   isAudio = (savedFormat == "MP3")
@@ -8947,5 +8994,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-v46-FixedTheme-APK
+          name: FlowRip-v48-FullFix-APK
           path: app/build/outputs/apk/**/*.apk
