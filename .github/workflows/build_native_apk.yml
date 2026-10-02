@@ -426,8 +426,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 43
-                  versionName "8.9.2"
+                  versionCode 44
+                  versionName "8.9.3"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -1971,14 +1971,19 @@ jobs:
                           val request = YoutubeDLRequest(url)
                           request.addOption("--no-check-certificates")
                           request.addOption("--no-update")
-                          // Enable continuation: resume partial downloads without restarting from zero
                           request.addOption("-c")
+                          request.addOption("--no-playlist")
+                          request.addOption("--socket-timeout", "20")
+                          // Bypass YouTube 403 Forbidden with Android Innertube client
+                          request.addOption("--extractor-args", "youtube:player_client=android,web;player_skip=webpage,configs")
+                          request.addOption("--user-agent", "com.google.android.youtube/19.29.37 (Linux; U; Android 11) gzip")
 
                           if (isAudio) {
                               val bitrate = quality.split(" ")[0].filter { it.isDigit() }.ifEmpty { "320" }
                               request.addOption("-x")
                               request.addOption("--audio-format", "mp3")
                               request.addOption("--audio-quality", bitrate)
+                              request.addOption("-f", "ba/b/best")
                               request.addOption("--add-metadata")
                               request.addOption("--embed-thumbnail")
                               request.addOption("--convert-thumbnails", "jpg")
@@ -1986,9 +1991,9 @@ jobs:
                               request.addOption("--add-metadata")
                               val targetHeight = getTargetHeight(quality)
                               val formatSelector = if (targetHeight > 0) {
-                                  "bv*[vcodec^=avc][height<=$targetHeight]+ba[ext=m4a]/bv*[ext=mp4][height<=$targetHeight]+ba[ext=m4a]/bv*[height<=$targetHeight]+ba/b[height<=$targetHeight]/bv*[vcodec^=avc][width<=$targetHeight]+ba[ext=m4a]/bv*[width<=$targetHeight]+ba/b[width<=$targetHeight]"
+                                  "bv*[height<=$targetHeight]+ba/b[height<=$targetHeight]/best[height<=$targetHeight]/bv*[ext=mp4][height<=$targetHeight]+ba[ext=m4a]/b/best"
                               } else {
-                                  "bv*[vcodec^=avc]+ba[ext=m4a]/bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b"
+                                  "bv*+ba/b/best[ext=mp4]/best"
                               }
                               Log.i(TAG, "QUALITY_PIPELINE: requested='$quality', targetMaxHeight=$targetHeight, formatSelector='$formatSelector'")
                               request.addOption("-f", formatSelector)
@@ -3171,169 +3176,6 @@ jobs:
                                           android:layout_marginTop="6dp" />
                                   </LinearLayout>
                               </LinearLayout>
-
-                              <!-- Trending Section (Showcase Screen 2) -->
-                              <RelativeLayout
-                                  android:layout_width="match_parent"
-                                  android:layout_height="wrap_content"
-                                  android:layout_marginTop="22dp"
-                                  android:layout_marginBottom="12dp">
-
-                                  <TextView
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:text="Trending"
-                                      android:textColor="#FFFFFF"
-                                      android:textSize="14sp"
-                                      android:textStyle="bold" />
-
-                                  <TextView
-                                      android:id="@+id/btnTrendingViewAll"
-                                      android:layout_width="wrap_content"
-                                      android:layout_height="wrap_content"
-                                      android:layout_alignParentEnd="true"
-                                      android:text="View All ›"
-                                      android:textColor="#38BDF8"
-                                      android:textSize="12sp" />
-                              </RelativeLayout>
-
-                              <!-- Trending Item 1 -->
-                              <androidx.cardview.widget.CardView
-                                  android:id="@+id/trendingCard1"
-                                  android:layout_width="match_parent"
-                                  android:layout_height="68dp"
-                                  android:layout_marginBottom="10dp"
-                                  app:cardCornerRadius="16dp"
-                                  app:cardElevation="0dp"
-                                  app:cardBackgroundColor="#13192B"
-                                  android:clickable="true"
-                                  android:focusable="true">
-
-                                  <LinearLayout
-                                      android:layout_width="match_parent"
-                                      android:layout_height="match_parent"
-                                      android:orientation="horizontal"
-                                      android:gravity="center_vertical"
-                                      android:padding="10dp">
-
-                                      <androidx.cardview.widget.CardView
-                                          android:layout_width="80dp"
-                                          android:layout_height="match_parent"
-                                          app:cardCornerRadius="10dp"
-                                          app:cardElevation="0dp"
-                                          app:cardBackgroundColor="#1E293B">
-
-                                          <ImageView
-                                              android:layout_width="match_parent"
-                                              android:layout_height="match_parent"
-                                              android:src="@drawable/ic_play_gradient"
-                                              android:scaleType="centerCrop" />
-                                      </androidx.cardview.widget.CardView>
-
-                                      <LinearLayout
-                                          android:layout_width="0dp"
-                                          android:layout_height="wrap_content"
-                                          android:layout_weight="1"
-                                          android:orientation="vertical"
-                                          android:layout_marginStart="12dp">
-
-                                          <TextView
-                                              android:layout_width="wrap_content"
-                                              android:layout_height="wrap_content"
-                                              android:text="Aesthetic Background Music 🎵"
-                                              android:textColor="#FFFFFF"
-                                              android:textSize="12sp"
-                                              android:textStyle="bold"
-                                              android:maxLines="1"
-                                              android:ellipsize="end" />
-
-                                          <TextView
-                                              android:layout_width="wrap_content"
-                                              android:layout_height="wrap_content"
-                                              android:text="3:24 • 2.4M views"
-                                              android:textColor="#94A3B8"
-                                              android:textSize="10sp"
-                                              android:layout_marginTop="2dp" />
-                                      </LinearLayout>
-
-                                      <TextView
-                                          android:layout_width="28dp"
-                                          android:layout_height="28dp"
-                                          android:text="⋮"
-                                          android:textColor="#64748B"
-                                          android:textSize="16sp"
-                                          android:gravity="center" />
-                                  </LinearLayout>
-                              </androidx.cardview.widget.CardView>
-
-                              <!-- Trending Item 2 -->
-                              <androidx.cardview.widget.CardView
-                                  android:id="@+id/trendingCard2"
-                                  android:layout_width="match_parent"
-                                  android:layout_height="68dp"
-                                  android:layout_marginBottom="16dp"
-                                  app:cardCornerRadius="16dp"
-                                  app:cardElevation="0dp"
-                                  app:cardBackgroundColor="#13192B"
-                                  android:clickable="true"
-                                  android:focusable="true">
-
-                                  <LinearLayout
-                                      android:layout_width="match_parent"
-                                      android:layout_height="match_parent"
-                                      android:orientation="horizontal"
-                                      android:gravity="center_vertical"
-                                      android:padding="10dp">
-
-                                      <androidx.cardview.widget.CardView
-                                          android:layout_width="80dp"
-                                          android:layout_height="match_parent"
-                                          app:cardCornerRadius="10dp"
-                                          app:cardElevation="0dp"
-                                          app:cardBackgroundColor="#1E293B">
-
-                                          <ImageView
-                                              android:layout_width="match_parent"
-                                              android:layout_height="match_parent"
-                                              android:src="@drawable/ic_play_gradient"
-                                              android:scaleType="centerCrop" />
-                                      </androidx.cardview.widget.CardView>
-
-                                      <LinearLayout
-                                          android:layout_width="0dp"
-                                          android:layout_height="wrap_content"
-                                          android:layout_weight="1"
-                                          android:orientation="vertical"
-                                          android:layout_marginStart="12dp">
-
-                                          <TextView
-                                              android:layout_width="wrap_content"
-                                              android:layout_height="wrap_content"
-                                              android:text="Best Minecraft Animation Movie"
-                                              android:textColor="#FFFFFF"
-                                              android:textSize="12sp"
-                                              android:textStyle="bold"
-                                              android:maxLines="1"
-                                              android:ellipsize="end" />
-
-                                          <TextView
-                                              android:layout_width="wrap_content"
-                                              android:layout_height="wrap_content"
-                                              android:text="14:10 • 8.1M views"
-                                              android:textColor="#94A3B8"
-                                              android:textSize="10sp"
-                                              android:layout_marginTop="2dp" />
-                                      </LinearLayout>
-
-                                      <TextView
-                                          android:layout_width="28dp"
-                                          android:layout_height="28dp"
-                                          android:text="⋮"
-                                          android:textColor="#64748B"
-                                          android:textSize="16sp"
-                                          android:gravity="center" />
-                                  </LinearLayout>
-                              </androidx.cardview.widget.CardView>
 
                               <!-- Feature List -->
                               <LinearLayout
@@ -6298,17 +6140,7 @@ jobs:
                   findViewById<View>(R.id.btnQuickSettings)?.setOnClickListener {
                       switchTab(3)
                   }
-                  findViewById<View>(R.id.trendingCard1)?.setOnClickListener {
-                      urlInput.setText("https://www.youtube.com/watch?v=jfKfPfyJRdk")
-                      btnMainAction.performClick()
-                  }
-                  findViewById<View>(R.id.trendingCard2)?.setOnClickListener {
-                      urlInput.setText("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-                      btnMainAction.performClick()
-                  }
-                  findViewById<View>(R.id.btnTrendingViewAll)?.setOnClickListener {
-                      switchTab(1)
-                  }
+
                   findViewById<View>(R.id.btnProCrown)?.setOnClickListener {
                       showFlowRipProDialog()
                   }
@@ -6317,6 +6149,7 @@ jobs:
                   }
                   initPlaylistScreen()
                   initNowPlayingOverlay()
+                  initThemeMode()
 
                   try {
                       StartAppSDK.init(this, "208492019", false)
@@ -6984,6 +6817,7 @@ jobs:
                   updateNavBar(index)
 
                   if (index == 1) refreshHistory(forceRescan = true)
+                  if (index == 2) refreshPlaylistCounts()
                   if (index == 0) refreshQueueUI()
               }
 
@@ -8075,6 +7909,68 @@ jobs:
                       .show()
               }
 
+              private var isDarkMode = true
+
+              private fun initThemeMode() {
+                  val switchDark = findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchDarkMode)
+                  val savedDark = prefs.getBoolean("pref_dark_mode", true)
+                  switchDark?.isChecked = savedDark
+                  applyThemeMode(savedDark)
+
+                  switchDark?.setOnCheckedChangeListener { _, isChecked ->
+                      prefs.edit().putBoolean("pref_dark_mode", isChecked).apply()
+                      applyThemeMode(isChecked)
+                  }
+              }
+
+              private fun applyThemeMode(isDark: Boolean) {
+                  isDarkMode = isDark
+                  val bgMain = if (isDark) android.graphics.Color.parseColor("#090D1A") else android.graphics.Color.parseColor("#F1F5F9")
+                  val bgCard = if (isDark) android.graphics.Color.parseColor("#13192B") else android.graphics.Color.parseColor("#FFFFFF")
+                  val textPrimary = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0F172A")
+                  val textSecondary = if (isDark) android.graphics.Color.parseColor("#94A3B8") else android.graphics.Color.parseColor("#64748B")
+                  val navBg = if (isDark) android.graphics.Color.parseColor("#0D111E") else android.graphics.Color.parseColor("#FFFFFF")
+
+                  try {
+                      findViewById<View>(R.id.rootContainer)?.setBackgroundColor(bgMain)
+                      if (::pageHome.isInitialized) pageHome.setBackgroundColor(bgMain)
+                      if (::pageHistory.isInitialized) pageHistory.setBackgroundColor(bgMain)
+                      if (::pagePlaylist.isInitialized) pagePlaylist.setBackgroundColor(bgMain)
+                      if (::pageSettings.isInitialized) pageSettings.setBackgroundColor(bgMain)
+
+                      cardUrlInput?.setCardBackgroundColor(bgCard)
+                      findViewById<View>(R.id.bottomNavSection)?.setBackgroundColor(navBg)
+                      findViewById<TextView>(R.id.txtAppTitleHeader)?.setTextColor(textPrimary)
+
+                      // Update settings cards
+                      findViewById<androidx.cardview.widget.CardView>(R.id.cardFolderFavorites)?.setCardBackgroundColor(bgCard)
+                      findViewById<androidx.cardview.widget.CardView>(R.id.cardFolderWatchLater)?.setCardBackgroundColor(bgCard)
+                      findViewById<androidx.cardview.widget.CardView>(R.id.cardFolderDownloaded)?.setCardBackgroundColor(bgCard)
+                      findViewById<androidx.cardview.widget.CardView>(R.id.cardFolderCustom)?.setCardBackgroundColor(bgCard)
+
+                      updateNavBar(currentTabIndex)
+                      if (::historyListContainer.isInitialized) renderHistoryUI()
+                  } catch (e: Exception) {
+                      Log.w("MainActivity", "Error applying theme mode: ${e.message}")
+                  }
+              }
+
+              private fun refreshPlaylistCounts() {
+                  try {
+                      val downloadedCount = cachedHistoryItems.size
+                      val favCount = prefs.getStringSet("flowrip_favorites_set", emptySet())?.size ?: 0
+                      val laterCount = prefs.getStringSet("flowrip_watch_later_set", emptySet())?.size ?: 0
+                      val customCount = prefs.getStringSet("flowrip_custom_playlists_set", emptySet())?.size ?: 0
+
+                      findViewById<TextView>(R.id.txtDownloadedCount)?.text = "$downloadedCount items"
+                      findViewById<TextView>(R.id.txtFavoritesCount)?.text = "$favCount items"
+                      findViewById<TextView>(R.id.txtWatchLaterCount)?.text = "$laterCount items"
+                      findViewById<TextView>(R.id.txtCustomCount)?.text = "$customCount items"
+                  } catch (e: Exception) {
+                      Log.w("MainActivity", "Error updating playlist counts: ${e.message}")
+                  }
+              }
+
               private fun initPlaylistScreen() {
                   val btnVideos = findViewById<Button>(R.id.btnPlaylistToggleVideos)
                   val btnMp3 = findViewById<Button>(R.id.btnPlaylistToggleAudio)
@@ -8920,5 +8816,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-DarkShowcase-CompleteUI-v43-APK
+          name: FlowRip-DarkShowcase-CompleteUI-v44-APK
           path: app/build/outputs/apk/**/*.apk
