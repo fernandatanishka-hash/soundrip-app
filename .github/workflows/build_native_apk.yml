@@ -2544,6 +2544,59 @@ jobs:
                   return null
               }
           
+              private fun codecHasMedia(codec: String?): Boolean {
+                  val c = codec?.trim()?.lowercase(Locale.US) ?: return false
+                  return c.isNotEmpty() && c != "none" && c != "null"
+              }
+          
+              private fun parseHeightFromText(vararg values: String?): Int {
+                  for (value in values) {
+                      if (value.isNullOrBlank()) continue
+          
+                      // Matches text such as 1080p, 720p60, 2160P HDR, etc.
+                      val pMatcher = Pattern.compile("""(?<!\d)(144|240|360|480|720|1080|1440|2160|4320)p(?:\d{2})?""", Pattern.CASE_INSENSITIVE).matcher(value)
+                      if (pMatcher.find()) {
+                          return pMatcher.group(1)?.toIntOrNull() ?: 0
+                      }
+          
+                      // Matches resolution strings such as 1920x1080 or 1080x1920.
+                      val resMatcher = Pattern.compile("""(\d{2,5})\s*[x×]\s*(\d{2,5})""", Pattern.CASE_INSENSITIVE).matcher(value)
+                      if (resMatcher.find()) {
+                          val w = resMatcher.group(1)?.toIntOrNull() ?: 0
+                          val h = resMatcher.group(2)?.toIntOrNull() ?: 0
+                          if (w > 0 && h > 0) return minOf(w, h)
+                      }
+                  }
+                  return 0
+              }
+          
+              private fun detectFormatHeight(width: Int, height: Int, format: String?, formatNote: String?): Int {
+                  if (height > 0) return height
+                  return parseHeightFromText(formatNote, format)
+              }
+          
+              private fun videoQualityLabel(height: Int): String? {
+                  return when (height) {
+                      4320 -> "4320p (8K UHD)"
+                      2160 -> "2160p (4K UHD)"
+                      1440 -> "1440p (2K QHD)"
+                      1080 -> "1080p (Full HD)"
+                      720 -> "720p (HD)"
+                      480 -> "480p"
+                      360 -> "360p"
+                      240 -> "240p"
+                      144 -> "144p"
+                      else -> if (height > 0) "${height}p" else null
+                  }
+              }
+          
+              private fun sortDetectedHeights(heights: Set<Int>): List<Int> {
+                  val preferredOrder = listOf(4320, 2160, 1440, 1080, 720, 480, 360, 240, 144)
+                  val known = preferredOrder.filter { it in heights }
+                  val unknown = heights.filter { it !in preferredOrder && it > 0 }.sortedDescending()
+                  return known + unknown
+              }
+          
               private fun handleWifiOnlySettingToggled(wifiOnlyEnabled: Boolean) {
                   if (wifiOnlyEnabled) {
                       if (DownloadService.isDownloading && !NetworkHelper.isWifiConnected(this)) {
@@ -2753,11 +2806,13 @@ jobs:
                           request.addOption("--no-check-certificates")
                           request.addOption("--skip-download")
                           request.addOption("--no-warnings")
-                          request.addOption("--socket-timeout", "6")
+                          request.addOption("--socket-timeout", "8")
                           request.addOption("--extractor-retries", "1")
                           request.addOption("--no-check-formats")
-                          request.addOption("--extractor-args", "youtube:player_client=android")
-                          request.addOption("--user-agent", "com.google.android.youtube/19.29.37 (Linux; U; Android 11) gzip")
+                          // QUALITY DETECTION: use web + android clients so DASH / video-only 720p and 1080p formats are visible.
+                          // Android-only extraction can return only low/progressive formats (often 360p and 144p).
+                          request.addOption("--extractor-args", "youtube:player_client=web,android")
+                          request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36")
                           val videoInfo = YoutubeDL.getInstance().getInfo(request)
           
                           // Cancel obsolete detection: if user changed URL, discard this result immediately!
@@ -2771,41 +2826,53 @@ jobs:
                           var videoAvailable = false
                           var audioAvailable = false
           
+                          Log.d("QualityDetection", "RAW_FORMAT_COUNT url=$url count=${formats.size}")
                           for (f in formats) {
-                              val isVideoFormat = (f.vcodec != null && f.vcodec != "none") || (f.height > 0)
-                              val isAudioFormat = (f.acodec != null && f.acodec != "none") || (f.vcodec == "none" && (f.abr > 0 || f.tbr > 0))
+                              val formatId = f.formatId ?: "?"
+                              val ext = f.ext ?: "?"
+                              val formatText = f.format ?: ""
+                              val note = f.formatNote ?: ""
+                              val vcodec = f.vcodec ?: "none"
+                              val acodec = f.acodec ?: "none"
+                              val width = f.width
+                              val height = f.height
+                              val fps = f.fps
+                              val parsedHeight = detectFormatHeight(width, height, formatText, note)
+                              val hasVideoCodec = codecHasMedia(vcodec)
+                              val hasAudioCodec = codecHasMedia(acodec)
+                              val looksLikeVideo = hasVideoCodec || parsedHeight > 0 || width > 0
+                              val isStoryboardOrImage = ext.equals("mhtml", true) || ext.equals("storyboard", true) ||
+                                  formatText.contains("storyboard", true) || note.contains("storyboard", true) ||
+                                  note.contains("images", true)
           
-                              if (isVideoFormat) {
-                                  videoAvailable = true
-                                  val dim = if (f.height > 0 && f.width > 0) minOf(f.height, f.width) else f.height
-                                  val note = f.formatNote ?: ""
-                                  when {
-                                      dim >= 2160 || note.contains("2160") -> detectedRes.add(2160)
-                                      dim >= 1440 || note.contains("1440") -> detectedRes.add(1440)
-                                      dim >= 1080 || note.contains("1080") -> detectedRes.add(1080)
-                                      dim >= 720 || note.contains("720") -> detectedRes.add(720)
-                                      dim >= 480 || note.contains("480") -> detectedRes.add(480)
-                                      dim >= 360 || note.contains("360") -> detectedRes.add(360)
-                                      dim >= 240 || note.contains("240") -> detectedRes.add(240)
-                                      dim >= 144 || note.contains("144") -> detectedRes.add(144)
-                                      dim > 0 -> detectedRes.add(dim)
-                                  }
-                              }
-                              if (isAudioFormat) {
+                              Log.d(
+                                  "QualityDetection",
+                                  "RAW_FORMAT id=$formatId ext=$ext resolution=${width}x${height} parsedHeight=$parsedHeight fps=$fps vcodec=$vcodec acodec=$acodec note='$note' format='$formatText'"
+                              )
+          
+                              if (hasAudioCodec || (!hasVideoCodec && (f.abr > 0 || f.tbr > 0))) {
                                   audioAvailable = true
+                              }
+          
+                              val rejectReason = when {
+                                  isStoryboardOrImage -> "storyboard/image format"
+                                  !looksLikeVideo -> "no video codec/resolution"
+                                  parsedHeight <= 0 -> "video height missing"
+                                  else -> null
+                              }
+          
+                              if (rejectReason == null) {
+                                  videoAvailable = true
+                                  detectedRes.add(parsedHeight)
+                                  Log.d("QualityDetection", "ACCEPT_FORMAT id=$formatId height=${parsedHeight}p reason=valid video or DASH video-only stream")
+                              } else {
+                                  Log.d("QualityDetection", "REJECT_FORMAT id=$formatId reason=$rejectReason")
                               }
                           }
           
-                          // Build ordered video qualities
-                          val parsedVideo = mutableListOf<String>()
-                          if (2160 in detectedRes) parsedVideo.add("2160p (4K UHD)")
-                          if (1440 in detectedRes) parsedVideo.add("1440p (2K QHD)")
-                          if (1080 in detectedRes) parsedVideo.add("1080p (Full HD)")
-                          if (720 in detectedRes) parsedVideo.add("720p (HD)")
-                          if (480 in detectedRes) parsedVideo.add("480p")
-                          if (360 in detectedRes) parsedVideo.add("360p")
-                          if (240 in detectedRes) parsedVideo.add("240p")
-                          if (144 in detectedRes) parsedVideo.add("144p")
+                          // Build ordered video qualities from actual yt-dlp-reported video/DASH heights.
+                          val parsedVideo = sortDetectedHeights(detectedRes).mapNotNull { videoQualityLabel(it) }.toMutableList()
+                          Log.d("QualityDetection", "FINAL_VIDEO_QUALITIES heights=${sortDetectedHeights(detectedRes)} labels=$parsedVideo")
           
                           // Safe fallback for video: if no heights parsed but video stream or raw format exists
                           if (parsedVideo.isEmpty()) {
