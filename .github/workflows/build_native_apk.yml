@@ -77,6 +77,11 @@ jobs:
           PYEOF
           python3 -c "import textwrap; exec(textwrap.dedent(open('/tmp/generate_brand_assets.py').read()))"
 
+          # 0.1 Download clean modern Roboto typography (guarantees OEM fonts never distort branding)
+          mkdir -p app/src/main/res/font
+          curl -sL --retry 3 https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Bold.ttf -o app/src/main/res/font/brand_bold.ttf || cp /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf app/src/main/res/font/brand_bold.ttf
+          curl -sL --retry 3 https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Regular.ttf -o app/src/main/res/font/brand_regular.ttf || cp /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf app/src/main/res/font/brand_regular.ttf
+
           cat << 'EOF' > app/src/main/res/drawable/ic_play_gradient.xml
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -355,6 +360,27 @@ jobs:
           </resources>
           EOF
 
+                    cat << 'EOF' > app/src/main/res/font/brand_font.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <font-family xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto">
+              <font
+                  android:fontStyle="normal"
+                  android:fontWeight="400"
+                  android:font="@font/brand_regular"
+                  app:fontStyle="normal"
+                  app:fontWeight="400"
+                  app:font="@font/brand_regular" />
+              <font
+                  android:fontStyle="normal"
+                  android:fontWeight="700"
+                  android:font="@font/brand_bold"
+                  app:fontStyle="normal"
+                  app:fontWeight="700"
+                  app:font="@font/brand_bold" />
+          </font-family>
+          EOF
+
           cat << 'EOF' > app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -362,6 +388,8 @@ jobs:
                   <item name="colorPrimary">@color/flowrip_primary</item>
                   <item name="colorPrimaryDark">#090D1A</item>
                   <item name="colorAccent">@color/flowrip_accent</item>
+                  <item name="fontFamily">@font/brand_font</item>
+                  <item name="android:fontFamily">@font/brand_font</item>
                   <item name="android:windowBackground">@color/flowrip_bg</item>
                   <item name="android:statusBarColor">#090D1A</item>
                   <item name="android:windowLightStatusBar">false</item>
@@ -426,8 +454,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 48
-                  versionName "9.3.0"
+                  versionCode 49
+                  versionName "9.4.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -2813,8 +2841,8 @@ jobs:
 
                                   <ImageView
                                       android:id="@+id/imgHeaderLogo"
-                                      android:layout_width="30dp"
-                                      android:layout_height="30dp"
+                                      android:layout_width="34dp"
+                                      android:layout_height="34dp"
                                       android:src="@drawable/ic_flowrip_brand"
                                       android:layout_marginEnd="10dp" />
 
@@ -2829,17 +2857,22 @@ jobs:
                                           android:layout_height="wrap_content"
                                           android:text="FlowRip"
                                           android:textColor="#FFFFFF"
-                                          android:textSize="20sp"
+                                          android:textSize="22sp"
                                           android:textStyle="bold"
-                                          android:letterSpacing="0.02" />
+                                          android:letterSpacing="0.02"
+                                          app:fontFamily="@font/brand_bold"
+                                          android:fontFamily="@font/brand_bold" />
 
                                       <TextView
                                           android:id="@+id/txtAppSubtitleHeader"
                                           android:layout_width="wrap_content"
                                           android:layout_height="wrap_content"
                                           android:text="Video &amp; MP3 Studio"
-                                          android:textColor="#94A3B8"
-                                          android:textSize="10sp" />
+                                          android:textColor="#CBD5E1"
+                                          android:textSize="11sp"
+                                          android:letterSpacing="0.03"
+                                          app:fontFamily="@font/brand_regular"
+                                          android:fontFamily="@font/brand_regular" />
                                   </LinearLayout>
                               </LinearLayout>
 
@@ -5049,7 +5082,7 @@ jobs:
                                           <TextView
                                               android:layout_width="wrap_content"
                                               android:layout_height="wrap_content"
-                                              android:text="Version 9.3.0 • yt-dlp &amp; FFmpeg"
+                                              android:text="Version 9.4.0 • yt-dlp &amp; FFmpeg"
                                               android:textColor="#94A3B8"
                                               android:textSize="11sp"
                                               android:layout_marginTop="2dp" />
@@ -6146,6 +6179,7 @@ jobs:
                   initPlaylistScreen()
                   initNowPlayingOverlay()
                   initThemeMode()
+                  updateHeaderBranding(isDarkMode)
 
                   try {
                       StartAppSDK.init(this, "208492019", false)
@@ -8014,6 +8048,25 @@ jobs:
                   }
               }
 
+              private fun updateHeaderBranding(isDark: Boolean) {
+                  try {
+                      val titleView = findViewById<TextView>(R.id.txtAppTitleHeader) ?: return
+                      val subView = findViewById<TextView>(R.id.txtAppSubtitleHeader) ?: return
+
+                      val flowColor = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0F172A")
+                      val ripColor = if (isDark) android.graphics.Color.parseColor("#38BDF8") else android.graphics.Color.parseColor("#0284C7")
+                      val subColor = if (isDark) android.graphics.Color.parseColor("#CBD5E1") else android.graphics.Color.parseColor("#475569")
+
+                      val spannable = android.text.SpannableStringBuilder("FlowRip")
+                      spannable.setSpan(android.text.style.ForegroundColorSpan(flowColor), 0, 4, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                      spannable.setSpan(android.text.style.ForegroundColorSpan(ripColor), 4, 7, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                      titleView.text = spannable
+                      subView.setTextColor(subColor)
+                  } catch (e: Exception) {
+                      Log.w("MainActivity", "Failed to update header branding", e)
+                  }
+              }
+
               private fun applyThemeToViewHierarchy(view: View, isDark: Boolean) {
                   val textPrimary = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0F172A")
                   val textSecondary = if (isDark) android.graphics.Color.parseColor("#94A3B8") else android.graphics.Color.parseColor("#475569")
@@ -8024,7 +8077,8 @@ jobs:
                           val tag = view.tag as? String
                           val id = view.id
                           if (tag != "keep_color" && id != R.id.btnProCrown && id != R.id.btnMainAction &&
-                              id != R.id.chipAll && id != R.id.chipVideo && id != R.id.chipAudio && id != R.id.chipFavorites) {
+                              id != R.id.chipAll && id != R.id.chipVideo && id != R.id.chipAudio && id != R.id.chipFavorites &&
+                              id != R.id.txtAppTitleHeader && id != R.id.txtAppSubtitleHeader) {
                               val current = view.currentTextColor
                               if (current == android.graphics.Color.WHITE || current == android.graphics.Color.parseColor("#0F172A") || current == android.graphics.Color.parseColor("#F8FAFC")) {
                                   view.setTextColor(textPrimary)
@@ -8086,8 +8140,7 @@ jobs:
                       findViewById<View>(R.id.bottomNavSection)?.setBackgroundColor(navBg)
 
                       findViewById<TextView>(R.id.iconHeaderMenu)?.setTextColor(textPrimary)
-                      findViewById<TextView>(R.id.txtAppTitleHeader)?.setTextColor(textPrimary)
-                      findViewById<TextView>(R.id.txtAppSubtitleHeader)?.setTextColor(textSecondary)
+                      updateHeaderBranding(isDark)
                       findViewById<TextView>(R.id.txtSettingsTitle)?.setTextColor(textPrimary)
 
                       if (::urlInput.isInitialized) {
@@ -8994,5 +9047,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-v48-FullFix-APK
+          name: FlowRip-v49-BrandFix-APK
           path: app/build/outputs/apk/**/*.apk
