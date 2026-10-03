@@ -32,6 +32,7 @@ jobs:
           mkdir -p app/src/main/res/mipmap-xhdpi
           mkdir -p app/src/main/res/mipmap-xxhdpi
           mkdir -p app/src/main/res/mipmap-xxxhdpi
+          mkdir -p app/src/main/res/color
 
           # 0. Official FlowRip Brand Logo & Launcher Icons (Stage 10 Brand System)
           python3 -m pip install --quiet pillow
@@ -280,6 +281,65 @@ jobs:
           </selector>
           EOF
 
+          cat << 'EOF' > app/src/main/res/drawable/bg_custom_toast.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"
+              android:shape="rectangle">
+              <solid android:color="#F013192B" />
+              <stroke android:width="1dp" android:color="#38BDF8" />
+              <corners android:radius="24dp" />
+          </shape>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/drawable/bg_dialog_card.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"
+              android:shape="rectangle">
+              <solid android:color="#13192B" />
+              <stroke android:width="1dp" android:color="#1E293B" />
+              <corners android:radius="18dp" />
+          </shape>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/drawable/bg_lang_selected.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"
+              android:shape="rectangle">
+              <solid android:color="#1E2B48" />
+              <stroke android:width="1.5dp" android:color="#38BDF8" />
+              <corners android:radius="12dp" />
+          </shape>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/drawable/bg_lang_unselected.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <ripple xmlns:android="http://schemas.android.com/apk/res/android"
+              android:color="#243452">
+              <item>
+                  <shape android:shape="rectangle">
+                      <solid android:color="@android:color/transparent" />
+                      <corners android:radius="12dp" />
+                  </shape>
+              </item>
+          </ripple>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/color/switch_thumb_selector.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <selector xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:state_checked="true" android:color="#38BDF8" />
+              <item android:color="#94A3B8" />
+          </selector>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/color/switch_track_selector.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <selector xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:state_checked="true" android:color="#0C4A6E" />
+              <item android:color="#1E293B" />
+          </selector>
+          EOF
+
           cat << 'EOF' > app/src/main/res/drawable/circular_progress_drawable.xml
           <?xml version="1.0" encoding="utf-8"?>
           <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
@@ -395,6 +455,13 @@ jobs:
                   <item name="android:windowLightStatusBar">false</item>
                   <item name="android:navigationBarColor">#0D111D</item>
                   <item name="android:windowLightNavigationBar">false</item>
+                  <item name="switchStyle">@style/Widget.FlowRip.Switch</item>
+              </style>
+
+              <style name="Widget.FlowRip.Switch" parent="Widget.AppCompat.CompoundButton.Switch">
+                  <item name="thumbTint">@color/switch_thumb_selector</item>
+                  <item name="trackTint">@color/switch_track_selector</item>
+                  <item name="splitTrack">false</item>
               </style>
 
               <style name="Theme.FlowRip.SpinnerPopup" parent="ThemeOverlay.AppCompat.Dark">
@@ -454,8 +521,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 52
-                  versionName "9.7.0"
+                  versionCode 53
+                  versionName "9.7.1"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -2819,7 +2886,7 @@ jobs:
                           android:orientation="vertical"
                           android:clipChildren="false"
                           android:clipToPadding="false"
-                          android:paddingBottom="24dp">
+                          android:paddingBottom="100dp">
 
                           <!-- Top Header Bar (☰ FlowRip Brand Logo + Title  👑) -->
                           <LinearLayout
@@ -4170,6 +4237,7 @@ jobs:
                           android:paddingBottom="14dp">
 
                           <TextView
+                              android:id="@+id/txtHistoryHeaderTitle"
                               android:layout_width="0dp"
                               android:layout_height="wrap_content"
                               android:layout_weight="1"
@@ -4355,7 +4423,9 @@ jobs:
                               android:layout_width="match_parent"
                               android:layout_height="wrap_content"
                               android:orientation="vertical"
-                              android:paddingBottom="24dp" />
+                              android:clipChildren="false"
+                              android:clipToPadding="false"
+                              android:paddingBottom="100dp" />
                       </ScrollView>
                   </LinearLayout>
 
@@ -4387,6 +4457,7 @@ jobs:
                               android:orientation="vertical">
 
                               <TextView
+                                  android:id="@+id/txtFavoritesHeaderTitle"
                                   android:layout_width="wrap_content"
                                   android:layout_height="wrap_content"
                                   android:text="Favorites"
@@ -4523,7 +4594,9 @@ jobs:
                               android:layout_width="match_parent"
                               android:layout_height="wrap_content"
                               android:orientation="vertical"
-                              android:paddingBottom="24dp" />
+                              android:clipChildren="false"
+                              android:clipToPadding="false"
+                              android:paddingBottom="100dp" />
                       </ScrollView>
                   </LinearLayout>
 
@@ -4542,7 +4615,9 @@ jobs:
                           android:orientation="vertical"
                           android:paddingHorizontal="24dp"
                           android:paddingTop="32dp"
-                          android:paddingBottom="30dp">
+                          android:clipChildren="false"
+                          android:clipToPadding="false"
+                          android:paddingBottom="120dp">
 
                           <TextView
                               android:id="@+id/txtSettingsTitle"
@@ -4603,6 +4678,7 @@ jobs:
                                           android:orientation="vertical">
 
                                           <TextView
+                                              android:id="@+id/txtSettingQualityTitle"
                                               android:layout_width="wrap_content"
                                               android:layout_height="wrap_content"
                                               android:text="Video Quality (Default)"
@@ -4658,6 +4734,7 @@ jobs:
                                           android:orientation="vertical">
 
                                           <TextView
+                                              android:id="@+id/txtSettingFormatTitle"
                                               android:layout_width="wrap_content"
                                               android:layout_height="wrap_content"
                                               android:text="Default Download Format"
@@ -4716,6 +4793,7 @@ jobs:
                                               android:orientation="vertical">
 
                                               <TextView
+                                                  android:id="@+id/txtSettingLocationTitle"
                                                   android:layout_width="wrap_content"
                                                   android:layout_height="wrap_content"
                                                   android:text="Save Location"
@@ -4783,6 +4861,7 @@ jobs:
                                           android:orientation="vertical">
 
                                           <TextView
+                                              android:id="@+id/txtSettingWifiTitle"
                                               android:layout_width="wrap_content"
                                               android:layout_height="wrap_content"
                                               android:text="Download via Wi-Fi only"
@@ -4803,7 +4882,11 @@ jobs:
                                       <androidx.appcompat.widget.SwitchCompat
                                           android:id="@+id/switchWifiOnly"
                                           android:layout_width="wrap_content"
-                                          android:layout_height="wrap_content" />
+                                          android:layout_height="wrap_content"
+                                          android:tag="keep_color"
+                                          app:splitTrack="false"
+                                          app:thumbTint="@color/switch_thumb_selector"
+                                          app:trackTint="@color/switch_track_selector" />
                                   </LinearLayout>
                               </LinearLayout>
                           </androidx.cardview.widget.CardView>
@@ -4849,6 +4932,7 @@ jobs:
                                           android:layout_marginEnd="12dp" />
 
                                       <TextView
+                                          android:id="@+id/txtSettingDarkTitle"
                                           android:layout_width="0dp"
                                           android:layout_height="wrap_content"
                                           android:layout_weight="1"
@@ -4861,6 +4945,10 @@ jobs:
                                           android:id="@+id/switchDarkMode"
                                           android:layout_width="wrap_content"
                                           android:layout_height="wrap_content"
+                                          android:tag="keep_color"
+                                          app:splitTrack="false"
+                                          app:thumbTint="@color/switch_thumb_selector"
+                                          app:trackTint="@color/switch_track_selector"
                                           android:checked="true" />
                                   </LinearLayout>
 
@@ -4888,6 +4976,7 @@ jobs:
                                           android:layout_marginEnd="12dp" />
 
                                       <TextView
+                                          android:id="@+id/txtSettingLangTitle"
                                           android:layout_width="0dp"
                                           android:layout_height="wrap_content"
                                           android:layout_weight="1"
@@ -4926,6 +5015,7 @@ jobs:
                                           android:layout_marginEnd="12dp" />
 
                                       <TextView
+                                          android:id="@+id/txtSettingNotifTitle"
                                           android:layout_width="0dp"
                                           android:layout_height="wrap_content"
                                           android:layout_weight="1"
@@ -4938,6 +5028,10 @@ jobs:
                                           android:id="@+id/switchNotifications"
                                           android:layout_width="wrap_content"
                                           android:layout_height="wrap_content"
+                                          android:tag="keep_color"
+                                          app:splitTrack="false"
+                                          app:thumbTint="@color/switch_thumb_selector"
+                                          app:trackTint="@color/switch_track_selector"
                                           android:checked="true" />
                                   </LinearLayout>
                               </LinearLayout>
@@ -4998,9 +5092,10 @@ jobs:
                                               android:textStyle="bold" />
 
                                           <TextView
+                                              android:id="@+id/txtAboutVersion"
                                               android:layout_width="wrap_content"
                                               android:layout_height="wrap_content"
-                                              android:text="Version 9.7.0 • yt-dlp &amp; FFmpeg"
+                                              android:text="Version 9.7.1 • yt-dlp &amp; FFmpeg"
                                               android:textColor="#94A3B8"
                                               android:textSize="11sp"
                                               android:layout_marginTop="2dp" />
@@ -5030,6 +5125,7 @@ jobs:
                                       android:focusable="true">
 
                                       <TextView
+                                          android:id="@+id/txtSettingRateTitle"
                                           android:layout_width="0dp"
                                           android:layout_height="wrap_content"
                                           android:layout_weight="1"
@@ -5050,7 +5146,53 @@ jobs:
                       </LinearLayout>
                   </ScrollView>
 
-                  <!-- OVERLAY: NOW PLAYING MP3 PLAYER (Showcase Screen 6) -->
+                  <!-- Elevated Custom Floating Toast / Banner Container (Always above Bottom Ad and Bottom Nav) -->
+              <FrameLayout
+                  android:id="@+id/customToastContainer"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:layout_above="@+id/bottomNavSection"
+                  android:layout_centerHorizontal="true"
+                  android:layout_marginBottom="18dp"
+                  android:paddingHorizontal="24dp"
+                  android:elevation="32dp"
+                  android:translationZ="32dp"
+                  android:visibility="gone"
+                  android:clickable="false">
+
+                  <LinearLayout
+                      android:id="@+id/customToastPill"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:layout_gravity="center_horizontal"
+                      android:background="@drawable/bg_custom_toast"
+                      android:orientation="horizontal"
+                      android:gravity="center_vertical"
+                      android:paddingVertical="10dp"
+                      android:paddingHorizontal="18dp"
+                      android:elevation="8dp">
+
+                      <TextView
+                          android:id="@+id/customToastIcon"
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="✨"
+                          android:textSize="14sp"
+                          android:layout_marginEnd="8dp" />
+
+                      <TextView
+                          android:id="@+id/customToastText"
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:maxWidth="280dp"
+                          android:textColor="#FFFFFF"
+                          android:textSize="13sp"
+                          android:textStyle="bold"
+                          android:text="Notification" />
+                  </LinearLayout>
+              </FrameLayout>
+
+              <!-- OVERLAY: NOW PLAYING MP3 PLAYER (Showcase Screen 6) -->
                   <LinearLayout
                       android:id="@+id/overlayNowPlaying"
                       android:layout_width="match_parent"
@@ -5625,7 +5767,317 @@ jobs:
           import java.util.regex.Pattern
           import kotlin.concurrent.thread
 
+          object AppLocalization {
+              const val KEY_LANGUAGE = "flowrip_app_language"
+
+              enum class Lang(val code: String, val displayName: String) {
+                  ENGLISH("en", "English"),
+                  SPANISH("es", "Español (Spanish)"),
+                  GERMAN("de", "Deutsch (German)"),
+                  FRENCH("fr", "Français (French)"),
+                  PORTUGUESE("pt", "Português (Portuguese)"),
+                  HINDI("hi", "हिन्दी (Hindi)"),
+                  BENGALI("bn", "বাংলা (Bengali)"),
+                  JAPANESE("ja", "日本語 (Japanese)"),
+                  CHINESE("zh", "中文 (Chinese)"),
+                  ARABIC("ar", "العربية (Arabic)"),
+                  RUSSIAN("ru", "Русский (Russian)");
+
+                  companion object {
+                      fun fromCode(code: String): Lang = values().firstOrNull { it.code.equals(code, true) } ?: ENGLISH
+                      fun fromDisplayName(name: String): Lang = values().firstOrNull { name.startsWith(it.displayName.split(" ")[0], true) || name.startsWith(it.name, true) } ?: ENGLISH
+                  }
+              }
+
+              private val translations = mapOf(
+                  // Settings Header & Sections
+                  "settings_title" to mapOf(
+                      "en" to "Settings", "es" to "Ajustes", "de" to "Einstellungen", "fr" to "Paramètres", "pt" to "Configurações",
+                      "hi" to "सेटिंग्स", "bn" to "সেটিংস", "ja" to "設定", "zh" to "设置", "ar" to "الإعدادات", "ru" to "Настройки"
+                  ),
+                  "download_settings_header" to mapOf(
+                      "en" to "Download Settings", "es" to "Ajustes de Descarga", "de" to "Download-Einstellungen", "fr" to "Paramètres de téléchargement",
+                      "pt" to "Configurações de Download", "hi" to "डाउनलोड सेटिंग्स", "bn" to "ডাউনলোড সেটিংস", "ja" to "ダウンロード設定",
+                      "zh" to "下载设置", "ar" to "إعدادات التنزيل", "ru" to "Настройки загрузки"
+                  ),
+                  "quality_preference" to mapOf(
+                      "en" to "Video Quality (Default)", "es" to "Calidad de Video (Predeterminada)", "de" to "Videoqualität (Standard)",
+                      "fr" to "Qualité vidéo (Par défaut)", "pt" to "Qualidade de Vídeo (Padrão)", "hi" to "वीडियो गुणवत्ता (डिफ़ॉल्ट)",
+                      "bn" to "ভিডিও গুণমান (ডিফল্ট)", "ja" to "画質（デフォルト）", "zh" to "视频画质（默认）", "ar" to "جودة الفيديو (الافتراضية)", "ru" to "Качество видео (по умолч.)"
+                  ),
+                  "best_available" to mapOf(
+                      "en" to "Best Available", "es" to "Mejor Disponible", "de" to "Beste Verfügbare", "fr" to "Meilleure disponible",
+                      "pt" to "Melhor Disponível", "hi" to "सर्वश्रेष्ठ उपलब्ध", "bn" to "সেরা উপলব্ধ", "ja" to "最高画質",
+                      "zh" to "最佳画质", "ar" to "الأفضل متاحاً", "ru" to "Лучшее доступное"
+                  ),
+                  "default_format" to mapOf(
+                      "en" to "Default Download Format", "es" to "Formato de Descarga Predeterminado", "de" to "Standard-Downloadformat",
+                      "fr" to "Format de téléchargement par défaut", "pt" to "Formato de Download Padrão", "hi" to "डिफ़ॉल्ट डाउनलोड प्रारूप",
+                      "bn" to "ডিফল্ট ডাউনলোড ফরম্যাট", "ja" to "デフォルトの保存形式", "zh" to "默认下载格式", "ar" to "صيغة التنزيل الافتراضية", "ru" to "Формат загрузки по умолч."
+                  ),
+                  "audio_only" to mapOf(
+                      "en" to "MP3 (Audio Only)", "es" to "MP3 (Solo Audio)", "de" to "MP3 (Nur Audio)", "fr" to "MP3 (Audio uniquement)",
+                      "pt" to "MP3 (Somente Áudio)", "hi" to "MP3 (केवल ऑडियो)", "bn" to "MP3 (শুধুমাত্র অডিও)", "ja" to "MP3（音声のみ）",
+                      "zh" to "MP3（仅音频）", "ar" to "MP3 (صوت فقط)", "ru" to "MP3 (только аудио)"
+                  ),
+                  "video_format" to mapOf(
+                      "en" to "MP4 (Video)", "es" to "MP4 (Video)", "de" to "MP4 (Video)", "fr" to "MP4 (Vidéo)",
+                      "pt" to "MP4 (Vídeo)", "hi" to "MP4 (वीडियो)", "bn" to "MP4 (ভিডিও)", "ja" to "MP4（動画）",
+                      "zh" to "MP4（视频）", "ar" to "MP4 (فيديو)", "ru" to "MP4 (видео)"
+                  ),
+                  "download_location" to mapOf(
+                      "en" to "Save Location", "es" to "Ubicación de Guardado", "de" to "Speicherort", "fr" to "Emplacement d'enregistrement",
+                      "pt" to "Local de Salvamento", "hi" to "सहेजने का स्थान", "bn" to "সংরক্ষণের স্থান", "ja" to "保存先",
+                      "zh" to "保存位置", "ar" to "موقع الحفظ", "ru" to "Папка сохранения"
+                  ),
+                  "change_folder" to mapOf(
+                      "en" to "Change Folder", "es" to "Cambiar Carpeta", "de" to "Ordner ändern", "fr" to "Changer de dossier",
+                      "pt" to "Alterar Pasta", "hi" to "फ़ोल्डर बदलें", "bn" to "ফোল্ডার পরিবর্তন করুন", "ja" to "フォルダを変更",
+                      "zh" to "更改文件夹", "ar" to "تغيير المجلد", "ru" to "Изменить папку"
+                  ),
+                  "reset_default" to mapOf(
+                      "en" to "Reset to Default", "es" to "Restablecer", "de" to "Zurücksetzen", "fr" to "Réinitialiser",
+                      "pt" to "Redefinir Padrão", "hi" to "डिफ़ॉल्ट पर रीसेट करें", "bn" to "ডিফল্টে রিসেট করুন", "ja" to "デフォルトに戻す",
+                      "zh" to "恢复默认", "ar" to "إعادة ضبط", "ru" to "Сбросить по умолч."
+                  ),
+                  "wifi_only_title" to mapOf(
+                      "en" to "Download via Wi-Fi only", "es" to "Descargar solo por Wi-Fi", "de" to "Downloads nur über WLAN",
+                      "fr" to "Télécharger via Wi-Fi uniquement", "pt" to "Baixar apenas via Wi-Fi", "hi" to "केवल वाई-फ़ाई से डाउनलोड करें",
+                      "bn" to "শুধুমাত্র ওয়াই-ফাই দিয়ে ডাউনলোড", "ja" to "Wi-Fi接続時のみダウンロード", "zh" to "仅通过 Wi-Fi 下载", "ar" to "التنزيل عبر Wi-Fi فقط", "ru" to "Загрузка только по Wi-Fi"
+                  ),
+                  "wifi_only_sub" to mapOf(
+                      "en" to "Download only when connected to Wi-Fi", "es" to "Descargar solo cuando esté conectado a Wi-Fi",
+                      "de" to "Download nur bei bestehender WLAN-Verbindung", "fr" to "Ne télécharger que si connecté au Wi-Fi",
+                      "pt" to "Baixar somente quando conectado ao Wi-Fi", "hi" to "केवल वाई-फ़ाई कनेक्ट होने पर डाउनलोड करें",
+                      "bn" to "ওয়াই-ফাই সংযোগ থাকলেই কেবল ডাউনলোড করুন", "ja" to "Wi-Fiに接続されている時のみダウンロードします",
+                      "zh" to "仅在连接 Wi-Fi 时进行下载", "ar" to "التنزيل فقط عند الاتصال بشبكة Wi-Fi", "ru" to "Скачивать только при подключении к Wi-Fi"
+                  ),
+                  "app_settings_header" to mapOf(
+                      "en" to "App Settings", "es" to "Ajustes de la Aplicación", "de" to "App-Einstellungen", "fr" to "Paramètres de l'application",
+                      "pt" to "Configurações do Aplicativo", "hi" to "ऐप सेटिंग्स", "bn" to "অ্যাপ সেটিংস", "ja" to "アプリ設定",
+                      "zh" to "应用设置", "ar" to "إعدادات التطبيق", "ru" to "Настройки приложения"
+                  ),
+                  "dark_mode" to mapOf(
+                      "en" to "Dark Mode", "es" to "Modo Oscuro", "de" to "Dunkelmodus", "fr" to "Mode sombre",
+                      "pt" to "Modo Escuro", "hi" to "डार्क मोड", "bn" to "ডার্ক মোড", "ja" to "ダークモード",
+                      "zh" to "深色模式", "ar" to "الوضع الداكن", "ru" to "Тёмная тема"
+                  ),
+                  "language" to mapOf(
+                      "en" to "Language", "es" to "Idioma", "de" to "Sprache", "fr" to "Langue",
+                      "pt" to "Idioma", "hi" to "भाषा", "bn" to "ভাষা", "ja" to "言語",
+                      "zh" to "语言", "ar" to "اللغة", "ru" to "Язык"
+                  ),
+                  "notifications" to mapOf(
+                      "en" to "Notifications", "es" to "Notificaciones", "de" to "Benachrichtigungen", "fr" to "Notifications",
+                      "pt" to "Notificações", "hi" to "सूचनाएं", "bn" to "বিজ্ঞপ্তি", "ja" to "通知",
+                      "zh" to "通知", "ar" to "الإشعارات", "ru" to "Уведомления"
+                  ),
+                  "about_header" to mapOf(
+                      "en" to "About", "es" to "Acerca de", "de" to "Über", "fr" to "À propos",
+                      "pt" to "Sobre", "hi" to "के बारे में", "bn" to "সম্পর্কে", "ja" to "アプリ情報",
+                      "zh" to "关于", "ar" to "حول التطبيق", "ru" to "О приложении"
+                  ),
+                  "version_info" to mapOf(
+                      "en" to "Version 9.7.1 • yt-dlp & FFmpeg", "es" to "Versión 9.7.1 • yt-dlp y FFmpeg", "de" to "Version 9.7.1 • yt-dlp & FFmpeg",
+                      "fr" to "Version 9.7.1 • yt-dlp & FFmpeg", "pt" to "Versão 9.7.1 • yt-dlp & FFmpeg", "hi" to "संस्करण 9.7.1 • yt-dlp और FFmpeg",
+                      "bn" to "সংস্করণ ৯.৭.১ • yt-dlp ও FFmpeg", "ja" to "バージョン 9.7.1 • yt-dlp & FFmpeg", "zh" to "版本 9.7.1 • yt-dlp & FFmpeg",
+                      "ar" to "الإصدار 9.7.1 • yt-dlp و FFmpeg", "ru" to "Версия 9.7.1 • yt-dlp и FFmpeg"
+                  ),
+                  "rate_us" to mapOf(
+                      "en" to "Rate Us", "es" to "Califícanos", "de" to "Bewerten Sie uns", "fr" to "Évaluez-nous",
+                      "pt" to "Avalie-nos", "hi" to "हमें रेट करें", "bn" to "আমাদের রেট দিন", "ja" to "アプリを評価",
+                      "zh" to "给我们评分", "ar" to "تقييم التطبيق", "ru" to "Оценить приложение"
+                  ),
+
+                  // Bottom Navigation Tabs
+                  "nav_home" to mapOf(
+                      "en" to "Home", "es" to "Inicio", "de" to "Start", "fr" to "Accueil", "pt" to "Início",
+                      "hi" to "होम", "bn" to "হোম", "ja" to "ホーム", "zh" to "首页", "ar" to "الرئيسية", "ru" to "Главная"
+                  ),
+                  "nav_downloads" to mapOf(
+                      "en" to "Downloads", "es" to "Descargas", "de" to "Downloads", "fr" to "Téléchargements", "pt" to "Downloads",
+                      "hi" to "डाउनलोड", "bn" to "ডাউনলোড", "ja" to "保存済み", "zh" to "下载", "ar" to "التنزيلات", "ru" to "Загрузки"
+                  ),
+                  "nav_favorites" to mapOf(
+                      "en" to "Favorites", "es" to "Favoritos", "de" to "Favoriten", "fr" to "Favoris", "pt" to "Favoritos",
+                      "hi" to "पसंदीदा", "bn" to "প্রিয়", "ja" to "お気に入り", "zh" to "收藏", "ar" to "المفضلة", "ru" to "Избранное"
+                  ),
+                  "nav_settings" to mapOf(
+                      "en" to "Settings", "es" to "Ajustes", "de" to "Einstellungen", "fr" to "Paramètres", "pt" to "Configurações",
+                      "hi" to "सेटिंग्स", "bn" to "সেটিংস", "ja" to "設定", "zh" to "设置", "ar" to "الإعدادات", "ru" to "Настройки"
+                  ),
+
+                  // Downloads Screen
+                  "downloads_title" to mapOf(
+                      "en" to "Downloads", "es" to "Descargas", "de" to "Downloads", "fr" to "Téléchargements", "pt" to "Downloads",
+                      "hi" to "डाउनलोड", "bn" to "ডাউনলোড", "ja" to "ダウンロード", "zh" to "下载列表", "ar" to "التنزيلات", "ru" to "Загрузки"
+                  ),
+                  "search_downloads" to mapOf(
+                      "en" to "Search downloads...", "es" to "Buscar descargas...", "de" to "Downloads durchsuchen...",
+                      "fr" to "Rechercher des téléchargements...", "pt" to "Buscar downloads...", "hi" to "डाउनलोड खोजें...",
+                      "bn" to "ডাউনলোড খুঁজুন...", "ja" to "ダウンロードを検索...", "zh" to "搜索下载内容...", "ar" to "البحث في التنزيلات...", "ru" to "Поиск загрузок..."
+                  ),
+                  "chip_all" to mapOf("en" to "All Files", "es" to "Todos", "de" to "Alle Dateien", "fr" to "Tous les fichiers", "pt" to "Todos"),
+                  "chip_video" to mapOf("en" to "🎬 Video", "es" to "🎬 Video", "de" to "🎬 Video", "fr" to "🎬 Vidéo", "pt" to "🎬 Vídeo"),
+                  "chip_audio" to mapOf("en" to "🎵 Audio", "es" to "🎵 Audio", "de" to "🎵 Audio", "fr" to "🎵 Audio", "pt" to "🎵 Áudio"),
+                  "chip_favorites" to mapOf("en" to "❤️ Favorites", "es" to "❤️ Favoritos", "de" to "❤️ Favoriten", "fr" to "❤️ Favoris", "pt" to "❤️ Favoritos"),
+
+                  // Favorites Screen
+                  "favorites_title" to mapOf(
+                      "en" to "Favorites", "es" to "Favoritos", "de" to "Favoriten", "fr" to "Favoris", "pt" to "Favoritos",
+                      "hi" to "पसंदीदा", "bn" to "প্রিয়", "ja" to "お気に入り", "zh" to "收藏夹", "ar" to "المفضلة", "ru" to "Избранное"
+                  ),
+                  "search_favorites" to mapOf(
+                      "en" to "Search favorites...", "es" to "Buscar favoritos...", "de" to "Favoriten durchsuchen...",
+                      "fr" to "Rechercher dans les favoris...", "pt" to "Buscar favoritos...", "hi" to "पसंदीदा खोजें...",
+                      "bn" to "প্রিয় খুঁজুন...", "ja" to "お気に入りを検索...", "zh" to "搜索收藏...", "ar" to "البحث في المفضلة...", "ru" to "Поиск в избранном..."
+                  ),
+                  "chip_fav_all" to mapOf("en" to "All", "es" to "Todo", "de" to "Alle", "fr" to "Tous", "pt" to "Todos"),
+                  "chip_fav_videos" to mapOf("en" to "Videos", "es" to "Videos", "de" to "Videos", "fr" to "Vidéos", "pt" to "Vídeos"),
+                  "chip_fav_audio" to mapOf("en" to "Audio", "es" to "Audio", "de" to "Audio", "fr" to "Audio", "pt" to "Áudio"),
+
+                  // Dialogs & Toasts
+                  "dialog_select_language" to mapOf(
+                      "en" to "Select Language", "es" to "Seleccionar Idioma", "de" to "Sprache wählen", "fr" to "Sélectionner la langue",
+                      "pt" to "Selecionar Idioma", "hi" to "भाषा चुनें", "bn" to "ভাষা নির্বাচন করুন", "ja" to "言語を選択",
+                      "zh" to "选择语言", "ar" to "اختر اللغة", "ru" to "Выберите язык"
+                  ),
+                  "cancel" to mapOf(
+                      "en" to "Cancel", "es" to "Cancelar", "de" to "Abbrechen", "fr" to "Annuler", "pt" to "Cancelar",
+                      "hi" to "रद्द करें", "bn" to "বাতিল", "ja" to "キャンセル", "zh" to "取消", "ar" to "إلغاء", "ru" to "Отмена"
+                  ),
+                  "lang_set_to" to mapOf(
+                      "en" to "Language set to", "es" to "Idioma establecido en", "de" to "Sprache eingestellt auf",
+                      "fr" to "Langue définie sur", "pt" to "Idioma alterado para", "hi" to "भाषा सेट की गई", "bn" to "ভাষা সেট করা হয়েছে",
+                      "ja" to "言語を設定しました：", "zh" to "语言已设置为", "ar" to "تم ضبط اللغة إلى", "ru" to "Язык изменён на"
+                  )
+              )
+
+              fun getString(key: String, langCode: String): String {
+                  val entry = translations[key] ?: return key
+                  return entry[langCode] ?: entry["en"] ?: key
+              }
+          }
+
           class MainActivity : AppCompatActivity() {
+
+              private var toastHideRunnable: Runnable? = null
+              private val toastHandler = Handler(Looper.getMainLooper())
+
+              private fun showAppToast(message: String, isLong: Boolean = false) {
+                  runOnUiThread {
+                      try {
+                          val container = findViewById<FrameLayout>(R.id.customToastContainer)
+                          val textView = findViewById<TextView>(R.id.customToastText)
+                          val iconView = findViewById<TextView>(R.id.customToastIcon)
+                          if (container == null || textView == null) {
+                              val t = Toast.makeText(this, message, if (isLong) Toast.LENGTH_LONG else Toast.LENGTH_SHORT)
+                              val navHeight = findViewById<View>(R.id.bottomNavSection)?.height ?: dpToPx(130)
+                              t.setGravity(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, navHeight + dpToPx(24))
+                              t.show()
+                              return@runOnUiThread
+                          }
+
+                          toastHideRunnable?.let { toastHandler.removeCallbacks(it) }
+
+                          textView.text = message
+                          iconView?.text = when {
+                              message.contains("❤️") || message.contains("Favorit") -> "❤️"
+                              message.contains("Download", true) || message.contains("Descarg", true) -> "📥"
+                              message.contains("Wi-Fi", true) || message.contains("WLAN", true) -> "📶"
+                              message.contains("Language", true) || message.contains("Idioma", true) || message.contains("Sprache", true) -> "🌐"
+                              message.contains("delete", true) || message.contains("elimina", true) || message.contains("lösch", true) -> "🗑️"
+                              message.contains("Cannot", true) || message.contains("No ", true) || message.contains("Error", true) || message.contains("Failed", true) -> "⚠️"
+                              else -> "✨"
+                          }
+
+                          container.visibility = View.VISIBLE
+                          container.alpha = 0f
+                          container.translationY = dpToPx(16).toFloat()
+                          container.animate()
+                              .alpha(1f)
+                              .translationY(0f)
+                              .setDuration(220L)
+                              .setInterpolator(DecelerateInterpolator())
+                              .start()
+
+                          val durationMs = if (isLong) 3500L else 2200L
+                          toastHideRunnable = Runnable {
+                              container.animate()
+                                  .alpha(0f)
+                                  .translationY(dpToPx(12).toFloat())
+                                  .setDuration(200L)
+                                  .withEndAction { container.visibility = View.GONE }
+                                  .start()
+                          }
+                          toastHandler.postDelayed(toastHideRunnable!!, durationMs)
+                      } catch (e: Exception) {
+                          val t = Toast.makeText(this, message, if (isLong) Toast.LENGTH_LONG else Toast.LENGTH_SHORT)
+                          val navHeight = findViewById<View>(R.id.bottomNavSection)?.height ?: dpToPx(130)
+                          t.setGravity(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, navHeight + dpToPx(24))
+                          t.show()
+                      }
+                  }
+              }
+
+              private fun applyCurrentLanguage(code: String) {
+                  try {
+                      val lang = AppLocalization.Lang.fromCode(code)
+
+                      // Settings Screen Titles & Labels
+                      findViewById<TextView>(R.id.txtSettingsTitle)?.text = AppLocalization.getString("settings_title", code)
+                      findViewById<TextView>(R.id.txtSectionDownloadSettings)?.text = AppLocalization.getString("download_settings_header", code)
+                      findViewById<TextView>(R.id.txtSettingQualityTitle)?.text = AppLocalization.getString("quality_preference", code)
+                      findViewById<TextView>(R.id.txtSettingFormatTitle)?.text = AppLocalization.getString("default_format", code)
+                      findViewById<TextView>(R.id.txtSettingLocationTitle)?.text = AppLocalization.getString("download_location", code)
+                      findViewById<Button>(R.id.btnChangeLocation)?.text = AppLocalization.getString("change_folder", code)
+                      findViewById<Button>(R.id.btnResetLocation)?.text = AppLocalization.getString("reset_default", code)
+                      findViewById<TextView>(R.id.txtSettingWifiTitle)?.text = AppLocalization.getString("wifi_only_title", code)
+                      findViewById<TextView>(R.id.txtWifiOnlySubtitle)?.text = AppLocalization.getString("wifi_only_sub", code)
+                      findViewById<TextView>(R.id.txtSectionAppSettings)?.text = AppLocalization.getString("app_settings_header", code)
+                      findViewById<TextView>(R.id.txtSettingDarkTitle)?.text = AppLocalization.getString("dark_mode", code)
+                      findViewById<TextView>(R.id.txtSettingLangTitle)?.text = AppLocalization.getString("language", code)
+                      findViewById<TextView>(R.id.txtCurrentLanguage)?.text = "${lang.displayName.split(" ")[0]} ›"
+                      findViewById<TextView>(R.id.txtSettingNotifTitle)?.text = AppLocalization.getString("notifications", code)
+                      findViewById<TextView>(R.id.txtSectionAbout)?.text = AppLocalization.getString("about_header", code)
+                      findViewById<TextView>(R.id.txtAboutVersion)?.text = AppLocalization.getString("version_info", code)
+                      findViewById<TextView>(R.id.txtSettingRateTitle)?.text = AppLocalization.getString("rate_us", code)
+
+                      // Bottom Navigation Bar Tabs
+                      findViewById<TextView>(R.id.textTabHome)?.text = AppLocalization.getString("nav_home", code)
+                      findViewById<TextView>(R.id.textTabHistory)?.text = AppLocalization.getString("nav_downloads", code)
+                      findViewById<TextView>(R.id.textTabPlaylist)?.text = AppLocalization.getString("nav_favorites", code)
+                      findViewById<TextView>(R.id.textTabSettings)?.text = AppLocalization.getString("nav_settings", code)
+
+                      // Downloads Screen Headers & Chips
+                      findViewById<TextView>(R.id.txtHistoryHeaderTitle)?.text = AppLocalization.getString("downloads_title", code)
+                      findViewById<EditText>(R.id.historySearchInput)?.hint = AppLocalization.getString("search_downloads", code)
+                      findViewById<Button>(R.id.chipAll)?.text = AppLocalization.getString("chip_all", code)
+                      findViewById<Button>(R.id.chipVideo)?.text = AppLocalization.getString("chip_video", code)
+                      findViewById<Button>(R.id.chipAudio)?.text = AppLocalization.getString("chip_audio", code)
+                      findViewById<Button>(R.id.chipFavorites)?.text = AppLocalization.getString("chip_favorites", code)
+
+                      // Favorites Screen Headers & Chips
+                      findViewById<TextView>(R.id.txtFavoritesHeaderTitle)?.text = AppLocalization.getString("favorites_title", code)
+                      findViewById<EditText>(R.id.favoritesSearchInput)?.hint = AppLocalization.getString("search_favorites", code)
+                      findViewById<TextView>(R.id.chipFavAll)?.text = AppLocalization.getString("chip_fav_all", code)
+                      findViewById<TextView>(R.id.chipFavVideos)?.text = AppLocalization.getString("chip_fav_videos", code)
+                      findViewById<TextView>(R.id.chipFavAudio)?.text = AppLocalization.getString("chip_fav_audio", code)
+
+                      // Update Format & Quality label texts
+                      if (::txtDefaultFormat.isInitialized) {
+                          val savedFormat = prefs.getString(KEY_DEFAULT_FORMAT, "MP3") ?: "MP3"
+                          txtDefaultFormat.text = if (savedFormat == "MP3") AppLocalization.getString("audio_only", code) else AppLocalization.getString("video_format", code)
+                      }
+                      if (::txtDefaultQuality.isInitialized) {
+                          val savedQuality = prefs.getString(KEY_PREFERRED_QUALITY, "Best Available") ?: "Best Available"
+                          txtDefaultQuality.text = if (savedQuality == "Best Available") AppLocalization.getString("best_available", code) else savedQuality
+                      }
+                  } catch (e: Exception) {
+                      Log.e("MainActivity", "Failed to apply language strings", e)
+                  }
+              }
+
 
           fun View.applyPressScaleEffect(scaleFactor: Float = 0.97f) {
               this.setOnTouchListener { v, event ->
@@ -6028,7 +6480,7 @@ jobs:
                       StorageHelper.setCustomTreeUri(this, null)
                       updateLocationUI()
                       refreshHistory()
-                      Toast.makeText(this, "Reset to default FlowRip folder", Toast.LENGTH_SHORT).show()
+                      showAppToast("Reset to default FlowRip folder")
                   }
 
                   updateLocationUI()
@@ -6064,6 +6516,14 @@ jobs:
                       insets
                   }
 
+                  // Responsive bottom content clearance: keep page container abutting the bottom ad
+                  findViewById<View>(R.id.bottomNavSection)?.addOnLayoutChangeListener { _, _, top, _, bottom, _, _, oldTop, _ ->
+                      val h = bottom - top
+                      if (h > 0) {
+                          findViewById<View>(R.id.containerPages)?.requestLayout()
+                      }
+                  }
+
                   // Apply persistent settings on startup
                   applyPersistentSettings()
 
@@ -6081,7 +6541,7 @@ jobs:
                           val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com"))
                           startActivity(intent)
                       } catch (e: Exception) {
-                          Toast.makeText(this, "Opening YouTube...", Toast.LENGTH_SHORT).show()
+                          showAppToast("Opening YouTube...")
                       }
                   }
                   findViewById<View>(R.id.btnQuickHistory)?.setOnClickListener {
@@ -6255,7 +6715,7 @@ jobs:
                               urlInput.setText(clip)
                               inspectUrlAndDetectFormats(clip)
                           } else {
-                              Toast.makeText(this, "Clipboard is empty. Copy a link first!", Toast.LENGTH_SHORT).show()
+                              showAppToast("Clipboard is empty. Copy a link first!")
                           }
                       } else {
                           inspectUrlAndDetectFormats(currentText)
@@ -6291,11 +6751,11 @@ jobs:
                   }
 
                   btnPlayFile.setOnClickListener {
-                      lastDownloadedFile?.let { playFile(it) } ?: Toast.makeText(this, "No file to play", Toast.LENGTH_SHORT).show()
+                      lastDownloadedFile?.let { playFile(it) } ?: showAppToast("No file to play")
                   }
 
                   btnSaveFile.setOnClickListener {
-                      lastDownloadedFile?.let { shareFile(it) } ?: Toast.makeText(this, "File is saved in /Downloads/FlowRip", Toast.LENGTH_LONG).show()
+                      lastDownloadedFile?.let { shareFile(it) } ?: showAppToast("File is saved in /Downloads/FlowRip", true)
                   }
 
                   btnPauseResume.setOnClickListener {
@@ -6305,7 +6765,7 @@ jobs:
                           val paused = QueueManager.getPausedItem(this)
                           if (paused != null) {
                               if (NetworkHelper.isWifiOnlyEnabled(this) && !NetworkHelper.isWifiConnected(this)) {
-                                  Toast.makeText(this, "Cannot resume download: Wi-Fi connection required (Wi-Fi Only is ON).", Toast.LENGTH_LONG).show()
+                                  showAppToast("Cannot resume download: Wi-Fi connection required (Wi-Fi Only is ON).", true)
                               } else {
                                   QueueManager.resumeItem(this, paused.id)
                               }
@@ -6365,7 +6825,7 @@ jobs:
                               txtDefaultQuality.text = chosen
                               prefs.edit().putString(KEY_PREFERRED_QUALITY, chosen).apply()
                               updateSpinner()
-                              Toast.makeText(this, "Default quality set to $chosen", Toast.LENGTH_SHORT).show()
+                              showAppToast("Default quality set to $chosen")
                           }.show()
                   }
 
@@ -6379,7 +6839,7 @@ jobs:
                               txtDefaultFormat.text = formatOptions[which]
                               prefs.edit().putString(KEY_DEFAULT_FORMAT, chosenFormat).apply()
                               setFormatSelection(isMp3)
-                              Toast.makeText(this, "Default format set to ${formatOptions[which]}", Toast.LENGTH_SHORT).show()
+                              showAppToast("Default format set to ${formatOptions[which]}")
                           }.show()
                   }
 
@@ -6451,48 +6911,103 @@ jobs:
                   }
               }
 
-              private val availableLanguages = arrayOf(
-                  "English",
-                  "Español (Spanish)",
-                  "Français (French)",
-                  "Deutsch (German)",
-                  "Português (Portuguese)",
-                  "हिन्दी (Hindi)",
-                  "বাংলা (Bengali)",
-                  "日本語 (Japanese)",
-                  "中文 (Chinese)",
-                  "العربية (Arabic)",
-                  "Русский (Russian)"
-              )
-
               private fun showLanguageSelectionDialog() {
-                  val currentLang = prefs.getString("flowrip_app_language", "English") ?: "English"
-                  val currentIndex = availableLanguages.indexOfFirst { it.startsWith(currentLang) }.let { if (it >= 0) it else 0 }
+                  val currentLangCode = prefs.getString(AppLocalization.KEY_LANGUAGE, "en") ?: "en"
+                  val dialog = android.app.Dialog(this)
+                  dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+                  dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
 
-                  MaterialAlertDialogBuilder(this)
-                      .setTitle("Select Language")
-                      .setSingleChoiceItems(availableLanguages, currentIndex) { dialog, which ->
-                          val selected = availableLanguages[which]
-                          val simpleName = selected.split(" ")[0]
-                          prefs.edit().putString("flowrip_app_language", simpleName).apply()
-                          findViewById<TextView>(R.id.txtCurrentLanguage)?.text = simpleName + " ›"
-                          Toast.makeText(this@MainActivity, "Language set to " + selected, Toast.LENGTH_SHORT).show()
-                          dialog.dismiss()
+                  val root = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setBackgroundResource(R.drawable.bg_dialog_card)
+                      val p = dpToPx(20)
+                      setPadding(p, p, p, p)
+                      layoutParams = ViewGroup.LayoutParams(dpToPx(320), ViewGroup.LayoutParams.WRAP_CONTENT)
+                  }
+
+                  val title = TextView(this).apply {
+                      text = AppLocalization.getString("dialog_select_language", currentLangCode)
+                      setTextColor(android.graphics.Color.WHITE)
+                      textSize = 18f
+                      typeface = android.graphics.Typeface.DEFAULT_BOLD
+                      setPadding(dpToPx(4), 0, 0, dpToPx(14))
+                  }
+                  root.addView(title)
+
+                  val scroll = ScrollView(this).apply {
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(320))
+                      isFillViewport = true
+                  }
+                  val listContainer = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                  }
+
+                  AppLocalization.Lang.values().forEach { lang ->
+                      val isSelected = (lang.code == currentLangCode)
+                      val row = LinearLayout(this).apply {
+                          orientation = LinearLayout.HORIZONTAL
+                          gravity = Gravity.CENTER_VERTICAL
+                          layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(48)).apply {
+                              bottomMargin = dpToPx(4)
+                          }
+                          setBackgroundResource(if (isSelected) R.drawable.bg_lang_selected else R.drawable.bg_lang_unselected)
+                          isClickable = true
+                          isFocusable = true
+                          setPadding(dpToPx(12), 0, dpToPx(12), 0)
+
+                          setOnClickListener {
+                              dialog.dismiss()
+                              if (lang.code != currentLangCode) {
+                                  prefs.edit().putString(AppLocalization.KEY_LANGUAGE, lang.code).apply()
+                                  applyCurrentLanguage(lang.code)
+                                  val confirmMsg = "${AppLocalization.getString("lang_set_to", lang.code)} ${lang.displayName.split(" ")[0]}"
+                                  showAppToast(confirmMsg)
+                              }
+                          }
                       }
-                      .setNegativeButton("Cancel", null)
-                      .show()
+
+                      val nameView = TextView(this).apply {
+                          text = lang.displayName
+                          setTextColor(if (isSelected) android.graphics.Color.parseColor("#38BDF8") else android.graphics.Color.parseColor("#E2E8F0"))
+                          textSize = 14f
+                          if (isSelected) typeface = android.graphics.Typeface.DEFAULT_BOLD
+                          layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                      }
+                      row.addView(nameView)
+
+                      val radioIndicator = TextView(this).apply {
+                          text = if (isSelected) "●" else "○"
+                          setTextColor(if (isSelected) android.graphics.Color.parseColor("#38BDF8") else android.graphics.Color.parseColor("#64748B"))
+                          textSize = 18f
+                      }
+                      row.addView(radioIndicator)
+
+                      listContainer.addView(row)
+                  }
+                  scroll.addView(listContainer)
+                  root.addView(scroll)
+
+                  val btnCancel = Button(this).apply {
+                      text = AppLocalization.getString("cancel", currentLangCode)
+                      setTextColor(android.graphics.Color.parseColor("#94A3B8"))
+                      background = null
+                      isAllCaps = false
+                      textSize = 14f
+                      layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dpToPx(40)).apply {
+                          gravity = Gravity.END
+                          topMargin = dpToPx(8)
+                      }
+                      setOnClickListener { dialog.dismiss() }
+                  }
+                  root.addView(btnCancel)
+
+                  dialog.setContentView(root)
+                  dialog.show()
               }
 
               private fun applyPersistentSettings() {
-                  val savedFormat = prefs.getString(KEY_DEFAULT_FORMAT, "MP3") ?: "MP3"
-                  val savedQuality = prefs.getString(KEY_PREFERRED_QUALITY, "Best Available") ?: "Best Available"
-
-                  txtDefaultFormat.text = if (savedFormat == "MP3") "MP3 (Audio Only)" else "MP4 (Video)"
-                  val savedLang = prefs.getString("flowrip_app_language", "English") ?: "English"
-                  findViewById<TextView>(R.id.txtCurrentLanguage)?.text = "${savedLang} ›"
-                  txtDefaultQuality.text = savedQuality
-
-                  isAudio = (savedFormat == "MP3")
+                  val savedLang = prefs.getString(AppLocalization.KEY_LANGUAGE, "en") ?: "en"
+                  applyCurrentLanguage(savedLang)
                   updateFormatUI()
                   updateSpinner()
               }
@@ -6727,9 +7242,9 @@ jobs:
                               StorageHelper.setCustomTreeUri(this, treeUri)
                               updateLocationUI()
                               refreshHistory()
-                              Toast.makeText(this, "Download location updated", Toast.LENGTH_SHORT).show()
+                              showAppToast("Download location updated")
                           } catch (e: Exception) {
-                              Toast.makeText(this, "Failed to persist folder permission: ${e.message}", Toast.LENGTH_SHORT).show()
+                              showAppToast("Failed to persist folder permission: ${e.message}")
                           }
                       }
                   }
@@ -6891,7 +7406,7 @@ jobs:
               private fun handleWifiOnlySettingToggled(wifiOnlyEnabled: Boolean) {
                   if (wifiOnlyEnabled) {
                       if (DownloadService.isDownloading && !NetworkHelper.isWifiConnected(this)) {
-                          Toast.makeText(this, "Wi-Fi Only enabled. Pausing download until Wi-Fi is connected.", Toast.LENGTH_LONG).show()
+                          showAppToast("Wi-Fi Only enabled. Pausing download until Wi-Fi is connected.", true)
                           val pauseIntent = Intent(this, DownloadService::class.java).apply {
                               action = DownloadService.ACTION_PAUSE
                               putExtra(DownloadService.EXTRA_PAUSE_REASON, PauseReason.WAITING_WIFI.name)
@@ -6901,7 +7416,7 @@ jobs:
                   } else {
                       val waitingWifi = QueueManager.getWaitingWifiItem(this)
                       if (waitingWifi != null && !DownloadService.isDownloading) {
-                          Toast.makeText(this, "Wi-Fi Only disabled. Resuming download on available connection.", Toast.LENGTH_SHORT).show()
+                          showAppToast("Wi-Fi Only disabled. Resuming download on available connection.")
                           QueueManager.resumeItem(this, waitingWifi.id)
                       } else if (!DownloadService.isDownloading && !DownloadService.isPaused) {
                           QueueManager.startNext(this)
@@ -7225,7 +7740,7 @@ jobs:
                               hasAudioTrack = true
                               updateVideoSummarySubtitle(detectedVideoQualities)
                               updateSpinner()
-                              Toast.makeText(this@MainActivity, "Standard qualities loaded. Ready to download!", Toast.LENGTH_SHORT).show()
+                              showAppToast("Standard qualities loaded. Ready to download!")
                           }
                       }
                   }
@@ -7450,7 +7965,7 @@ jobs:
                           }
                           prefs.edit().putStringSet("flowrip_favorites_set", currentFavs).apply()
                           text = if (nowFav) "❤️" else "🤍"
-                          Toast.makeText(this@MainActivity, if (nowFav) "Added to Favorites ❤️" else "Removed from Favorites", Toast.LENGTH_SHORT).show()
+                          showAppToast(if (nowFav) "Added to Favorites ❤️" else "Removed from Favorites")
                           renderFavoritesUI()
                           if (historyFilter == "FAVORITES") {
                               renderHistoryUI()
@@ -8100,7 +8615,7 @@ jobs:
                       }
                       startActivity(Intent.createChooser(intent, "Play media with"))
                   } catch (e: Exception) {
-                      Toast.makeText(this, "No compatible app found to open this file.", Toast.LENGTH_SHORT).show()
+                      showAppToast("No compatible app found to open this file.")
                   }
               }
 
@@ -8122,7 +8637,7 @@ jobs:
                               1 -> switchTab(1)
                               2 -> switchTab(2)
                               3 -> switchTab(3)
-                              4 -> Toast.makeText(this@MainActivity, "FlowRip is up to date (v8.9.1)", Toast.LENGTH_SHORT).show()
+                              4 -> showAppToast("FlowRip is up to date (v9.7.1)")
                           }
                       }
                       .show()
@@ -8133,12 +8648,15 @@ jobs:
               private fun initThemeMode() {
                   val switchDark = findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchDarkMode)
                   val savedDark = prefs.getBoolean("pref_dark_mode", true)
+                  switchDark?.setOnCheckedChangeListener(null)
                   switchDark?.isChecked = savedDark
                   applyThemeMode(savedDark)
 
-                  switchDark?.setOnCheckedChangeListener { _, isChecked ->
+                  switchDark?.setOnCheckedChangeListener { buttonView, isChecked ->
                       prefs.edit().putBoolean("pref_dark_mode", isChecked).apply()
-                      applyThemeMode(isChecked)
+                      buttonView.postDelayed({
+                          applyThemeMode(isChecked)
+                      }, 120L)
                   }
               }
 
@@ -8165,6 +8683,9 @@ jobs:
                   val textPrimary = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0F172A")
                   val textSecondary = if (isDark) android.graphics.Color.parseColor("#94A3B8") else android.graphics.Color.parseColor("#475569")
                   val bgCard = if (isDark) android.graphics.Color.parseColor("#13192B") else android.graphics.Color.parseColor("#FFFFFF")
+
+                  if (view is android.widget.CompoundButton) return
+                  if (view.tag == "keep_color") return
 
                   when (view) {
                       is TextView -> {
@@ -8293,24 +8814,24 @@ jobs:
                   }
 
                   btnDownload?.setOnClickListener {
-                      Toast.makeText(this@MainActivity, "Audio file is safely saved on storage", Toast.LENGTH_SHORT).show()
+                      showAppToast("Audio file is safely saved on storage")
                   }
 
                   btnAdd?.setOnClickListener {
-                      Toast.makeText(this@MainActivity, "Added track to Favorites playlist", Toast.LENGTH_SHORT).show()
+                      showAppToast("Added track to Favorites playlist")
                   }
 
                   findViewById<View>(R.id.btnPlayerPrev)?.setOnClickListener {
-                      Toast.makeText(this@MainActivity, "Previous track", Toast.LENGTH_SHORT).show()
+                      showAppToast("Previous track")
                   }
                   findViewById<View>(R.id.btnPlayerNext)?.setOnClickListener {
-                      Toast.makeText(this@MainActivity, "Next track", Toast.LENGTH_SHORT).show()
+                      showAppToast("Next track")
                   }
                   findViewById<View>(R.id.btnPlayerShuffle)?.setOnClickListener {
-                      Toast.makeText(this@MainActivity, "Shuffle enabled", Toast.LENGTH_SHORT).show()
+                      showAppToast("Shuffle enabled")
                   }
                   findViewById<View>(R.id.btnPlayerRepeat)?.setOnClickListener {
-                      Toast.makeText(this@MainActivity, "Repeat track", Toast.LENGTH_SHORT).show()
+                      showAppToast("Repeat track")
                   }
               }
 
@@ -8367,7 +8888,7 @@ jobs:
                       }
                       startActivity(Intent.createChooser(shareIntent, "Share media via"))
                   } catch (e: Exception) {
-                      Toast.makeText(this, "Could not share file: ${e.message}", Toast.LENGTH_SHORT).show()
+                      showAppToast("Could not share file: ${e.message}")
                   }
               }
 
@@ -8411,9 +8932,9 @@ jobs:
                                       } catch (e: Exception) {}
                                       cachedHistoryItems = cachedHistoryItems.filter { it.id != item.id }
                                       renderHistoryUI()
-                                      Toast.makeText(this@MainActivity, "File deleted", Toast.LENGTH_SHORT).show()
+                                      showAppToast("File deleted")
                                   } else {
-                                      Toast.makeText(this@MainActivity, "Could not delete file", Toast.LENGTH_SHORT).show()
+                                      showAppToast("Could not delete file")
                                   }
                               }
                           }
@@ -8501,7 +9022,7 @@ jobs:
                                               .start()
                                       }
                                   }
-                                  Toast.makeText(this@MainActivity, "Download Complete!${event.resolutionInfo}", Toast.LENGTH_LONG).show()
+                                  showAppToast("Download Complete!${event.resolutionInfo}", true)
                               }
                               is DownloadService.DownloadEvent.Error -> {
                                   updatePauseResumeButton(isPaused = false)
@@ -8542,7 +9063,7 @@ jobs:
                                       showDownloaderState(2)
                                   } else {
                                       showDownloaderState(1)
-                                      Toast.makeText(this@MainActivity, "Download cancelled", Toast.LENGTH_SHORT).show()
+                                      showAppToast("Download cancelled")
                                   }
                               }
                           }
@@ -8552,7 +9073,7 @@ jobs:
 
               private fun startDownloadFlow() {
                   if (isLoadingFormats) {
-                      Toast.makeText(this, "Please wait, detecting available stream qualities...", Toast.LENGTH_SHORT).show()
+                      showAppToast("Please wait, detecting available stream qualities...")
                       return
                   }
                   val rawInput = urlInput.text.toString().trim()
@@ -8562,7 +9083,7 @@ jobs:
 
                   val selectedQuality = qualitySpinner.selectedItem?.toString() ?: "Best"
                   if (selectedQuality.contains("No audio") || selectedQuality.contains("No video")) {
-                      Toast.makeText(this, "Selected format is not available for this media", Toast.LENGTH_SHORT).show()
+                      showAppToast("Selected format is not available for this media")
                       return
                   }
 
@@ -8604,9 +9125,9 @@ jobs:
                       val wifiOnly = NetworkHelper.isWifiOnlyEnabled(this@MainActivity)
                       val wifiConnected = NetworkHelper.isWifiConnected(this@MainActivity)
                       if (wifiOnly && !wifiConnected) {
-                          Toast.makeText(this@MainActivity, "Added to queue: Waiting for Wi-Fi", Toast.LENGTH_SHORT).show()
+                          showAppToast("Added to queue: Waiting for Wi-Fi")
                       } else {
-                          Toast.makeText(this@MainActivity, "Added to download queue: ${item.title}", Toast.LENGTH_SHORT).show()
+                          showAppToast("Added to download queue: ${item.title}")
                       }
                       if (DownloadService.isDownloading || DownloadService.isPaused || QueueManager.getPausedItem(this@MainActivity) != null) {
                           showDownloaderState(2)
@@ -8759,7 +9280,7 @@ jobs:
                                   setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4))
                                   setOnClickListener {
                                       if (NetworkHelper.isWifiOnlyEnabled(this@MainActivity) && !NetworkHelper.isWifiConnected(this@MainActivity)) {
-                                          Toast.makeText(this@MainActivity, "Connect to Wi-Fi to resume download (Wi-Fi Only is ON).", Toast.LENGTH_LONG).show()
+                                          showAppToast("Connect to Wi-Fi to resume download (Wi-Fi Only is ON).", true)
                                       } else {
                                           QueueManager.resumeItem(this@MainActivity, item.id)
                                           refreshQueueUI()
@@ -8968,7 +9489,7 @@ jobs:
                       }
                       startActivity(Intent.createChooser(intent, "Play media with"))
                   } catch (e: Exception) {
-                      Toast.makeText(this, "File located at: ${file.absolutePath}", Toast.LENGTH_LONG).show()
+                      showAppToast("File located at: ${file.absolutePath}", true)
                   }
               }
 
@@ -8982,7 +9503,7 @@ jobs:
                       }
                       startActivity(Intent.createChooser(shareIntent, "Share media via"))
                   } catch (e: Exception) {
-                      Toast.makeText(this, "File located at: ${file.absolutePath}", Toast.LENGTH_LONG).show()
+                      showAppToast("File located at: ${file.absolutePath}", true)
                   }
               }
 
