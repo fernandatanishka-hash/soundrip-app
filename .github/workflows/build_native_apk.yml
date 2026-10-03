@@ -3782,7 +3782,7 @@ jobs:
                               id != R.id.chipAll && id != R.id.chipVideo && id != R.id.chipAudio && id != R.id.chipFavorites && id != R.id.chipFavAll && id != R.id.chipFavVideos && id != R.id.chipFavAudio &&
                               id != R.id.txtAppTitleHeader && id != R.id.txtAppSubtitleHeader &&
                               id != R.id.btnChangeLocation && id != R.id.btnResetLocation &&
-                              id != R.id.iconQuickSettings && id != R.id.btnPauseResume && id != R.id.btnCancel && id != R.id.btnShareCompleted) {
+                              id != R.id.iconQuickSettings && id != R.id.btnPauseResume && id != R.id.btnCancel && id != R.id.btnSaveFile) {
                               val current = view.currentTextColor
                               if (current == android.graphics.Color.WHITE || current == android.graphics.Color.parseColor("#0F172A") || current == android.graphics.Color.parseColor("#F8FAFC")) {
                                   view.setTextColor(textPrimary)
@@ -3906,7 +3906,7 @@ jobs:
                               btn.setTextColor(android.graphics.Color.parseColor("#DC2626"))
                           }
                       }
-                      findViewById<Button>(R.id.btnShareCompleted)?.let { btn ->
+                      findViewById<Button>(R.id.btnSaveFile)?.let { btn ->
                           if (isDark) {
                               btn.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#1E293B"))
                               btn.setTextColor(android.graphics.Color.parseColor("#38BDF8"))
