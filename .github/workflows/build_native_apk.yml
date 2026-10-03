@@ -454,8 +454,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 51
-                  versionName "9.6.0"
+                  versionCode 52
+                  versionName "9.7.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -5000,7 +5000,7 @@ jobs:
                                           <TextView
                                               android:layout_width="wrap_content"
                                               android:layout_height="wrap_content"
-                                              android:text="Version 9.6.0 • yt-dlp &amp; FFmpeg"
+                                              android:text="Version 9.7.0 • yt-dlp &amp; FFmpeg"
                                               android:textColor="#94A3B8"
                                               android:textSize="11sp"
                                               android:layout_marginTop="2dp" />
@@ -8261,12 +8261,6 @@ jobs:
                   }
               }
 
-              private fun refreshPlaylistCounts() {
-                  renderFavoritesUI()
-              }
-
-
-
               private fun initNowPlayingOverlay() {
                   overlayNowPlaying = findViewById(R.id.overlayNowPlaying)
                   val btnClose = findViewById<View>(R.id.btnClosePlayer)
@@ -9055,5 +9049,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-v51-FavoritesSection-APK
+          name: FlowRip-v52-FavoritesFix-APK
           path: app/build/outputs/apk/**/*.apk
