@@ -454,8 +454,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 49
-                  versionName "9.4.0"
+                  versionCode 50
+                  versionName "9.5.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -2790,6 +2790,8 @@ jobs:
               android:id="@+id/rootContainer"
               android:layout_width="match_parent"
               android:layout_height="match_parent"
+              android:clipChildren="false"
+              android:clipToPadding="false"
               android:background="#090D1A">
 
               <!-- App Pages Container -->
@@ -2797,6 +2799,8 @@ jobs:
                   android:id="@+id/containerPages"
                   android:layout_width="match_parent"
                   android:layout_height="match_parent"
+                  android:clipChildren="false"
+                  android:clipToPadding="false"
                   android:layout_above="@+id/bottomNavSection">
 
                   <!-- PAGE 1: HOME SCREEN (Showcase Screen 2) -->
@@ -2805,56 +2809,75 @@ jobs:
                       android:layout_width="match_parent"
                       android:layout_height="match_parent"
                       android:fillViewport="true"
+                      android:clipChildren="false"
+                      android:clipToPadding="false"
                       android:background="#090D1A">
 
                       <LinearLayout
                           android:layout_width="match_parent"
                           android:layout_height="wrap_content"
                           android:orientation="vertical"
+                          android:clipChildren="false"
+                          android:clipToPadding="false"
                           android:paddingBottom="24dp">
 
                           <!-- Top Header Bar (☰ FlowRip Brand Logo + Title  👑) -->
-                          <RelativeLayout
+                          <LinearLayout
                               android:layout_width="match_parent"
                               android:layout_height="wrap_content"
-                              android:paddingHorizontal="24dp"
-                              android:paddingTop="32dp"
-                              android:paddingBottom="12dp">
+                              android:minHeight="68dp"
+                              android:orientation="horizontal"
+                              android:gravity="center_vertical"
+                              android:clipChildren="false"
+                              android:clipToPadding="false"
+                              android:paddingHorizontal="20dp"
+                              android:paddingTop="16dp"
+                              android:paddingBottom="14dp">
 
                               <TextView
                                   android:id="@+id/iconHeaderMenu"
-                                  android:layout_width="32dp"
-                                  android:layout_height="32dp"
-                                  android:layout_alignParentStart="true"
-                                  android:layout_centerVertical="true"
+                                  android:layout_width="44dp"
+                                  android:layout_height="44dp"
+                                  android:gravity="center_vertical|start"
                                   android:text="☰"
                                   android:textColor="#FFFFFF"
-                                  android:textSize="20sp"
-                                  android:gravity="center" />
+                                  android:textSize="22sp"
+                                  android:background="?android:attr/selectableItemBackgroundBorderless"
+                                  android:clickable="true"
+                                  android:focusable="true" />
 
                               <LinearLayout
-                                  android:layout_width="wrap_content"
+                                  android:id="@+id/containerBrandHeader"
+                                  android:layout_width="0dp"
                                   android:layout_height="wrap_content"
-                                  android:layout_centerInParent="true"
+                                  android:layout_weight="1"
                                   android:orientation="horizontal"
-                                  android:gravity="center_vertical">
+                                  android:gravity="center"
+                                  android:clipChildren="false"
+                                  android:clipToPadding="false">
 
                                   <ImageView
                                       android:id="@+id/imgHeaderLogo"
-                                      android:layout_width="34dp"
-                                      android:layout_height="34dp"
+                                      android:layout_width="40dp"
+                                      android:layout_height="40dp"
                                       android:src="@drawable/ic_flowrip_brand"
+                                      android:scaleType="fitCenter"
+                                      android:adjustViewBounds="true"
                                       android:layout_marginEnd="10dp" />
 
                                   <LinearLayout
                                       android:layout_width="wrap_content"
                                       android:layout_height="wrap_content"
-                                      android:orientation="vertical">
+                                      android:orientation="vertical"
+                                      android:gravity="center_vertical"
+                                      android:clipChildren="false"
+                                      android:clipToPadding="false">
 
                                       <TextView
                                           android:id="@+id/txtAppTitleHeader"
                                           android:layout_width="wrap_content"
                                           android:layout_height="wrap_content"
+                                          android:includeFontPadding="false"
                                           android:text="FlowRip"
                                           android:textColor="#FFFFFF"
                                           android:textSize="22sp"
@@ -2867,10 +2890,12 @@ jobs:
                                           android:id="@+id/txtAppSubtitleHeader"
                                           android:layout_width="wrap_content"
                                           android:layout_height="wrap_content"
+                                          android:includeFontPadding="false"
                                           android:text="Video &amp; MP3 Studio"
                                           android:textColor="#CBD5E1"
                                           android:textSize="11sp"
                                           android:letterSpacing="0.03"
+                                          android:layout_marginTop="2dp"
                                           app:fontFamily="@font/brand_regular"
                                           android:fontFamily="@font/brand_regular" />
                                   </LinearLayout>
@@ -2878,14 +2903,15 @@ jobs:
 
                               <TextView
                                   android:id="@+id/btnProCrown"
-                                  android:layout_width="32dp"
-                                  android:layout_height="32dp"
-                                  android:layout_alignParentEnd="true"
-                                  android:layout_centerVertical="true"
+                                  android:layout_width="44dp"
+                                  android:layout_height="44dp"
+                                  android:gravity="center_vertical|end"
                                   android:text="👑"
-                                  android:textSize="18sp"
-                                  android:gravity="center" />
-                          </RelativeLayout>
+                                  android:textSize="20sp"
+                                  android:background="?android:attr/selectableItemBackgroundBorderless"
+                                  android:clickable="true"
+                                  android:focusable="true" />
+                          </LinearLayout>
 
                           <LinearLayout
                               android:layout_width="match_parent"
@@ -5082,7 +5108,7 @@ jobs:
                                           <TextView
                                               android:layout_width="wrap_content"
                                               android:layout_height="wrap_content"
-                                              android:text="Version 9.4.0 • yt-dlp &amp; FFmpeg"
+                                              android:text="Version 9.5.0 • yt-dlp &amp; FFmpeg"
                                               android:textColor="#94A3B8"
                                               android:textSize="11sp"
                                               android:layout_marginTop="2dp" />
@@ -9047,5 +9073,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-v49-BrandFix-APK
+          name: FlowRip-v50-HeaderFix-APK
           path: app/build/outputs/apk/**/*.apk
