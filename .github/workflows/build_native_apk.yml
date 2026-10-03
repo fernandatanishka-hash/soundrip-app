@@ -130,7 +130,7 @@ jobs:
               android:viewportHeight="24">
               <path
                   android:fillColor="#64748B"
-                  android:pathData="M4,10h12v2H4z M4,6h12v2H4z M4,14h8v2H4z M15,13v7l6,-3.5z"/>
+                  android:pathData="M12,21.35l-1.45,-1.32C5.4,15.36 2,12.28 2,8.5 2,5.42 4.42,3 7.5,3c1.74,0 3.41,0.81 4.5,2.09C13.09,3.81 14.76,3 16.5,3 19.58,3 22,5.42 22,8.5c0,3.78 -3.4,6.86 -8.55,11.54L12,21.35z"/>
           </vector>
           EOF
 
@@ -454,8 +454,8 @@ jobs:
                   applicationId "com.soundrip.app"
                   minSdk 24
                   targetSdk 35
-                  versionCode 50
-                  versionName "9.5.0"
+                  versionCode 51
+                  versionName "9.6.0"
 
                   ndk {
                       abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -4359,16 +4359,18 @@ jobs:
                       </ScrollView>
                   </LinearLayout>
 
-                  <!-- PAGE 3: PLAYLIST / SAVED VIDEOS (Showcase Screen 8) -->
+                  <!-- PAGE 3: FAVORITES SCREEN (with Live Search Bar & Filter Chips) -->
                   <LinearLayout
-                      android:id="@+id/pagePlaylist"
+                      android:id="@+id/pageFavorites"
                       android:layout_width="match_parent"
                       android:layout_height="match_parent"
                       android:orientation="vertical"
                       android:visibility="gone"
+                      android:clipChildren="false"
+                      android:clipToPadding="false"
                       android:background="#090D1A">
 
-                      <!-- Top Header -->
+                      <!-- Top Header (Favorites + Dynamic Count) -->
                       <LinearLayout
                           android:layout_width="match_parent"
                           android:layout_height="wrap_content"
@@ -4378,260 +4380,150 @@ jobs:
                           android:paddingTop="32dp"
                           android:paddingBottom="14dp">
 
-                          <TextView
+                          <LinearLayout
                               android:layout_width="0dp"
                               android:layout_height="wrap_content"
                               android:layout_weight="1"
-                              android:text="Playlist"
-                              android:textColor="#FFFFFF"
-                              android:textSize="26sp"
-                              android:textStyle="bold" />
+                              android:orientation="vertical">
+
+                              <TextView
+                                  android:layout_width="wrap_content"
+                                  android:layout_height="wrap_content"
+                                  android:text="Favorites"
+                                  android:textColor="#FFFFFF"
+                                  android:textSize="26sp"
+                                  android:textStyle="bold" />
+
+                              <TextView
+                                  android:id="@+id/txtFavoritesHeaderCount"
+                                  android:layout_width="wrap_content"
+                                  android:layout_height="wrap_content"
+                                  android:text="0 saved items"
+                                  android:textColor="#94A3B8"
+                                  android:textSize="12sp"
+                                  android:layout_marginTop="2dp" />
+                          </LinearLayout>
 
                           <TextView
-                              android:id="@+id/btnPlaylistAdd"
-                              android:layout_width="wrap_content"
-                              android:layout_height="wrap_content"
-                              android:text="+"
-                              android:textColor="#38BDF8"
-                              android:textSize="26sp"
-                              android:textStyle="bold"
-                              android:padding="6dp" />
+                              android:id="@+id/btnFavoritesHeaderHeart"
+                              android:layout_width="40dp"
+                              android:layout_height="40dp"
+                              android:text="❤️"
+                              android:textSize="20sp"
+                              android:gravity="center"
+                              android:background="@drawable/bg_badge"
+                              android:backgroundTint="#1E293B" />
                       </LinearLayout>
 
-                      <!-- Segmented Toggle: Videos vs MP3 -->
+                      <!-- Search Bar for Favorites -->
                       <LinearLayout
-                          android:id="@+id/playlistToggleContainer"
                           android:layout_width="match_parent"
                           android:layout_height="44dp"
                           android:layout_marginHorizontal="24dp"
-                          android:layout_marginBottom="18dp"
+                          android:layout_marginBottom="14dp"
                           android:background="@drawable/bg_search_bar"
-                          android:padding="4dp">
+                          android:gravity="center_vertical"
+                          android:paddingHorizontal="14dp">
 
-                          <Button
-                              android:id="@+id/btnPlaylistToggleVideos"
+                          <TextView
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="🔍"
+                              android:textSize="14sp"
+                              android:layout_marginEnd="10dp" />
+
+                          <EditText
+                              android:id="@+id/favoritesSearchInput"
                               android:layout_width="0dp"
                               android:layout_height="match_parent"
                               android:layout_weight="1"
-                              android:text="Videos"
+                              android:background="@null"
+                              android:hint="Search favorites..."
+                              android:textColorHint="#64748B"
                               android:textColor="#FFFFFF"
                               android:textSize="13sp"
-                              android:textStyle="bold"
-                              android:backgroundTint="#2563EB"
-                              app:cornerRadius="20dp" />
+                              android:singleLine="true"
+                              android:imeOptions="actionSearch" />
 
-                          <Button
-                              android:id="@+id/btnPlaylistToggleAudio"
-                              android:layout_width="0dp"
-                              android:layout_height="match_parent"
-                              android:layout_weight="1"
-                              android:text="MP3"
+                          <TextView
+                              android:id="@+id/btnClearFavoritesSearch"
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="✕"
                               android:textColor="#94A3B8"
-                              android:textSize="13sp"
-                              android:textStyle="bold"
-                              android:backgroundTint="@android:color/transparent"
-                              app:cornerRadius="20dp" />
+                              android:textSize="14sp"
+                              android:padding="6dp"
+                              android:visibility="gone" />
                       </LinearLayout>
 
-                      <!-- Playlist Folders List (Showcase Screen 8) -->
+                      <!-- Segmented Filter Chips: All, Videos, MP3 -->
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:orientation="horizontal"
+                          android:paddingHorizontal="24dp"
+                          android:layout_marginBottom="14dp">
+
+                          <TextView
+                              android:id="@+id/chipFavAll"
+                              android:layout_width="wrap_content"
+                              android:layout_height="32dp"
+                              android:text="All"
+                              android:textColor="#FFFFFF"
+                              android:textSize="12sp"
+                              android:textStyle="bold"
+                              android:gravity="center"
+                              android:paddingHorizontal="16dp"
+                              android:background="@drawable/bg_badge"
+                              android:backgroundTint="#3B82F6"
+                              android:clickable="true"
+                              android:focusable="true"
+                              android:layout_marginEnd="8dp" />
+
+                          <TextView
+                              android:id="@+id/chipFavVideos"
+                              android:layout_width="wrap_content"
+                              android:layout_height="32dp"
+                              android:text="Videos"
+                              android:textColor="#94A3B8"
+                              android:textSize="12sp"
+                              android:gravity="center"
+                              android:paddingHorizontal="16dp"
+                              android:background="@drawable/bg_badge"
+                              android:backgroundTint="#161F38"
+                              android:clickable="true"
+                              android:focusable="true"
+                              android:layout_marginEnd="8dp" />
+
+                          <TextView
+                              android:id="@+id/chipFavAudio"
+                              android:layout_width="wrap_content"
+                              android:layout_height="32dp"
+                              android:text="Audio"
+                              android:textColor="#94A3B8"
+                              android:textSize="12sp"
+                              android:gravity="center"
+                              android:paddingHorizontal="16dp"
+                              android:background="@drawable/bg_badge"
+                              android:backgroundTint="#161F38"
+                              android:clickable="true"
+                              android:focusable="true" />
+                      </LinearLayout>
+
+                      <!-- Favorites List ScrollView -->
                       <ScrollView
                           android:layout_width="match_parent"
-                          android:layout_height="match_parent"
+                          android:layout_height="0dp"
+                          android:layout_weight="1"
+                          android:fillViewport="true"
                           android:paddingHorizontal="24dp">
 
                           <LinearLayout
+                              android:id="@+id/favoritesListContainer"
                               android:layout_width="match_parent"
                               android:layout_height="wrap_content"
-                              android:orientation="vertical">
-
-                              <!-- Folder 1: My Favorites -->
-                              <androidx.cardview.widget.CardView
-                                  android:id="@+id/cardFolderFavorites"
-                                  android:layout_width="match_parent"
-                                  android:layout_height="72dp"
-                                  android:layout_marginBottom="12dp"
-                                  app:cardCornerRadius="18dp"
-                                  app:cardElevation="0dp"
-                                  app:cardBackgroundColor="#13192B"
-                                  android:clickable="true"
-                                  android:focusable="true">
-
-                                  <LinearLayout
-                                      android:layout_width="match_parent"
-                                      android:layout_height="match_parent"
-                                      android:orientation="horizontal"
-                                      android:gravity="center_vertical"
-                                      android:paddingHorizontal="16dp">
-
-                                      <TextView
-                                          android:layout_width="44dp"
-                                          android:layout_height="44dp"
-                                          android:text="♥"
-                                          android:textColor="#FFFFFF"
-                                          android:textSize="18sp"
-                                          android:gravity="center"
-                                          android:background="@drawable/bg_badge"
-                                          android:backgroundTint="#8B5CF6" />
-
-                                      <LinearLayout
-                                          android:layout_width="0dp"
-                                          android:layout_height="wrap_content"
-                                          android:layout_weight="1"
-                                          android:orientation="vertical"
-                                          android:layout_marginStart="14dp">
-
-                                          <TextView
-                                              android:layout_width="wrap_content"
-                                              android:layout_height="wrap_content"
-                                              android:text="My Favorites"
-                                              android:textColor="#FFFFFF"
-                                              android:textSize="14sp"
-                                              android:textStyle="bold" />
-
-                                          <TextView
-                                              android:id="@+id/txtFavoritesCount"
-                                              android:layout_width="wrap_content"
-                                              android:layout_height="wrap_content"
-                                              android:text="12 items"
-                                              android:textColor="#94A3B8"
-                                              android:textSize="11sp" />
-                                      </LinearLayout>
-
-                                      <TextView
-                                          android:layout_width="wrap_content"
-                                          android:layout_height="wrap_content"
-                                          android:text="›"
-                                          android:textColor="#64748B"
-                                          android:textSize="22sp" />
-                                  </LinearLayout>
-                              </androidx.cardview.widget.CardView>
-
-
-
-                              <!-- Folder 3: Downloaded -->
-                              <androidx.cardview.widget.CardView
-                                  android:id="@+id/cardFolderDownloaded"
-                                  android:layout_width="match_parent"
-                                  android:layout_height="72dp"
-                                  android:layout_marginBottom="12dp"
-                                  app:cardCornerRadius="18dp"
-                                  app:cardElevation="0dp"
-                                  app:cardBackgroundColor="#13192B"
-                                  android:clickable="true"
-                                  android:focusable="true">
-
-                                  <LinearLayout
-                                      android:layout_width="match_parent"
-                                      android:layout_height="match_parent"
-                                      android:orientation="horizontal"
-                                      android:gravity="center_vertical"
-                                      android:paddingHorizontal="16dp">
-
-                                      <TextView
-                                          android:layout_width="44dp"
-                                          android:layout_height="44dp"
-                                          android:text="⬇"
-                                          android:textColor="#FFFFFF"
-                                          android:textSize="18sp"
-                                          android:gravity="center"
-                                          android:background="@drawable/bg_badge"
-                                          android:backgroundTint="#10B981" />
-
-                                      <LinearLayout
-                                          android:layout_width="0dp"
-                                          android:layout_height="wrap_content"
-                                          android:layout_weight="1"
-                                          android:orientation="vertical"
-                                          android:layout_marginStart="14dp">
-
-                                          <TextView
-                                              android:layout_width="wrap_content"
-                                              android:layout_height="wrap_content"
-                                              android:text="Downloaded"
-                                              android:textColor="#FFFFFF"
-                                              android:textSize="14sp"
-                                              android:textStyle="bold" />
-
-                                          <TextView
-                                              android:id="@+id/txtDownloadedCount"
-                                              android:layout_width="wrap_content"
-                                              android:layout_height="wrap_content"
-                                              android:text="45 items"
-                                              android:textColor="#94A3B8"
-                                              android:textSize="11sp" />
-                                      </LinearLayout>
-
-                                      <TextView
-                                          android:layout_width="wrap_content"
-                                          android:layout_height="wrap_content"
-                                          android:text="›"
-                                          android:textColor="#64748B"
-                                          android:textSize="22sp" />
-                                  </LinearLayout>
-                              </androidx.cardview.widget.CardView>
-
-                              <!-- Folder 4: Custom Playlist -->
-                              <androidx.cardview.widget.CardView
-                                  android:id="@+id/cardFolderCustom"
-                                  android:layout_width="match_parent"
-                                  android:layout_height="72dp"
-                                  android:layout_marginBottom="12dp"
-                                  app:cardCornerRadius="18dp"
-                                  app:cardElevation="0dp"
-                                  app:cardBackgroundColor="#13192B"
-                                  android:clickable="true"
-                                  android:focusable="true">
-
-                                  <LinearLayout
-                                      android:layout_width="match_parent"
-                                      android:layout_height="match_parent"
-                                      android:orientation="horizontal"
-                                      android:gravity="center_vertical"
-                                      android:paddingHorizontal="16dp">
-
-                                      <TextView
-                                          android:layout_width="44dp"
-                                          android:layout_height="44dp"
-                                          android:text="+"
-                                          android:textColor="#FFFFFF"
-                                          android:textSize="22sp"
-                                          android:gravity="center"
-                                          android:background="@drawable/bg_badge"
-                                          android:backgroundTint="#2563EB" />
-
-                                      <LinearLayout
-                                          android:layout_width="0dp"
-                                          android:layout_height="wrap_content"
-                                          android:layout_weight="1"
-                                          android:orientation="vertical"
-                                          android:layout_marginStart="14dp">
-
-                                          <TextView
-                                              android:layout_width="wrap_content"
-                                              android:layout_height="wrap_content"
-                                              android:text="Custom Playlist"
-                                              android:textColor="#FFFFFF"
-                                              android:textSize="14sp"
-                                              android:textStyle="bold" />
-
-                                          <TextView
-                                              android:id="@+id/txtCustomCount"
-                                              android:layout_width="wrap_content"
-                                              android:layout_height="wrap_content"
-                                              android:text="5 items"
-                                              android:textColor="#94A3B8"
-                                              android:textSize="11sp" />
-                                      </LinearLayout>
-
-                                      <TextView
-                                          android:layout_width="wrap_content"
-                                          android:layout_height="wrap_content"
-                                          android:text="›"
-                                          android:textColor="#64748B"
-                                          android:textSize="22sp" />
-                                  </LinearLayout>
-                              </androidx.cardview.widget.CardView>
-                          </LinearLayout>
+                              android:orientation="vertical"
+                              android:paddingBottom="24dp" />
                       </ScrollView>
                   </LinearLayout>
 
@@ -5108,7 +5000,7 @@ jobs:
                                           <TextView
                                               android:layout_width="wrap_content"
                                               android:layout_height="wrap_content"
-                                              android:text="Version 9.5.0 • yt-dlp &amp; FFmpeg"
+                                              android:text="Version 9.6.0 • yt-dlp &amp; FFmpeg"
                                               android:textColor="#94A3B8"
                                               android:textSize="11sp"
                                               android:layout_marginTop="2dp" />
@@ -5551,7 +5443,7 @@ jobs:
                               android:id="@+id/textTabPlaylist"
                               android:layout_width="wrap_content"
                               android:layout_height="wrap_content"
-                              android:text="Playlist"
+                              android:text="Favorites"
                               android:textColor="#64748B"
                               android:textSize="11sp"
                               android:textStyle="bold"
@@ -5874,6 +5766,11 @@ jobs:
               private lateinit var pageHome: View
               private lateinit var pageHistory: View
               private lateinit var pagePlaylist: View
+              private lateinit var pageFavorites: View
+              private lateinit var favoritesListContainer: LinearLayout
+              private lateinit var favoritesSearchInput: EditText
+              private lateinit var btnClearFavoritesSearch: TextView
+              private var favoritesFilter = "ALL" // "ALL", "VIDEO", "AUDIO"
               private lateinit var pageSettings: View
 
               private lateinit var tabHome: View
@@ -5994,7 +5891,8 @@ jobs:
                   // Find views
                   pageHome = findViewById(R.id.pageHome)
                   pageHistory = findViewById(R.id.pageHistory)
-                  pagePlaylist = findViewById(R.id.pagePlaylist)
+                  pageFavorites = findViewById(R.id.pageFavorites)
+                  pagePlaylist = pageFavorites
                   pageSettings = findViewById(R.id.pageSettings)
 
                   tabHome = findViewById(R.id.tabHome)
@@ -6202,7 +6100,7 @@ jobs:
                   findViewById<View>(R.id.iconHeaderMenu)?.setOnClickListener {
                       showHeaderNavigationMenu()
                   }
-                  initPlaylistScreen()
+                  initFavoritesScreen()
                   initNowPlayingOverlay()
                   initThemeMode()
                   updateHeaderBranding(isDarkMode)
@@ -6917,7 +6815,7 @@ jobs:
                   updateNavBar(index)
 
                   if (index == 1) refreshHistory(forceRescan = true)
-                  if (index == 2) refreshPlaylistCounts()
+                  if (index == 2) renderFavoritesUI()
                   if (index == 0) refreshQueueUI()
               }
 
@@ -7404,6 +7302,206 @@ jobs:
                   }
               }
 
+              private fun buildMediaCard(item: StorageHelper.HistoryItem, itemIndex: Int, isFavoritesView: Boolean = false): View {
+                  val itemCard = androidx.cardview.widget.CardView(this).apply {
+                      radius = dpToPx(16).toFloat()
+                      cardElevation = dpToPx(2).toFloat()
+                      setCardBackgroundColor(if (isDarkMode) android.graphics.Color.parseColor("#13192B") else android.graphics.Color.WHITE)
+                      val lp = LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      ).apply { setMargins(0, 0, 0, dpToPx(12)) }
+                      this.layoutParams = lp
+                      isClickable = true
+                      isFocusable = true
+                      applyPressScaleEffect(0.985f)
+                      setOnClickListener {
+                          showFileDetailsDialog(item)
+                      }
+                      alpha = 0f
+                      translationY = dpToPx(10).toFloat()
+                      animate()
+                          .alpha(1f)
+                          .translationY(0f)
+                          .setDuration(180L)
+                          .setStartDelay((itemIndex.coerceAtMost(8) * 20).toLong())
+                          .setInterpolator(DecelerateInterpolator())
+                          .start()
+                  }
+
+                  val row = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = android.view.Gravity.CENTER_VERTICAL
+                      setPadding(dpToPx(14), dpToPx(12), dpToPx(14), dpToPx(12))
+                  }
+
+                  val thumbCard = androidx.cardview.widget.CardView(this).apply {
+                      radius = 14f
+                      cardElevation = 0f
+                      setCardBackgroundColor(android.graphics.Color.parseColor("#EEF2FF"))
+                      val lp = LinearLayout.LayoutParams(dpToPx(56), dpToPx(56)).apply {
+                          marginEnd = dpToPx(12)
+                      }
+                      layoutParams = lp
+                  }
+
+                  val thumbFrame = FrameLayout(this).apply {
+                      layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                  }
+
+                  val placeholderText = TextView(this).apply {
+                      text = if (item.isAudio) "🎵" else "🎬"
+                      textSize = 22f
+                      gravity = android.view.Gravity.CENTER
+                      layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+                  }
+
+                  val thumbImg = ImageView(this).apply {
+                      layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+                      scaleType = ImageView.ScaleType.CENTER_CROP
+                  }
+
+                  thumbFrame.addView(placeholderText)
+                  thumbFrame.addView(thumbImg)
+                  thumbCard.addView(thumbFrame)
+
+                  loadThumbnail(item, thumbImg, placeholderText)
+
+                  val infoCol = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                  }
+
+                  val title = TextView(this).apply {
+                      text = item.name
+                      textSize = 13f
+                      setTextColor(if (isDarkMode) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0F172A"))
+                      setTypeface(null, android.graphics.Typeface.BOLD)
+                      maxLines = 2
+                      ellipsize = android.text.TextUtils.TruncateAt.END
+                  }
+
+                  val typePart = if (item.isAudio) "MP3" else (item.resolution ?: "MP4")
+                  val durPart = if (item.durationMs > 0) " • ${item.formattedDuration}" else ""
+                  val sub1 = TextView(this).apply {
+                      text = "$typePart$durPart • ${item.formattedSize}"
+                      textSize = 11f
+                      setTextColor(if (isDarkMode) android.graphics.Color.parseColor("#64748B") else android.graphics.Color.parseColor("#475569"))
+                      val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                      lp.topMargin = dpToPx(3)
+                      layoutParams = lp
+                  }
+
+                  val sub2 = TextView(this).apply {
+                      text = "${item.formattedDate} • ${item.locationName}"
+                      textSize = 10f
+                      setTextColor(if (isDarkMode) android.graphics.Color.parseColor("#94A3B8") else android.graphics.Color.parseColor("#64748B"))
+                      val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                      lp.topMargin = dpToPx(2)
+                      layoutParams = lp
+                  }
+
+                  infoCol.addView(title)
+                  infoCol.addView(sub1)
+                  infoCol.addView(sub2)
+
+                  val actionsRow = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = android.view.Gravity.CENTER_VERTICAL
+                      layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                  }
+
+                  val playBtn = Button(this).apply {
+                      text = "▶"
+                      textSize = 13f
+                      setTextColor(android.graphics.Color.parseColor("#4F46E5"))
+                      backgroundTintList = android.content.res.ColorStateList.valueOf(if (isDarkMode) android.graphics.Color.parseColor("#1E293B") else android.graphics.Color.parseColor("#E2E8F0"))
+                      val lp = LinearLayout.LayoutParams(dpToPx(36), dpToPx(36))
+                      layoutParams = lp
+                      setPadding(0, 0, 0, 0)
+                      applyPressScaleEffect(0.93f)
+                      setOnClickListener {
+                          playItem(item)
+                      }
+                  }
+
+                  val itemKey = item.id.ifEmpty { item.name }
+                  val favSet = prefs.getStringSet("flowrip_favorites_set", emptySet()) ?: emptySet()
+                  val isItemFav = favSet.contains(itemKey)
+
+                  val favoriteBtn = Button(this).apply {
+                      text = if (isItemFav) "❤️" else "🤍"
+                      textSize = 12f
+                      backgroundTintList = android.content.res.ColorStateList.valueOf(if (isDarkMode) android.graphics.Color.parseColor("#161F38") else android.graphics.Color.parseColor("#E2E8F0"))
+                      val lp = LinearLayout.LayoutParams(dpToPx(36), dpToPx(36)).apply {
+                          marginStart = dpToPx(4)
+                      }
+                      layoutParams = lp
+                      setPadding(0, 0, 0, 0)
+                      applyPressScaleEffect(0.93f)
+                      setOnClickListener {
+                          val currentFavs = prefs.getStringSet("flowrip_favorites_set", emptySet())?.toMutableSet() ?: mutableSetOf()
+                          val nowFav = if (currentFavs.contains(itemKey)) {
+                              currentFavs.remove(itemKey)
+                              false
+                          } else {
+                              currentFavs.add(itemKey)
+                              true
+                          }
+                          prefs.edit().putStringSet("flowrip_favorites_set", currentFavs).apply()
+                          text = if (nowFav) "❤️" else "🤍"
+                          Toast.makeText(this@MainActivity, if (nowFav) "Added to Favorites ❤️" else "Removed from Favorites", Toast.LENGTH_SHORT).show()
+                          renderFavoritesUI()
+                          if (historyFilter == "FAVORITES") {
+                              renderHistoryUI()
+                          }
+                      }
+                  }
+
+                  val shareBtn = Button(this).apply {
+                      text = "↗"
+                      textSize = 13f
+                      setTextColor(android.graphics.Color.parseColor("#0284C7"))
+                      backgroundTintList = android.content.res.ColorStateList.valueOf(if (isDarkMode) android.graphics.Color.parseColor("#1E293B") else android.graphics.Color.parseColor("#E2E8F0"))
+                      val lp = LinearLayout.LayoutParams(dpToPx(36), dpToPx(36)).apply {
+                          marginStart = dpToPx(4)
+                      }
+                      layoutParams = lp
+                      setPadding(0, 0, 0, 0)
+                      applyPressScaleEffect(0.93f)
+                      setOnClickListener {
+                          shareItem(item)
+                      }
+                  }
+
+                  val deleteBtn = Button(this).apply {
+                      text = "✕"
+                      textSize = 12f
+                      setTextColor(android.graphics.Color.parseColor("#EF4444"))
+                      backgroundTintList = android.content.res.ColorStateList.valueOf(if (isDarkMode) android.graphics.Color.parseColor("#1E293B") else android.graphics.Color.parseColor("#E2E8F0"))
+                      val lp = LinearLayout.LayoutParams(dpToPx(36), dpToPx(36)).apply {
+                          marginStart = dpToPx(4)
+                      }
+                      layoutParams = lp
+                      setPadding(0, 0, 0, 0)
+                      applyPressScaleEffect(0.93f)
+                      setOnClickListener {
+                          confirmAndDeleteItem(item)
+                      }
+                  }
+
+                  actionsRow.addView(playBtn)
+                  actionsRow.addView(favoriteBtn)
+                  actionsRow.addView(shareBtn)
+                  actionsRow.addView(deleteBtn)
+
+                  row.addView(thumbCard)
+                  row.addView(infoCol)
+                  row.addView(actionsRow)
+                  itemCard.addView(row)
+                  return itemCard
+              }
+
               private fun renderHistoryUI() {
                   if (!::historyListContainer.isInitialized) return
                   historyListContainer.removeAllViews()
@@ -7441,7 +7539,7 @@ jobs:
                           text = "No downloads yet"
                           textSize = 17f
                           setTypeface(null, android.graphics.Typeface.BOLD)
-                          setTextColor(android.graphics.Color.WHITE)
+                          setTextColor(if (isDarkMode) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0F172A"))
                           gravity = android.view.Gravity.CENTER
                           val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
                           lp.topMargin = dpToPx(14)
@@ -7450,7 +7548,7 @@ jobs:
                       val subtitle = TextView(this).apply {
                           text = "Videos and music you download will appear here with rich offline playback."
                           textSize = 13f
-                          setTextColor(android.graphics.Color.parseColor("#64748B"))
+                          setTextColor(if (isDarkMode) android.graphics.Color.parseColor("#64748B") else android.graphics.Color.parseColor("#475569"))
                           gravity = android.view.Gravity.CENTER
                           val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
                           lp.topMargin = dpToPx(6)
@@ -7478,7 +7576,7 @@ jobs:
                           text = "No matching downloads"
                           textSize = 16f
                           setTypeface(null, android.graphics.Typeface.BOLD)
-                          setTextColor(android.graphics.Color.WHITE)
+                          setTextColor(if (isDarkMode) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0F172A"))
                           gravity = android.view.Gravity.CENTER
                           val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
                           lp.topMargin = dpToPx(12)
@@ -7487,7 +7585,7 @@ jobs:
                       val subtitle = TextView(this).apply {
                           text = "No files match your current search or filter.\nTry clearing the search or selecting 'All Files'."
                           textSize = 13f
-                          setTextColor(android.graphics.Color.parseColor("#64748B"))
+                          setTextColor(if (isDarkMode) android.graphics.Color.parseColor("#64748B") else android.graphics.Color.parseColor("#475569"))
                           gravity = android.view.Gravity.CENTER
                           val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
                           lp.topMargin = dpToPx(6)
@@ -7500,205 +7598,175 @@ jobs:
                       return
                   }
 
-                  for (item in filtered) {
-                      val itemIndex = filtered.indexOf(item)
-                      val itemCard = androidx.cardview.widget.CardView(this).apply {
-                          radius = dpToPx(16).toFloat()
-                          cardElevation = dpToPx(2).toFloat()
-                          setCardBackgroundColor(android.graphics.Color.parseColor("#13192B"))
-                          val lp = LinearLayout.LayoutParams(
-                              LinearLayout.LayoutParams.MATCH_PARENT,
-                              LinearLayout.LayoutParams.WRAP_CONTENT
-                          ).apply { setMargins(0, 0, 0, dpToPx(12)) }
-                          this.layoutParams = lp
-                          isClickable = true
-                          isFocusable = true
-                          applyPressScaleEffect(0.985f)
-                          setOnClickListener {
-                              showFileDetailsDialog(item)
-                          }
-                          // Staggered entrance animation
-                          alpha = 0f
-                          translationY = dpToPx(10).toFloat()
-                          animate()
-                              .alpha(1f)
-                              .translationY(0f)
-                              .setDuration(180L)
-                              .setStartDelay((itemIndex.coerceAtMost(8) * 20).toLong())
-                              .setInterpolator(DecelerateInterpolator())
-                              .start()
-                      }
-
-                      val row = LinearLayout(this).apply {
-                          orientation = LinearLayout.HORIZONTAL
-                          gravity = android.view.Gravity.CENTER_VERTICAL
-                          setPadding(dpToPx(14), dpToPx(12), dpToPx(14), dpToPx(12))
-                      }
-
-                      val thumbCard = androidx.cardview.widget.CardView(this).apply {
-                          radius = 14f
-                          cardElevation = 0f
-                          setCardBackgroundColor(android.graphics.Color.parseColor("#EEF2FF"))
-                          val lp = LinearLayout.LayoutParams(dpToPx(56), dpToPx(56)).apply {
-                              marginEnd = dpToPx(12)
-                          }
-                          layoutParams = lp
-                      }
-
-                      val thumbFrame = FrameLayout(this).apply {
-                          layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                      }
-
-                      val placeholderText = TextView(this).apply {
-                          text = if (item.isAudio) "🎵" else "🎬"
-                          textSize = 22f
-                          gravity = android.view.Gravity.CENTER
-                          layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-                      }
-
-                      val thumbImg = ImageView(this).apply {
-                          layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-                          scaleType = ImageView.ScaleType.CENTER_CROP
-                      }
-
-                      thumbFrame.addView(placeholderText)
-                      thumbFrame.addView(thumbImg)
-                      thumbCard.addView(thumbFrame)
-
-                      loadThumbnail(item, thumbImg, placeholderText)
-
-                      val infoCol = LinearLayout(this).apply {
-                          orientation = LinearLayout.VERTICAL
-                          layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                      }
-
-                      val title = TextView(this).apply {
-                          text = item.name
-                          textSize = 13f
-                          setTextColor(android.graphics.Color.WHITE)
-                          setTypeface(null, android.graphics.Typeface.BOLD)
-                          maxLines = 2
-                          ellipsize = android.text.TextUtils.TruncateAt.END
-                      }
-
-                      val typePart = if (item.isAudio) "MP3" else (item.resolution ?: "MP4")
-                      val durPart = if (item.durationMs > 0) " • ${item.formattedDuration}" else ""
-                      val sub1 = TextView(this).apply {
-                          text = "$typePart$durPart • ${item.formattedSize}"
-                          textSize = 11f
-                          setTextColor(android.graphics.Color.parseColor("#64748B"))
-                          val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-                          lp.topMargin = dpToPx(3)
-                          layoutParams = lp
-                      }
-
-                      val sub2 = TextView(this).apply {
-                          text = "${item.formattedDate} • ${item.locationName}"
-                          textSize = 10f
-                          setTextColor(android.graphics.Color.parseColor("#94A3B8"))
-                          val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-                          lp.topMargin = dpToPx(2)
-                          layoutParams = lp
-                      }
-
-                      infoCol.addView(title)
-                      infoCol.addView(sub1)
-                      infoCol.addView(sub2)
-
-                      val actionsRow = LinearLayout(this).apply {
-                          orientation = LinearLayout.HORIZONTAL
-                          gravity = android.view.Gravity.CENTER_VERTICAL
-                          layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-                      }
-
-                      val playBtn = Button(this).apply {
-                          text = "▶"
-                          textSize = 13f
-                          setTextColor(android.graphics.Color.parseColor("#4F46E5"))
-                          backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#1E293B"))
-                          val lp = LinearLayout.LayoutParams(dpToPx(36), dpToPx(36))
-                          layoutParams = lp
-                          setPadding(0, 0, 0, 0)
-                          applyPressScaleEffect(0.93f)
-                          setOnClickListener {
-                              playItem(item)
-                          }
-                      }
-
-                      val itemKey = item.id.ifEmpty { item.name }
-                      val isItemFav = favSet.contains(itemKey)
-                      val favoriteBtn = Button(this).apply {
-                          text = if (isItemFav) "❤️" else "🤍"
-                          textSize = 12f
-                          backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#161F38"))
-                          val lp = LinearLayout.LayoutParams(dpToPx(36), dpToPx(36)).apply {
-                              marginStart = dpToPx(4)
-                          }
-                          layoutParams = lp
-                          setPadding(0, 0, 0, 0)
-                          applyPressScaleEffect(0.93f)
-                          setOnClickListener {
-                              val currentFavs = prefs.getStringSet("flowrip_favorites_set", emptySet())?.toMutableSet() ?: mutableSetOf()
-                              val nowFav = if (currentFavs.contains(itemKey)) {
-                                  currentFavs.remove(itemKey)
-                                  false
-                              } else {
-                                  currentFavs.add(itemKey)
-                                  true
-                              }
-                              prefs.edit().putStringSet("flowrip_favorites_set", currentFavs).apply()
-                              text = if (nowFav) "❤️" else "🤍"
-                              refreshPlaylistCounts()
-                              Toast.makeText(this@MainActivity, if (nowFav) "Added to Favorites ❤️" else "Removed from Favorites", Toast.LENGTH_SHORT).show()
-                              if (historyFilter == "FAVORITES") {
-                                  renderHistoryUI()
-                              }
-                          }
-                      }
-
-                      val shareBtn = Button(this).apply {
-                          text = "↗"
-                          textSize = 13f
-                          setTextColor(android.graphics.Color.parseColor("#4F46E5"))
-                          backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#161F38"))
-                          val lp = LinearLayout.LayoutParams(dpToPx(36), dpToPx(36)).apply {
-                              marginStart = dpToPx(4)
-                          }
-                          layoutParams = lp
-                          setPadding(0, 0, 0, 0)
-                          applyPressScaleEffect(0.93f)
-                          setOnClickListener {
-                              shareItem(item)
-                          }
-                      }
-
-                      val deleteBtn = Button(this).apply {
-                          text = "🗑"
-                          textSize = 13f
-                          setTextColor(android.graphics.Color.parseColor("#EF4444"))
-                          backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2A151B"))
-                          val lp = LinearLayout.LayoutParams(dpToPx(36), dpToPx(36)).apply {
-                              marginStart = dpToPx(4)
-                          }
-                          layoutParams = lp
-                          setPadding(0, 0, 0, 0)
-                          applyPressScaleEffect(0.93f)
-                          setOnClickListener {
-                              confirmAndDeleteItem(item)
-                          }
-                      }
-
-                      actionsRow.addView(playBtn)
-                      actionsRow.addView(favoriteBtn)
-                      actionsRow.addView(shareBtn)
-                      actionsRow.addView(deleteBtn)
-
-                      row.addView(thumbCard)
-                      row.addView(infoCol)
-                      row.addView(actionsRow)
-                      itemCard.addView(row)
-                      historyListContainer.addView(itemCard)
+                  for ((itemIndex, item) in filtered.withIndex()) {
+                      historyListContainer.addView(buildMediaCard(item, itemIndex, isFavoritesView = false))
                   }
+              }
+
+              private fun renderFavoritesUI() {
+                  if (!::favoritesListContainer.isInitialized) return
+                  favoritesListContainer.removeAllViews()
+
+                  val favSet = prefs.getStringSet("flowrip_favorites_set", emptySet()) ?: emptySet()
+                  val searchQuery = if (::favoritesSearchInput.isInitialized) favoritesSearchInput.text.toString().trim() else ""
+
+                  val favItems = cachedHistoryItems.filter { item ->
+                      val key = item.id.ifEmpty { item.name }
+                      favSet.contains(key)
+                  }
+
+                  val typeFiltered = when (favoritesFilter) {
+                      "VIDEO" -> favItems.filter { !it.isAudio }
+                      "AUDIO" -> favItems.filter { it.isAudio }
+                      else -> favItems
+                  }
+
+                  val finalItems = if (searchQuery.isNotEmpty()) {
+                      typeFiltered.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                  } else {
+                      typeFiltered
+                  }
+
+                  findViewById<TextView>(R.id.txtFavoritesHeaderCount)?.text = "${finalItems.size} ${if (finalItems.size == 1) "saved item" else "saved items"}"
+
+                  if (favItems.isEmpty()) {
+                      val emptyContainer = LinearLayout(this).apply {
+                          orientation = LinearLayout.VERTICAL
+                          gravity = android.view.Gravity.CENTER
+                          setPadding(dpToPx(24), dpToPx(60), dpToPx(24), dpToPx(40))
+                      }
+                      val icon = TextView(this).apply {
+                          text = "❤️"
+                          textSize = 48f
+                          gravity = android.view.Gravity.CENTER
+                      }
+                      val title = TextView(this).apply {
+                          text = "No Favorites Yet"
+                          textSize = 18f
+                          setTypeface(null, android.graphics.Typeface.BOLD)
+                          setTextColor(if (isDarkMode) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0F172A"))
+                          gravity = android.view.Gravity.CENTER
+                          val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                          lp.topMargin = dpToPx(14)
+                          layoutParams = lp
+                      }
+                      val sub = TextView(this).apply {
+                          text = "Tap the ❤️ heart icon on any downloaded video or audio to save your favorites here."
+                          textSize = 13f
+                          setTextColor(if (isDarkMode) android.graphics.Color.parseColor("#94A3B8") else android.graphics.Color.parseColor("#64748B"))
+                          gravity = android.view.Gravity.CENTER
+                          val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                          lp.topMargin = dpToPx(8)
+                          layoutParams = lp
+                      }
+                      emptyContainer.addView(icon)
+                      emptyContainer.addView(title)
+                      emptyContainer.addView(sub)
+                      favoritesListContainer.addView(emptyContainer)
+                      return
+                  }
+
+                  if (finalItems.isEmpty() && searchQuery.isNotEmpty()) {
+                      val emptyContainer = LinearLayout(this).apply {
+                          orientation = LinearLayout.VERTICAL
+                          gravity = android.view.Gravity.CENTER
+                          setPadding(dpToPx(24), dpToPx(60), dpToPx(24), dpToPx(40))
+                      }
+                      val icon = TextView(this).apply {
+                          text = "🔍"
+                          textSize = 34f
+                          gravity = android.view.Gravity.CENTER
+                      }
+                      val title = TextView(this).apply {
+                          text = "No matching favorites"
+                          textSize = 16f
+                          setTypeface(null, android.graphics.Typeface.BOLD)
+                          setTextColor(if (isDarkMode) android.graphics.Color.WHITE else android.graphics.Color.parseColor("#0F172A"))
+                          gravity = android.view.Gravity.CENTER
+                          val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                          lp.topMargin = dpToPx(12)
+                          layoutParams = lp
+                      }
+                      val sub = TextView(this).apply {
+                          text = "No saved favorites match \"$searchQuery\"."
+                          textSize = 13f
+                          setTextColor(if (isDarkMode) android.graphics.Color.parseColor("#94A3B8") else android.graphics.Color.parseColor("#64748B"))
+                          gravity = android.view.Gravity.CENTER
+                          val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                          lp.topMargin = dpToPx(6)
+                          layoutParams = lp
+                      }
+                      emptyContainer.addView(icon)
+                      emptyContainer.addView(title)
+                      emptyContainer.addView(sub)
+                      favoritesListContainer.addView(emptyContainer)
+                      return
+                  }
+
+                  for ((itemIndex, item) in finalItems.withIndex()) {
+                      favoritesListContainer.addView(buildMediaCard(item, itemIndex, isFavoritesView = true))
+                  }
+              }
+
+              private fun initFavoritesScreen() {
+                  favoritesListContainer = findViewById(R.id.favoritesListContainer)
+                  favoritesSearchInput = findViewById(R.id.favoritesSearchInput)
+                  btnClearFavoritesSearch = findViewById(R.id.btnClearFavoritesSearch)
+
+                  val chipAll = findViewById<TextView>(R.id.chipFavAll)
+                  val chipVideos = findViewById<TextView>(R.id.chipFavVideos)
+                  val chipAudio = findViewById<TextView>(R.id.chipFavAudio)
+
+                  fun updateFavChips() {
+                      val activeBg = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#3B82F6"))
+                      val inactiveBg = android.content.res.ColorStateList.valueOf(if (isDarkMode) android.graphics.Color.parseColor("#161F38") else android.graphics.Color.parseColor("#E2E8F0"))
+                      val activeText = android.graphics.Color.WHITE
+                      val inactiveText = if (isDarkMode) android.graphics.Color.parseColor("#94A3B8") else android.graphics.Color.parseColor("#64748B")
+
+                      chipAll?.backgroundTintList = if (favoritesFilter == "ALL") activeBg else inactiveBg
+                      chipAll?.setTextColor(if (favoritesFilter == "ALL") activeText else inactiveText)
+
+                      chipVideos?.backgroundTintList = if (favoritesFilter == "VIDEO") activeBg else inactiveBg
+                      chipVideos?.setTextColor(if (favoritesFilter == "VIDEO") activeText else inactiveText)
+
+                      chipAudio?.backgroundTintList = if (favoritesFilter == "AUDIO") activeBg else inactiveBg
+                      chipAudio?.setTextColor(if (favoritesFilter == "AUDIO") activeText else inactiveText)
+
+                      renderFavoritesUI()
+                  }
+
+                  chipAll?.setOnClickListener {
+                      favoritesFilter = "ALL"
+                      updateFavChips()
+                  }
+                  chipVideos?.setOnClickListener {
+                      favoritesFilter = "VIDEO"
+                      updateFavChips()
+                  }
+                  chipAudio?.setOnClickListener {
+                      favoritesFilter = "AUDIO"
+                      updateFavChips()
+                  }
+
+                  favoritesSearchInput.addTextChangedListener(object : TextWatcher {
+                      override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                      override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                          val query = s?.toString()?.trim() ?: ""
+                          btnClearFavoritesSearch.visibility = if (query.isNotEmpty()) View.VISIBLE else View.GONE
+                          renderFavoritesUI()
+                      }
+                      override fun afterTextChanged(s: Editable?) {}
+                  })
+
+                  btnClearFavoritesSearch.setOnClickListener {
+                      favoritesSearchInput.setText("")
+                  }
+
+                  renderFavoritesUI()
+              }
+
+              private fun refreshPlaylistCounts() {
+                  renderFavoritesUI()
               }
 
               private fun getThumbnailCacheKey(item: StorageHelper.HistoryItem): String {
@@ -8103,7 +8171,7 @@ jobs:
                           val tag = view.tag as? String
                           val id = view.id
                           if (tag != "keep_color" && id != R.id.btnProCrown && id != R.id.btnMainAction &&
-                              id != R.id.chipAll && id != R.id.chipVideo && id != R.id.chipAudio && id != R.id.chipFavorites &&
+                              id != R.id.chipAll && id != R.id.chipVideo && id != R.id.chipAudio && id != R.id.chipFavorites && id != R.id.chipFavAll && id != R.id.chipFavVideos && id != R.id.chipFavAudio &&
                               id != R.id.txtAppTitleHeader && id != R.id.txtAppSubtitleHeader) {
                               val current = view.currentTextColor
                               if (current == android.graphics.Color.WHITE || current == android.graphics.Color.parseColor("#0F172A") || current == android.graphics.Color.parseColor("#F8FAFC")) {
@@ -8152,9 +8220,16 @@ jobs:
                           pageHistory.setBackgroundColor(bgMain)
                           applyThemeToViewHierarchy(pageHistory, isDark)
                       }
-                      if (::pagePlaylist.isInitialized) {
-                          pagePlaylist.setBackgroundColor(bgMain)
-                          applyThemeToViewHierarchy(pagePlaylist, isDark)
+                      if (::pageFavorites.isInitialized) {
+                          pageFavorites.setBackgroundColor(bgMain)
+                          applyThemeToViewHierarchy(pageFavorites, isDark)
+                      }
+                      if (::favoritesSearchInput.isInitialized) {
+                          favoritesSearchInput.setTextColor(textPrimary)
+                          favoritesSearchInput.setHintTextColor(if (isDark) android.graphics.Color.parseColor("#64748B") else android.graphics.Color.parseColor("#94A3B8"))
+                      }
+                      if (::favoritesListContainer.isInitialized) {
+                          renderFavoritesUI()
                       }
                       if (::pageSettings.isInitialized) {
                           pageSettings.setBackgroundColor(bgMain)
@@ -8162,7 +8237,6 @@ jobs:
                       }
 
                       cardUrlInput?.setCardBackgroundColor(bgCard)
-                      findViewById<View>(R.id.playlistToggleContainer)?.setBackgroundColor(toggleBg)
                       findViewById<View>(R.id.bottomNavSection)?.setBackgroundColor(navBg)
 
                       findViewById<TextView>(R.id.iconHeaderMenu)?.setTextColor(textPrimary)
@@ -8188,102 +8262,10 @@ jobs:
               }
 
               private fun refreshPlaylistCounts() {
-                  try {
-                      val favSet = prefs.getStringSet("flowrip_favorites_set", emptySet()) ?: emptySet()
-                      val customCount = prefs.getStringSet("flowrip_custom_playlists_set", emptySet())?.size ?: 0
-
-                      val videoItems = cachedHistoryItems.filter { !it.isAudio }
-                      val audioItems = cachedHistoryItems.filter { it.isAudio }
-
-                      val videoFavCount = videoItems.count { item -> favSet.contains(item.id.ifEmpty { item.name }) }
-                      val audioFavCount = audioItems.count { item -> favSet.contains(item.id.ifEmpty { item.name }) }
-
-                      val activeDownloadedCount = if (playlistMediaType == "AUDIO") audioItems.size else videoItems.size
-                      val activeFavCount = if (playlistMediaType == "AUDIO") audioFavCount else videoFavCount
-                      val totalFavCount = favSet.size
-                      val displayFavCount = if (activeFavCount > 0 || totalFavCount == 0) activeFavCount else totalFavCount
-
-                      findViewById<TextView>(R.id.txtDownloadedCount)?.text = "$activeDownloadedCount ${if (activeDownloadedCount == 1) "item" else "items"}"
-                      findViewById<TextView>(R.id.txtFavoritesCount)?.text = "$displayFavCount ${if (displayFavCount == 1) "item" else "items"}"
-                      findViewById<TextView>(R.id.txtCustomCount)?.text = "$customCount ${if (customCount == 1) "playlist" else "playlists"}"
-                  } catch (e: Exception) {
-                      Log.w("MainActivity", "Error updating playlist counts: ${e.message}")
-                  }
+                  renderFavoritesUI()
               }
 
-              private fun initPlaylistScreen() {
-                  val btnVideos = findViewById<Button>(R.id.btnPlaylistToggleVideos)
-                  val btnMp3 = findViewById<Button>(R.id.btnPlaylistToggleAudio)
 
-                  fun updateToggleUi() {
-                      val activeBg = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2563EB"))
-                      val inactiveBg = android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
-                      val activeText = android.graphics.Color.WHITE
-                      val inactiveText = android.graphics.Color.parseColor("#94A3B8")
-
-                      if (playlistMediaType == "VIDEO") {
-                          btnVideos?.backgroundTintList = activeBg
-                          btnVideos?.setTextColor(activeText)
-                          btnMp3?.backgroundTintList = inactiveBg
-                          btnMp3?.setTextColor(inactiveText)
-                      } else {
-                          btnMp3?.backgroundTintList = activeBg
-                          btnMp3?.setTextColor(activeText)
-                          btnVideos?.backgroundTintList = inactiveBg
-                          btnVideos?.setTextColor(inactiveText)
-                      }
-                      refreshPlaylistCounts()
-                  }
-
-                  btnVideos?.setOnClickListener {
-                      playlistMediaType = "VIDEO"
-                      updateToggleUi()
-                  }
-
-                  btnMp3?.setOnClickListener {
-                      playlistMediaType = "AUDIO"
-                      updateToggleUi()
-                  }
-
-                  findViewById<View>(R.id.cardFolderFavorites)?.setOnClickListener {
-                      historyFilter = "FAVORITES"
-                      updateFilterChipStyles()
-                      switchTab(1)
-                      renderHistoryUI()
-                  }
-                  findViewById<View>(R.id.cardFolderDownloaded)?.setOnClickListener {
-                      historyFilter = if (playlistMediaType == "AUDIO") "AUDIO" else "VIDEO"
-                      updateFilterChipStyles()
-                      switchTab(1)
-                      renderHistoryUI()
-                  }
-                  findViewById<View>(R.id.cardFolderCustom)?.setOnClickListener {
-                      showCreatePlaylistDialog()
-                  }
-                  findViewById<View>(R.id.btnPlaylistAdd)?.setOnClickListener {
-                      showCreatePlaylistDialog()
-                  }
-              }
-
-              private fun showCreatePlaylistDialog() {
-                  val input = EditText(this).apply {
-                      hint = "Playlist name (e.g. Chill Beats)"
-                      setTextColor(android.graphics.Color.WHITE)
-                      setHintTextColor(android.graphics.Color.parseColor("#64748B"))
-                      setPadding(dpToPx(16), dpToPx(12), dpToPx(16), dpToPx(12))
-                  }
-                  MaterialAlertDialogBuilder(this)
-                      .setTitle("Create New Playlist")
-                      .setView(input)
-                      .setPositiveButton("Create") { _, _ ->
-                          val name = input.text.toString().trim()
-                          if (name.isNotEmpty()) {
-                              Toast.makeText(this@MainActivity, "Created playlist: " + name, Toast.LENGTH_SHORT).show()
-                          }
-                      }
-                      .setNegativeButton("Cancel", null)
-                      .show()
-              }
 
               private fun initNowPlayingOverlay() {
                   overlayNowPlaying = findViewById(R.id.overlayNowPlaying)
@@ -9073,5 +9055,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlowRip-v50-HeaderFix-APK
+          name: FlowRip-v51-FavoritesSection-APK
           path: app/build/outputs/apk/**/*.apk
