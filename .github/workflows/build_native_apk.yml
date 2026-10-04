@@ -2596,13 +2596,17 @@ jobs:
               }
           
               private fun detectFormatHeight(width: Int, height: Int, format: String?, formatNote: String?): Int {
-                  if (height > 0) return height
-                  return parseHeightFromText(formatNote, format)
+                  // Prefer an explicit resolution in yt-dlp's human-readable fields.
+                  // Some Android mapper/yt-dlp combinations expose a misleading numeric
+                  // height for strings such as 640x360; the actual video height is 360.
+                  val textualHeight = parseHeightFromText(formatNote, format)
+                  if (textualHeight > 0) return textualHeight
+                  return height
               }
           
               private fun videoQualityLabel(height: Int): String? {
-                  // Only expose the known YouTube video-height values. Do not turn an
-                  // invalid/mis-mapped numeric field such as 640 into a fake "640p" option.
+                  // Expose the height reported by yt-dlp. A non-standard height is
+                  // allowed when it is an actual numeric field from the detected format.
                   return when (height) {
                       4320 -> "4320p (8K UHD)"
                       2160 -> "2160p (4K UHD)"
@@ -2613,7 +2617,7 @@ jobs:
                       360 -> "360p"
                       240 -> "240p"
                       144 -> "144p"
-                      else -> null
+                      else -> if (height > 0) "${height}p" else null
                   }
               }
           
@@ -2713,7 +2717,8 @@ jobs:
                       top.contains("240") -> "Up to 240p"
                       top.contains("144") -> "Up to 144p"
                       top.contains("Best") -> "Best Available Quality"
-                      else -> "Up to 1080p Full HD"
+                      top.isEmpty() -> "No verified video quality yet"
+                      else -> "Up to $top"
                   }
               }
           
@@ -2920,7 +2925,6 @@ jobs:
                                   isStoryboardOrImage -> "storyboard/image format"
                                   !looksLikeVideo -> "no video codec/resolution"
                                   parsedHeight <= 0 -> "video height missing"
-                                  videoQualityLabel(parsedHeight) == null -> "unsupported/non-standard video height=$parsedHeight"
                                   else -> null
                               }
           
