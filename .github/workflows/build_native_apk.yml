@@ -2550,6 +2550,22 @@ jobs:
                   return null
               }
           
+              private fun diagnosticField(value: Any?, fieldName: String): String {
+                  if (value == null) return "?"
+                  return try {
+                      val suffix = fieldName.replaceFirstChar { it.uppercaseChar() }
+                      val getter = value.javaClass.methods.firstOrNull { it.name == "get$suffix" && it.parameterTypes.isEmpty() }
+                      val result = getter?.invoke(value) ?: try {
+                          value.javaClass.getField(fieldName).get(value)
+                      } catch (_: Exception) {
+                          null
+                      }
+                      result?.toString() ?: "?"
+                  } catch (_: Exception) {
+                      "?"
+                  }
+              }
+
               private fun codecHasMedia(codec: String?): Boolean {
                   val c = codec?.trim()?.lowercase(Locale.US) ?: return false
                   return c.isNotEmpty() && c != "none" && c != "null"
@@ -2888,7 +2904,7 @@ jobs:
           
                               Log.d(
                                   "QualityDetection",
-                                  "[QUALITY] request=$jobId format_id=$formatId ext=$ext width=$width height=$height parsedHeight=$parsedHeight fps=$fps vcodec=$vcodec acodec=$acodec format_note='$note' format='$formatText' protocol=${f.protocol} tbr=${f.tbr} abr=${f.abr}"
+                                  "[QUALITY] request=$jobId format_id=$formatId ext=$ext width=$width height=$height parsedHeight=$parsedHeight fps=$fps vcodec=$vcodec acodec=$acodec format_note='$note' format='$formatText' protocol=${diagnosticField(f, "protocol")} tbr=${f.tbr} abr=${f.abr}"
                               )
           
                               if (hasAudioCodec || (!hasVideoCodec && (f.abr > 0 || f.tbr > 0))) {
