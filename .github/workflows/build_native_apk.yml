@@ -2154,7 +2154,10 @@ jobs:
               private fun showQualityLoading() {
                   isLoadingFormats = true
                   layoutQualityLoading.visibility = View.VISIBLE
-                  qualitySpinner.visibility = View.VISIBLE
+                  // The dedicated loading layout is the only in-progress indicator.
+                  // Hiding the spinner prevents a duplicate "analyzing" option.
+                  qualitySpinner.visibility = View.GONE
+                  qualityLabel.text = if (isAudio) "Bitrate:" else "Resolution:"
           
                   // Do not present a guessed or partial video quality while yt-dlp is still running.
                   // The final adapter is installed only after format processing completes.
