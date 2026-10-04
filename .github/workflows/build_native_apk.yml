@@ -844,6 +844,7 @@ jobs:
           import java.net.HttpURLConnection
           import java.net.URL
           import java.util.concurrent.ConcurrentHashMap
+          import java.util.concurrent.atomic.AtomicLong
           import java.text.SimpleDateFormat
           import java.util.*
           import java.util.regex.Pattern
@@ -1288,6 +1289,11 @@ jobs:
               private var lastFormatErrorUrl: String? = null
               private var activeDetectionUrl: String? = null
               private var activeDetectionJobId: Long = 0L
+              private val qualityRequestSequence = AtomicLong(0L)
+              private var qualityStateRequestId: Long = 0L
+              private var qualityStateComplete = false
+              private var qualityStateFormatCount = 0
+              private var qualityStateHeights: List<Int> = emptyList()
           
               private var isAudio = true
               private var currentVideoId: String? = null
@@ -1754,7 +1760,7 @@ jobs:
                               lastFormatDetectionUrl = null
                               lastFormatErrorUrl = null
                               activeDetectionUrl = null
-                              activeDetectionJobId = System.currentTimeMillis()
+                              activeDetectionJobId = qualityRequestSequence.incrementAndGet()
                               if (::txtMp4Subtitle.isInitialized) {
                                   txtMp4Subtitle.text = "Up to 1080p Full HD"
                               }
@@ -1783,7 +1789,7 @@ jobs:
                       lastFormatDetectionUrl = null
                       lastFormatErrorUrl = null
                       activeDetectionUrl = null
-                      activeDetectionJobId = System.currentTimeMillis()
+                      activeDetectionJobId = qualityRequestSequence.incrementAndGet()
                       hideQualityLoading()
                       showDownloaderState(0)
                   }
@@ -1869,7 +1875,7 @@ jobs:
                       lastFormatDetectionUrl = null
                       lastFormatErrorUrl = null
                       activeDetectionUrl = null
-                      activeDetectionJobId = System.currentTimeMillis()
+                      activeDetectionJobId = qualityRequestSequence.incrementAndGet()
                       hideQualityLoading()
                       showDownloaderState(0)
                   }
@@ -2150,12 +2156,12 @@ jobs:
                   layoutQualityLoading.visibility = View.VISIBLE
                   qualitySpinner.visibility = View.VISIBLE
           
-                  // Non-blocking detection: user can start immediately with a real safe option
-                  // while exact 720p/1080p entries are discovered in the background.
+                  // Do not present a guessed or partial video quality while yt-dlp is still running.
+                  // The final adapter is installed only after format processing completes.
                   val fastOptions = if (isAudio) {
                       listOf("320 kbps (HQ Audio)", "192 kbps (Standard)", "128 kbps (Fast)")
                   } else {
-                      listOf("Best Available")
+                      listOf("FlowRip is analyzing available streams...")
                   }
                   val adapter = object : ArrayAdapter<String>(this, R.layout.item_spinner_selected, fastOptions) {
                       override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
@@ -2176,8 +2182,8 @@ jobs:
                   qualitySpinner.adapter = adapter
                   qualitySpinner.setSelection(0)
           
-                  btnStartDownload.isEnabled = true
-                  btnStartDownload.text = "⬇ START NOW"
+                  btnStartDownload.isEnabled = isAudio
+                  btnStartDownload.text = if (isAudio) "⬇ START NOW" else "⏳ ANALYZING VIDEO"
                   btnStartDownload.setTextColor(android.graphics.Color.WHITE)
                   btnStartDownload.alpha = 1.0f
           
@@ -2717,6 +2723,40 @@ jobs:
                   updateSpinner()
               }
           
+              private fun resetAuthoritativeQualityState(requestId: Long, source: String) {
+                  qualityStateRequestId = requestId
+                  qualityStateComplete = false
+                  qualityStateFormatCount = 0
+                  qualityStateHeights = emptyList()
+                  Log.d("QualityDetection", "[QUALITY][STATE] request=$requestId source=$source oldVideo=${detectedVideoQualities.joinToString()} newVideo=ANALYZING")
+              }
+
+              private fun acceptAuthoritativeQualityResult(
+                  requestId: Long,
+                  source: String,
+                  formatCount: Int,
+                  heights: List<Int>,
+                  videoQualities: List<String>,
+                  audioQualities: List<String>,
+                  hasVideo: Boolean,
+                  hasAudio: Boolean
+              ): Boolean {
+                  if (requestId != activeDetectionJobId || activeDetectionUrl == null || qualityStateRequestId != requestId) {
+                      Log.d("QualityDetection", "[QUALITY][STALE] request=$requestId source=$source active=$activeDetectionJobId state=$qualityStateRequestId")
+                      return false
+                  }
+                  if (qualityStateComplete && requestId == qualityStateRequestId) {
+                      Log.d("QualityDetection", "[QUALITY][DUPLICATE] request=$requestId source=$source ignored complete result")
+                      return false
+                  }
+                  val old = detectedVideoQualities.toList()
+                  qualityStateComplete = true
+                  qualityStateFormatCount = formatCount
+                  qualityStateHeights = heights
+                  Log.d("QualityDetection", "[QUALITY][STATE] request=$requestId source=$source oldVideo=$old newVideo=$videoQualities formats=$formatCount heights=$heights")
+                  return true
+              }
+
               private fun inspectUrlAndDetectFormats(rawUrl: String, forceRefresh: Boolean = false) {
                   val cleanId = extractYouTubeId(rawUrl)
                   val url = if (cleanId != null) "https://www.youtube.com/watch?v=$cleanId" else rawUrl.trim()
@@ -2738,8 +2778,9 @@ jobs:
                       }
                   }
           
-                  val jobId = System.currentTimeMillis()
+                  val jobId = qualityRequestSequence.incrementAndGet()
                   activeDetectionJobId = jobId
+                  resetAuthoritativeQualityState(jobId, "new-request")
                   activeDetectionUrl = url
                   currentVideoId = cleanId
                   lastFormatDetectionUrl = url
@@ -2826,7 +2867,7 @@ jobs:
                           var videoAvailable = false
                           var audioAvailable = false
           
-                          Log.d("QualityDetection", "RAW_FORMAT_COUNT url=$url count=${formats.size}")
+                          Log.d("QualityDetection", "[QUALITY] request=$jobId url=$url videoId=${cleanId ?: "unknown"} ytDlpFormatCount=${formats.size}")
                           for (f in formats) {
                               val formatId = f.formatId ?: "?"
                               val ext = f.ext ?: "?"
@@ -2847,7 +2888,7 @@ jobs:
           
                               Log.d(
                                   "QualityDetection",
-                                  "RAW_FORMAT id=$formatId ext=$ext resolution=${width}x${height} parsedHeight=$parsedHeight fps=$fps vcodec=$vcodec acodec=$acodec note='$note' format='$formatText'"
+                                  "[QUALITY] request=$jobId format_id=$formatId ext=$ext width=$width height=$height parsedHeight=$parsedHeight fps=$fps vcodec=$vcodec acodec=$acodec format_note='$note' format='$formatText' protocol=${f.protocol} tbr=${f.tbr} abr=${f.abr}"
                               )
           
                               if (hasAudioCodec || (!hasVideoCodec && (f.abr > 0 || f.tbr > 0))) {
@@ -2864,22 +2905,16 @@ jobs:
                               if (rejectReason == null) {
                                   videoAvailable = true
                                   detectedRes.add(parsedHeight)
-                                  Log.d("QualityDetection", "ACCEPT_FORMAT id=$formatId height=${parsedHeight}p reason=valid video or DASH video-only stream")
+                                  Log.d("QualityDetection", "[QUALITY][ACCEPTED] request=$jobId format_id=$formatId height=${parsedHeight}p")
                               } else {
-                                  Log.d("QualityDetection", "REJECT_FORMAT id=$formatId reason=$rejectReason")
+                                  Log.d("QualityDetection", "[QUALITY][REJECTED] request=$jobId format_id=$formatId reason=$rejectReason")
                               }
                           }
           
                           // Build ordered video qualities from actual yt-dlp-reported video/DASH heights.
                           val parsedVideo = sortDetectedHeights(detectedRes).mapNotNull { videoQualityLabel(it) }.toMutableList()
-                          Log.d("QualityDetection", "FINAL_VIDEO_QUALITIES heights=${sortDetectedHeights(detectedRes)} labels=$parsedVideo")
-          
-                          // Safe fallback for video: if no heights parsed but video stream or raw format exists
-                          if (parsedVideo.isEmpty()) {
-                              if (videoAvailable || formats.isEmpty()) {
-                                  parsedVideo.add("Best Available")
-                              }
-                          }
+                          val finalHeights = sortDetectedHeights(detectedRes)
+                          Log.d("QualityDetection", "[QUALITY][PARSED] request=$jobId videoQualities=$parsedVideo audioAvailable=$audioAvailable rawFormats=${formats.size} parsedVideoFormats=${detectedRes.size} heights=$finalHeights")
           
                           // Build usable audio qualities
                           val parsedAudio = mutableListOf<String>()
@@ -2902,10 +2937,10 @@ jobs:
                               hasVideo = videoAvailable || parsedVideo.isNotEmpty(),
                               hasAudio = audioAvailable || parsedAudio.isNotEmpty()
                           )
-                          formatCache[url] = detectedData
-          
                           runOnUiThread {
+                              if (!acceptAuthoritativeQualityResult(jobId, "yt-dlp", formats.size, finalHeights, parsedVideo, parsedAudio, detectedData.hasVideo, detectedData.hasAudio)) return@runOnUiThread
                               if (activeDetectionJobId != jobId || activeDetectionUrl != url) return@runOnUiThread
+                              formatCache[url] = detectedData
                               activeDetectionUrl = null
           
                               if (!fetchedTitle.isNullOrEmpty() && (previewTitle.text == "Loading media..." || previewTitle.text == "Inspecting stream...")) {
@@ -2939,21 +2974,23 @@ jobs:
                       } catch (e: Exception) {
                           runOnUiThread {
                               if (activeDetectionJobId != jobId || activeDetectionUrl != url) return@runOnUiThread
+                              if (qualityStateComplete && qualityStateRequestId == jobId) {
+                                  Log.d("QualityDetection", "[QUALITY][STALE_ERROR] request=$jobId ignored after completed result")
+                                  return@runOnUiThread
+                              }
                               activeDetectionUrl = null
                               hideQualityLoading()
                               lastFormatErrorUrl = url
-          
-                              // Safe fallback: do NOT show fake 1080p/720p entries when exact formats could not be verified.
-                              // This prevents the app from claiming a resolution and then downloading a lower one.
+                              Log.e("QualityDetection", "[QUALITY][ERROR] request=$jobId url=$url source=yt-dlp", e)
+                              // Detection failed: keep video state unavailable rather than inventing a quality.
                               detectedVideoQualities.clear()
-                              detectedVideoQualities.add("Best Available")
                               detectedAudioQualities.clear()
                               detectedAudioQualities.addAll(listOf("320 kbps (HQ Audio)", "256 kbps", "192 kbps (Standard)", "128 kbps (Fast)"))
-                              hasVideoTrack = true
+                              hasVideoTrack = false
                               hasAudioTrack = true
                               updateVideoSummarySubtitle(detectedVideoQualities)
                               updateSpinner()
-                              showAppToast("Could not verify exact resolutions. Best Available is ready; tap retry to detect exact 720p/1080p.", true)
+                              showAppToast("Could not verify the available video formats. Tap retry to detect them again.", true)
                           }
                       }
                   }
@@ -4381,7 +4418,7 @@ jobs:
                   if (wasStillDetecting) {
                       // Stop the background detection job from touching UI after the download starts.
                       activeDetectionUrl = null
-                      activeDetectionJobId = System.currentTimeMillis()
+                      activeDetectionJobId = qualityRequestSequence.incrementAndGet()
                       isLoadingFormats = false
                   }
           
