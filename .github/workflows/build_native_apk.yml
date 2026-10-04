@@ -2598,6 +2598,8 @@ jobs:
               }
           
               private fun videoQualityLabel(height: Int): String? {
+                  // Only expose the known YouTube video-height values. Do not turn an
+                  // invalid/mis-mapped numeric field such as 640 into a fake "640p" option.
                   return when (height) {
                       4320 -> "4320p (8K UHD)"
                       2160 -> "2160p (4K UHD)"
@@ -2608,7 +2610,7 @@ jobs:
                       360 -> "360p"
                       240 -> "240p"
                       144 -> "144p"
-                      else -> if (height > 0) "${height}p" else null
+                      else -> null
                   }
               }
           
@@ -2915,6 +2917,7 @@ jobs:
                                   isStoryboardOrImage -> "storyboard/image format"
                                   !looksLikeVideo -> "no video codec/resolution"
                                   parsedHeight <= 0 -> "video height missing"
+                                  videoQualityLabel(parsedHeight) == null -> "unsupported/non-standard video height=$parsedHeight"
                                   else -> null
                               }
           
