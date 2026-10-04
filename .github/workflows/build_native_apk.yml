@@ -2868,28 +2868,69 @@ jobs:
                   // Background thread for real yt-dlp format detection (lightest safe request)
                   thread {
                       try {
-                          val request = YoutubeDLRequest(url)
-                          request.addOption("--no-playlist")
-                          request.addOption("--no-check-certificates")
-                          request.addOption("--skip-download")
-                          request.addOption("--no-warnings")
-                          request.addOption("--socket-timeout", "8")
-                          request.addOption("--extractor-retries", "1")
-                          request.addOption("--no-check-formats")
-                          // QUALITY DETECTION: use clients that expose the real DASH/video-only list.
-                          // For these links, web/web_safari/android expose only the progressive
-                          // 360p/480p stream, while tv_embedded/android_creator expose 720p+
-                          // and the actual 1080p/1440p/2160p streams.
-                          request.addOption("--extractor-args", "youtube:player_client=tv_embedded,android_creator")
-                          request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36")
-                          val videoInfo = YoutubeDL.getInstance().getInfo(request)
+                          fun qualityRequest(clientArgs: String): YoutubeDLRequest {
+                              return YoutubeDLRequest(url).apply {
+                                  addOption("--no-playlist")
+                                  addOption("--no-check-certificates")
+                                  addOption("--skip-download")
+                                  addOption("--no-warnings")
+                                  addOption("--socket-timeout", "8")
+                                  addOption("--extractor-retries", "1")
+                                  addOption("--no-check-formats")
+                                  addOption("--extractor-args", "youtube:player_client=$clientArgs")
+                                  addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36")
+                              }
+                          }
+
+                          // Try the DASH-capable clients first. Older bundled yt-dlp versions
+                          // may not support every client, so a failed/empty result must not be
+                          // treated as "no video"; retry with compatible clients.
+                          val clients = listOf(
+                              "tv_embedded,android_creator",
+                              "android_creator",
+                              "android,web",
+                              "web"
+                          )
+                          var selectedClient = clients.first()
+                          var videoInfo = try {
+                              YoutubeDL.getInstance().getInfo(qualityRequest(selectedClient))
+                          } catch (firstError: Exception) {
+                              Log.w("QualityDetection", "[QUALITY][CLIENT_FAILED] request=$jobId client=$selectedClient error=${firstError.message}")
+                              selectedClient = clients[1]
+                              YoutubeDL.getInstance().getInfo(qualityRequest(selectedClient))
+                          }
+                          var formats = videoInfo.formats ?: arrayListOf()
+                          fun hasUsableVideo(candidate: ArrayList<com.yausername.youtubedl_android.mapper.VideoFormat>): Boolean {
+                              return candidate.any { f ->
+                                  val ext = f.ext ?: ""
+                                  !ext.equals("mhtml", true) && !ext.equals("storyboard", true) &&
+                                      (codecHasMedia(f.vcodec) || f.width > 0 || f.height > 0)
+                              }
+                          }
+                          if (!hasUsableVideo(formats)) {
+                              for (fallbackClient in clients.drop(1)) {
+                                  try {
+                                      val fallbackInfo = YoutubeDL.getInstance().getInfo(qualityRequest(fallbackClient))
+                                      val fallbackFormats = fallbackInfo.formats ?: arrayListOf()
+                                      Log.d("QualityDetection", "[QUALITY][RETRY] request=$jobId client=$fallbackClient formats=${fallbackFormats.size} usableVideo=${hasUsableVideo(fallbackFormats)}")
+                                      if (hasUsableVideo(fallbackFormats)) {
+                                          videoInfo = fallbackInfo
+                                          formats = fallbackFormats
+                                          selectedClient = fallbackClient
+                                          break
+                                      }
+                                  } catch (fallbackError: Exception) {
+                                      Log.w("QualityDetection", "[QUALITY][RETRY_FAILED] request=$jobId client=$fallbackClient error=${fallbackError.message}")
+                                  }
+                              }
+                          }
+                          Log.d("QualityDetection", "[QUALITY][SOURCE] request=$jobId client=$selectedClient formats=${formats.size}")
           
                           // Cancel obsolete detection: if user changed URL, discard this result immediately!
                           if (activeDetectionJobId != jobId || activeDetectionUrl != url) return@thread
           
                           val fetchedTitle = videoInfo.title
                           val fetchedUploader = videoInfo.uploader
-                          val formats = videoInfo.formats ?: arrayListOf()
           
                           val detectedRes = mutableSetOf<Int>()
                           var videoAvailable = false
